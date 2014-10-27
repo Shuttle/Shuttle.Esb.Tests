@@ -31,7 +31,7 @@
 		<Error Text="Please enter a version number." Condition="$(SemanticVersion) == ''" />
 
 		<ItemGroup>
-			<AssemblyInfoFiles Include="..\**\*AssemblyInfo.cs" Exclude="..\*.Tests\**\*AssemblyInfo.cs"/>
+			<AssemblyInfoFiles Include="..\**\*AssemblyInfo.cs" />
 			<NugetFiles Include="..\**\*.nuspec"/>
 		</ItemGroup>
 
