@@ -5,13 +5,19 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Shuttle.ESB.Tests", "Shuttl
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = ".nuget", ".nuget", "{2611BDDF-F7A4-4E28-A1C0-D620553E5527}"
 	ProjectSection(SolutionItems) = preProject
-		.nuget\NuGet.Config = .nuget\NuGet.Config
+		.nuget\packages.config = .nuget\packages.config
 	EndProjectSection
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = ".build", ".build", "{FDE104A1-20DF-4108-ABF2-61E7D00D6F3B}"
 	ProjectSection(SolutionItems) = preProject
 		.build\package.msbuild = .build\package.msbuild
 		.build\shuttle-esb-tests.nuspec = .build\shuttle-esb-tests.nuspec
+	EndProjectSection
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution Items", "{12152C2D-D418-4514-8714-949C0AEE79A1}"
+	ProjectSection(SolutionItems) = preProject
+		LICENSE = LICENSE
+		README.md = README.md
 	EndProjectSection
 EndProject
 Global

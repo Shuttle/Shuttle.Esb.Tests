@@ -1,4 +1,4 @@
 shuttle-esb-tests
 =================
 
-Tests to verify all shuttle-esb components.
+Contains a number of fixtures that can be used to verify specific shuttle-esb implementations.
