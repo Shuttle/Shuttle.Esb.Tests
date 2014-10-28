@@ -8,12 +8,12 @@ namespace Shuttle.ESB.Tests
 {
 	public class IdempotenceFixture : IntegrationFixture
 	{
-		protected void TestIdempotenceProcessing(string queueUriFormat, string errorQueueUriFormat, bool isTransactional, bool enqueueUniqueMessages, IIdempotenceService idempotenceService)
+		protected void TestIdempotenceProcessing(IIdempotenceService idempotenceService, string queueUriFormat, bool isTransactional, bool enqueueUniqueMessages)
 		{
 			const int threadCount = 1;
 			const int messageCount = 5;
 
-			var configuration = GetInboxConfiguration(queueUriFormat, errorQueueUriFormat, threadCount, isTransactional, idempotenceService);
+			var configuration = GetInboxConfiguration(idempotenceService, queueUriFormat, threadCount, isTransactional);
 			var padlock = new object();
 
 			using (var bus = new ServiceBus(configuration))
@@ -76,7 +76,7 @@ namespace Shuttle.ESB.Tests
 			AttemptDropQueues(queueUriFormat);
 		}
 
-		private static ServiceBusConfiguration GetInboxConfiguration(string workQueueUriFormat, string errorQueueUriFormat, int threadCount, bool isTransactional, IIdempotenceService idempotenceService)
+		private static ServiceBusConfiguration GetInboxConfiguration(IIdempotenceService idempotenceService, string queueUriFormat, int threadCount, bool isTransactional)
 		{
 			var configuration = DefaultConfiguration(isTransactional);
 
@@ -85,8 +85,8 @@ namespace Shuttle.ESB.Tests
 			configuration.IdempotenceService = idempotenceService;
 
 			var inboxWorkQueue =
-				configuration.QueueManager.GetQueue(string.Format(workQueueUriFormat, "test-inbox-work"));
-			var errorQueue = configuration.QueueManager.GetQueue(string.Format(errorQueueUriFormat, "test-error"));
+				configuration.QueueManager.GetQueue(string.Format(queueUriFormat, "test-inbox-work"));
+			var errorQueue = configuration.QueueManager.GetQueue(string.Format(queueUriFormat, "test-error"));
 
 			configuration.Inbox =
 				new InboxQueueConfiguration
