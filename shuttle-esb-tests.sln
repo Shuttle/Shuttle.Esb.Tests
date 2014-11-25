@@ -4,14 +4,13 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Shuttle.ESB.Tests", "Shuttle.ESB.Tests\Shuttle.ESB.Tests.csproj", "{62B7A97B-588B-4021-92F3-C79A4146EAB4}"
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = ".nuget", ".nuget", "{2611BDDF-F7A4-4E28-A1C0-D620553E5527}"
-	ProjectSection(SolutionItems) = preProject
-		.nuget\packages.config = .nuget\packages.config
-	EndProjectSection
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = ".build", ".build", "{FDE104A1-20DF-4108-ABF2-61E7D00D6F3B}"
 	ProjectSection(SolutionItems) = preProject
 		.build\package.msbuild = .build\package.msbuild
-		.build\shuttle-esb-tests.nuspec = .build\shuttle-esb-tests.nuspec
+		.build\package.nuspec = .build\package.nuspec
+		.build\Shuttle.Core.MSBuild.dll = .build\Shuttle.Core.MSBuild.dll
+		.build\Shuttle.Core.MSBuild.targets = .build\Shuttle.Core.MSBuild.targets
 	EndProjectSection
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution Items", "{12152C2D-D418-4514-8714-949C0AEE79A1}"
