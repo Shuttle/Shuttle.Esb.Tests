@@ -17,8 +17,8 @@
 			<dependency id="shuttle-esb-core" version="{shuttle-esb-core-version}" />
 			<dependency id="shuttle-core-infrastructure" version="{shuttle-core-infrastructure-version}" />
 			<dependency id="shuttle-core-infrastructure-log4net" version="{shuttle-core-infrastructure-log4net-version}" />
-			<dependency id="NUnit" version="[{NUnit-version}]" />
-			<dependency id="Moq" version="[{Moq-version}]" />
+			<dependency id="NUnit" version="{NUnit-version}" />
+			<dependency id="Moq" version="{Moq-version}" />
 		</dependencies>
 	</metadata>
 </package>
