@@ -23,17 +23,13 @@ namespace Shuttle.ESB.Tests
 		{
 			var configuration = new ServiceBusConfiguration
 				{
-					Serializer = new DefaultSerializer(),
-					MessageHandlerFactory = new DefaultMessageHandlerFactory(),
-					PipelineFactory = new DefaultPipelineFactory(),
-					TransactionScopeFactory = new DefaultTransactionScopeFactory(),
-					Policy = new DefaultServiceBusPolicy(),
-					ThreadActivityFactory = new DefaultThreadActivityFactory(),
 					TransactionScope = new TransactionScopeConfiguration
 						{
 							Enabled = isTransactional
 						}
 				};
+
+			configuration.QueueManager.ScanForQueueFactories();
 
 			return configuration;
 		}
@@ -42,6 +38,8 @@ namespace Shuttle.ESB.Tests
 		{
 			using (var queueManager = new QueueManager())
 			{
+				queueManager.ScanForQueueFactories();
+
 				queueManager.GetQueue(string.Format(queueUriFormat, "test-worker-work")).AttemptDrop();
 				queueManager.GetQueue(string.Format(queueUriFormat, "test-distributor-work")).AttemptDrop();
 				queueManager.GetQueue(string.Format(queueUriFormat, "test-distributor-control")).AttemptDrop();

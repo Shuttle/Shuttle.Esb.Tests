@@ -9,5 +9,15 @@ namespace Shuttle.ESB.Tests
 		{
 			return new List<string> { "memory://./idempotence-inbox-work" };
 		}
+
+		public void Add(IMessageRoute messageRoute)
+		{
+			throw new System.NotImplementedException();
+		}
+
+		public IMessageRoute Find(string uri)
+		{
+			throw new System.NotImplementedException();
+		}
 	}
 }

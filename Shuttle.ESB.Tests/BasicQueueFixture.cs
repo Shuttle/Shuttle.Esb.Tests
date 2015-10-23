@@ -98,6 +98,8 @@ namespace Shuttle.ESB.Tests
 		{
 			using (var queueManager = new QueueManager())
 			{
+				queueManager.ScanForQueueFactories();
+
 				var workQueue = queueManager.GetQueue(string.Format(workQueueUriFormat, "test-work"));
 
 				if (refresh)

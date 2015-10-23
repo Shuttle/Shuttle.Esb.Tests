@@ -69,6 +69,8 @@ namespace Shuttle.ESB.Tests
 
 			using (var queueManager = new QueueManager())
 			{
+				queueManager.ScanForQueueFactories();
+
 				var receiverWorkQueue = queueManager.GetQueue(receiverWorkQueueUri);
 
 				for (var i = 0; i < count; i++)
