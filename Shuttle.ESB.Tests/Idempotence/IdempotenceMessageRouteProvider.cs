@@ -19,5 +19,10 @@ namespace Shuttle.ESB.Tests
 		{
 			throw new System.NotImplementedException();
 		}
+
+	    public bool Any()
+	    {
+	        throw new System.NotImplementedException();
+	    }
 	}
 }

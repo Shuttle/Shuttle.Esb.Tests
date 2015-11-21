@@ -82,7 +82,7 @@ namespace Shuttle.ESB.Tests
 			return MemoryQueue.From("memory://./outbox_error");
 		}
 
-		[TestFixtureSetUp]
+		[OneTimeSetUp]
 		protected virtual void FixtureSetUp()
 		{
 		}
@@ -91,7 +91,7 @@ namespace Shuttle.ESB.Tests
 		{
 		}
 
-		[TestFixtureTearDown]
+		[OneTimeTearDown]
 		protected virtual void FixtureTearDown()
 		{
 		}

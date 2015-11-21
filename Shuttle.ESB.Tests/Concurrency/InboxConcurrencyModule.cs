@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using Shuttle.Core.Infrastructure;
 using Shuttle.ESB.Core;
 
 namespace Shuttle.ESB.Tests
