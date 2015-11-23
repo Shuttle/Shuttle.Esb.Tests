@@ -5,7 +5,7 @@ namespace Shuttle.ESB.Tests
 {
     public class ConcurrentHandler : IMessageHandler<ConcurrentCommand>
     {
-        public void ProcessMessage(HandlerContext<ConcurrentCommand> context)
+        public void ProcessMessage(IHandlerContext<ConcurrentCommand> context)
         {
             Log.Debug(string.Format("[processing message] : index = {0}", context.Message.MessageIndex));
 

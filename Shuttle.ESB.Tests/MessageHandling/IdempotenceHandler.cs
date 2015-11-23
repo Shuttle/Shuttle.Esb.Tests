@@ -11,7 +11,7 @@ namespace Shuttle.ESB.Tests
 			_counter = counter;
 		}
 
-		public void ProcessMessage(HandlerContext<IdempotenceCommand> context)
+		public void ProcessMessage(IHandlerContext<IdempotenceCommand> context)
 		{
 			context.Send(new NoHandlerCommand());
 

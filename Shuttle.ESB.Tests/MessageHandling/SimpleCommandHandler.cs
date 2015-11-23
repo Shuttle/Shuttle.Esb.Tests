@@ -12,7 +12,7 @@ namespace Shuttle.ESB.Tests
 			_log = Log.For(this);
 		}
 
-		public void ProcessMessage(HandlerContext<SimpleCommand> context)
+		public void ProcessMessage(IHandlerContext<SimpleCommand> context)
 		{
 			_log.Trace(string.Format("[executed] : name = '{0}'", context.Message.Name));
 		}

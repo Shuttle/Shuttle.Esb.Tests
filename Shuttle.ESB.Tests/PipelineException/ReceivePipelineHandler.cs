@@ -4,7 +4,7 @@ namespace Shuttle.ESB.Tests
 {
 	public class ReceivePipelineHandler : IMessageHandler<ReceivePipelineCommand>
 	{
-		public void ProcessMessage(HandlerContext<ReceivePipelineCommand> context)
+		public void ProcessMessage(IHandlerContext<ReceivePipelineCommand> context)
 		{
 		}
 
