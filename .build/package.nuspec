@@ -1,22 +1,22 @@
 <?xml version="1.0"?>
 <package >
 	<metadata>
-		<id>shuttle-esb-tests</id>
+		<id>Shuttle.Esb.Tests</id>
 		<version>{semver}</version>
 		<authors>Eben Roux</authors>
 		<owners>Eben Roux</owners>
-		<licenseUrl>https://github.com/shuttle/shuttle-esb-tests/raw/master/LICENSE</licenseUrl>
-		<projectUrl>https://github.com/shuttle/shuttle-esb-tests</projectUrl>
-		<iconUrl>https://raw.githubusercontent.com/Shuttle/shuttle-esb-tests/master/.media/logo.png</iconUrl>
+		<licenseUrl>https://github.com/shuttle/Shuttle.Esb.Tests/raw/master/LICENSE</licenseUrl>
+		<projectUrl>https://github.com/shuttle/Shuttle.Esb.Tests</projectUrl>
+		<iconUrl>https://raw.githubusercontent.com/Shuttle/Shuttle.Esb.Tests/master/.media/logo.png</iconUrl>
 		<requireLicenseAcceptance>false</requireLicenseAcceptance>
-		<description>Fixtures to facilitate testing of components that relate to shuttle-esb.</description>
+		<description>Test fixtures to facilitate testing of components that relate to shuttle-esb.</description>
 		<releaseNotes/>
 		<copyright>Copyright (c) {year}, Eben Roux</copyright>
-		<tags>shuttle</tags>
+		<tags>shuttle shuttle-esb-tests</tags>
 		<dependencies>
-			<dependency id="shuttle-esb-core" version="{shuttle-esb-core-version}" />
-			<dependency id="shuttle-core-infrastructure" version="{shuttle-core-infrastructure-version}" />
-			<dependency id="shuttle-core-infrastructure-log4net" version="{shuttle-core-infrastructure-log4net-version}" />
+			<dependency id="Shuttle.Esb" version="{Shuttle.Esb-version}" />
+			<dependency id="Shuttle.Core.Infrastructure" version="{Shuttle.Core.Infrastructure-version}" />
+			<dependency id="Shuttle.Core.Log4Net" version="{Shuttle.Core.Log4Net-version}" />
 			<dependency id="NUnit" version="{NUnit-version}" />
 			<dependency id="Moq" version="{Moq-version}" />
 		</dependencies>
