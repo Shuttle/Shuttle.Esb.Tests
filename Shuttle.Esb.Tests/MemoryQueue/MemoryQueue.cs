@@ -41,7 +41,7 @@ namespace Shuttle.Esb.Tests
 
 			if (Uri.Host != Environment.MachineName.ToLower())
 			{
-				throw new UriFormatException(string.Format(ESBResources.UriFormatException,
+				throw new UriFormatException(string.Format(EsbResources.UriFormatException,
 														   string.Format("memory://{{.|{0}}}/{{name}}",
 																		 Environment.MachineName.ToLower()), uri));
 			}
