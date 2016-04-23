@@ -267,17 +267,17 @@ namespace Shuttle.Esb.Tests
 
 				var transportMessage = bus.CreateTransportMessage(new ReceivePipelineCommand(), c =>
 				{
-					c.WillExpire(DateTime.Now.AddMilliseconds(250));
+					c.WillExpire(DateTime.Now.AddMilliseconds(1000));
 					c.WithRecipient(configuration.Inbox.WorkQueue);
 				});
 
 				configuration.Inbox.WorkQueue.Enqueue(transportMessage, configuration.Serializer.Serialize(transportMessage));
 
-				Assert.IsNotNull(transportMessage);
-				Assert.IsFalse(transportMessage.HasExpired());
+				Assert.IsNotNull(transportMessage, "TransportMessage is null.");
+				Assert.IsFalse(transportMessage.HasExpired(), "The message has already expired before being processed.");
 
 				// wait until the message expires
-				Thread.Sleep(300);
+				Thread.Sleep(1050);
 
 				if (queueCanExpireMessages)
 				{
