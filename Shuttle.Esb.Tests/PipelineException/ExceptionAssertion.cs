@@ -2,8 +2,6 @@
 {
 	internal class ExceptionAssertion
 	{
-		private bool hasRun;
-
 		public ExceptionAssertion(string name)
 		{
 			Name = name;
@@ -13,12 +11,9 @@
 
 		public void MarkAsRun()
 		{
-			hasRun = true;
+			HasRun = true;
 		}
 
-		public bool HasRun
-		{
-			get { return hasRun; }
-		}
+		public bool HasRun { get; private set; }
 	}
 }

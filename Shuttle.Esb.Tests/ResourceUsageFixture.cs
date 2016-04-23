@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Threading;
 using NUnit.Framework;
-using Shuttle.Esb;
 
 namespace Shuttle.Esb.Tests
 {
@@ -16,11 +15,11 @@ namespace Shuttle.Esb.Tests
 			var configuration = GetConfiguration(queueUriFormat, isTransactional, threadCount);
 
 			var cpuCounter = new PerformanceCounterValue(new PerformanceCounter
-				{
-					CategoryName = "Processor",
-					CounterName = "% Processor Time",
-					InstanceName = "_Total"
-				});
+			{
+				CategoryName = "Processor",
+				CounterName = "% Processor Time",
+				InstanceName = "_Total"
+			});
 
 			var padlock = new object();
 			var idleThreads = new List<int>();
@@ -56,9 +55,9 @@ namespace Shuttle.Esb.Tests
 					for (var i = 0; i < 5; i++)
 					{
 						var message = bus.CreateTransportMessage(new SimpleCommand("[resource testing]"),
-																c => c.WithRecipient(configuration.Inbox.WorkQueue));
+							c => c.WithRecipient(configuration.Inbox.WorkQueue));
 
-						configuration.Inbox.WorkQueue.Enqueue(message.MessageId, configuration.Serializer.Serialize(message));
+						configuration.Inbox.WorkQueue.Enqueue(message, configuration.Serializer.Serialize(message));
 					}
 
 					idleThreads.Clear();
@@ -75,7 +74,7 @@ namespace Shuttle.Esb.Tests
 						}
 
 						Assert.IsTrue(cpuUsage < cpuUsageLimit,
-									  string.Format("[EXCEEDED] : cpu usage = {0} / limit = {1}", cpuUsage, cpuUsageLimit));
+							string.Format("[EXCEEDED] : cpu usage = {0} / limit = {1}", cpuUsage, cpuUsageLimit));
 
 						Thread.Sleep(25);
 					}
@@ -96,12 +95,12 @@ namespace Shuttle.Esb.Tests
 
 			configuration.Inbox =
 				new InboxQueueConfiguration
-					{
-						WorkQueue = inboxWorkQueue,
-						ErrorQueue = errorQueue,
-						DurationToSleepWhenIdle = new[] { TimeSpan.FromSeconds(1) },
-						ThreadCount = threadCount
-					};
+				{
+					WorkQueue = inboxWorkQueue,
+					ErrorQueue = errorQueue,
+					DurationToSleepWhenIdle = new[] {TimeSpan.FromSeconds(1)},
+					ThreadCount = threadCount
+				};
 
 			inboxWorkQueue.AttemptDrop();
 			errorQueue.AttemptDrop();

@@ -1,5 +1,3 @@
-using Shuttle.Esb;
-
 namespace Shuttle.Esb.Tests
 {
 	public class ReceivePipelineHandler : IMessageHandler<ReceivePipelineCommand>

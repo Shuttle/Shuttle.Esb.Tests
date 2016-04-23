@@ -2,13 +2,13 @@
 using System.Collections.Generic;
 using System.Threading;
 using NUnit.Framework;
-using Shuttle.Esb;
 
 namespace Shuttle.Esb.Tests
 {
 	public class IdempotenceFixture : IntegrationFixture
 	{
-		protected void TestIdempotenceProcessing(IIdempotenceService idempotenceService, string queueUriFormat, bool isTransactional, bool enqueueUniqueMessages)
+		protected void TestIdempotenceProcessing(IIdempotenceService idempotenceService, string queueUriFormat,
+			bool isTransactional, bool enqueueUniqueMessages)
 		{
 			const int threadCount = 1;
 			const int messageCount = 5;
@@ -22,35 +22,37 @@ namespace Shuttle.Esb.Tests
 				{
 					for (var i = 0; i < messageCount; i++)
 					{
-						var message = bus.CreateTransportMessage(new IdempotenceCommand(), c => c.WithRecipient(configuration.Inbox.WorkQueue));
+						var message = bus.CreateTransportMessage(new IdempotenceCommand(),
+							c => c.WithRecipient(configuration.Inbox.WorkQueue));
 
-						configuration.Inbox.WorkQueue.Enqueue(message.MessageId, configuration.Serializer.Serialize(message));
+						configuration.Inbox.WorkQueue.Enqueue(message, configuration.Serializer.Serialize(message));
 					}
 				}
 				else
 				{
-					var message = bus.CreateTransportMessage(new IdempotenceCommand(), c => c.WithRecipient(configuration.Inbox.WorkQueue));
+					var message = bus.CreateTransportMessage(new IdempotenceCommand(),
+						c => c.WithRecipient(configuration.Inbox.WorkQueue));
 
 					for (var i = 0; i < messageCount; i++)
 					{
-						configuration.Inbox.WorkQueue.Enqueue(message.MessageId, configuration.Serializer.Serialize(message));
+						configuration.Inbox.WorkQueue.Enqueue(message, configuration.Serializer.Serialize(message));
 					}
 				}
 
 				var idleThreads = new List<int>();
 
 				bus.Events.ThreadWaiting += (sender, args) =>
+				{
+					lock (padlock)
 					{
-						lock (padlock)
+						if (idleThreads.Contains(Thread.CurrentThread.ManagedThreadId))
 						{
-							if (idleThreads.Contains(Thread.CurrentThread.ManagedThreadId))
-							{
-								return;
-							}
-
-							idleThreads.Add(Thread.CurrentThread.ManagedThreadId);
+							return;
 						}
-					};
+
+						idleThreads.Add(Thread.CurrentThread.ManagedThreadId);
+					}
+				};
 
 				bus.Start();
 
@@ -65,7 +67,7 @@ namespace Shuttle.Esb.Tests
 				if (enqueueUniqueMessages)
 				{
 					Assert.AreEqual(messageCount,
-					                ((IdempotenceMessageHandlerFactory) bus.Configuration.MessageHandlerFactory).ProcessedCount);
+						((IdempotenceMessageHandlerFactory) bus.Configuration.MessageHandlerFactory).ProcessedCount);
 				}
 				else
 				{
@@ -76,7 +78,8 @@ namespace Shuttle.Esb.Tests
 			AttemptDropQueues(queueUriFormat);
 		}
 
-		private static ServiceBusConfiguration GetInboxConfiguration(IIdempotenceService idempotenceService, string queueUriFormat, int threadCount, bool isTransactional)
+		private static ServiceBusConfiguration GetInboxConfiguration(IIdempotenceService idempotenceService,
+			string queueUriFormat, int threadCount, bool isTransactional)
 		{
 			var configuration = DefaultConfiguration(isTransactional);
 
@@ -90,13 +93,13 @@ namespace Shuttle.Esb.Tests
 
 			configuration.Inbox =
 				new InboxQueueConfiguration
-					{
-						WorkQueue = inboxWorkQueue,
-						ErrorQueue = errorQueue,
-						DurationToIgnoreOnFailure = new[] {TimeSpan.FromMilliseconds(5)},
-						DurationToSleepWhenIdle = new[] {TimeSpan.FromMilliseconds(5)},
-						ThreadCount = threadCount
-					};
+				{
+					WorkQueue = inboxWorkQueue,
+					ErrorQueue = errorQueue,
+					DurationToIgnoreOnFailure = new[] {TimeSpan.FromMilliseconds(5)},
+					DurationToSleepWhenIdle = new[] {TimeSpan.FromMilliseconds(5)},
+					ThreadCount = threadCount
+				};
 
 			inboxWorkQueue.AttemptDrop();
 			errorQueue.AttemptDrop();

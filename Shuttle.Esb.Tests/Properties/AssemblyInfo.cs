@@ -1,7 +1,8 @@
-using System.Reflection;
+﻿using System.Reflection;
 using System.Runtime.InteropServices;
 
 #if NET40FULL
+
 [assembly: AssemblyTitle("Shuttle.Esb.Tests for .NET Framework 4.0")]
 #endif
 
@@ -32,4 +33,3 @@ using System.Runtime.InteropServices;
 [assembly: AssemblyConfiguration("Release")]
 [assembly: AssemblyInformationalVersion("4.0.7")]
 [assembly: ComVisible(false)]
-

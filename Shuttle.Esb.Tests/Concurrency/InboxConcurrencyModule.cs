@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using Shuttle.Core.Infrastructure;
-using Shuttle.Esb;
 
 namespace Shuttle.Esb.Tests
 {
@@ -21,7 +20,9 @@ namespace Shuttle.Esb.Tests
 
 		private void PipelineCreated(object sender, PipelineEventArgs e)
 		{
-			if (!e.Pipeline.GetType().FullName.Equals(typeof(InboxMessagePipeline).FullName, StringComparison.InvariantCultureIgnoreCase))
+			if (
+				!e.Pipeline.GetType()
+					.FullName.Equals(typeof (InboxMessagePipeline).FullName, StringComparison.InvariantCultureIgnoreCase))
 			{
 				return;
 			}
@@ -55,7 +56,9 @@ namespace Shuttle.Esb.Tests
 
 		public bool AllMessagesReceivedWithinTimespan(int msToComplete)
 		{
-			return _datesAfterGetMessage.All(dateTime => dateTime.Subtract(_firstDateAfterGetMessage) <= TimeSpan.FromMilliseconds(msToComplete));
+			return
+				_datesAfterGetMessage.All(
+					dateTime => dateTime.Subtract(_firstDateAfterGetMessage) <= TimeSpan.FromMilliseconds(msToComplete));
 		}
 	}
 }

@@ -1,11 +1,10 @@
 using Shuttle.Core.Infrastructure;
-using Shuttle.Esb;
 
 namespace Shuttle.Esb.Tests
 {
 	public class SimpleCommandHandler : IMessageHandler<SimpleCommand>
 	{
-		private readonly ILog _log ;
+		private readonly ILog _log;
 
 		public SimpleCommandHandler()
 		{

@@ -1,7 +1,6 @@
 using System;
 using NUnit.Framework;
 using Shuttle.Core.Infrastructure;
-using Shuttle.Esb;
 
 namespace Shuttle.Esb.Tests
 {
@@ -28,29 +27,29 @@ namespace Shuttle.Esb.Tests
 			MemoryQueue.Clear();
 
 			return new ServiceBusConfiguration
-				{
-					Inbox =
-						new InboxQueueConfiguration
-							{
-								WorkQueue = CreateMemoryInboxWork(),
-								ErrorQueue = CreateMemoryInboxError(),
-								DurationToSleepWhenIdle = new[] {TimeSpan.FromMilliseconds(5)},
-								ThreadCount = 1
-							},
-					ControlInbox =
-						new ControlInboxQueueConfiguration
-							{
-								WorkQueue = CreateMemoryControlInboxWork(),
-								ErrorQueue = CreateMemoryControlInboxError(),
-								DurationToSleepWhenIdle = new[] {TimeSpan.FromMilliseconds(5)},
-								ThreadCount = 1
-							},
-					Serializer = new DefaultSerializer(),
-					MessageHandlerFactory = new DefaultMessageHandlerFactory(),
-					PipelineFactory = new DefaultPipelineFactory(),
-					TransactionScopeFactory = new DefaultTransactionScopeFactory(),
-					ThreadActivityFactory = new DefaultThreadActivityFactory()
-				};
+			{
+				Inbox =
+					new InboxQueueConfiguration
+					{
+						WorkQueue = CreateMemoryInboxWork(),
+						ErrorQueue = CreateMemoryInboxError(),
+						DurationToSleepWhenIdle = new[] {TimeSpan.FromMilliseconds(5)},
+						ThreadCount = 1
+					},
+				ControlInbox =
+					new ControlInboxQueueConfiguration
+					{
+						WorkQueue = CreateMemoryControlInboxWork(),
+						ErrorQueue = CreateMemoryControlInboxError(),
+						DurationToSleepWhenIdle = new[] {TimeSpan.FromMilliseconds(5)},
+						ThreadCount = 1
+					},
+				Serializer = new DefaultSerializer(),
+				MessageHandlerFactory = new DefaultMessageHandlerFactory(),
+				PipelineFactory = new DefaultPipelineFactory(),
+				TransactionScopeFactory = new DefaultTransactionScopeFactory(),
+				ThreadActivityFactory = new DefaultThreadActivityFactory()
+			};
 		}
 
 		public IQueue CreateMemoryInboxWork()

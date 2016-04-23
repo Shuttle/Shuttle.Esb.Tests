@@ -2,7 +2,6 @@
 using System.IO;
 using NUnit.Framework;
 using Shuttle.Core.Infrastructure;
-using Shuttle.Esb;
 
 namespace Shuttle.Esb.Tests
 {
@@ -16,9 +15,11 @@ namespace Shuttle.Esb.Tests
 
 			stream.WriteByte(100);
 
-			var messageId = Guid.NewGuid();
+			workQueue.Enqueue(new TransportMessage
+			{
+				MessageId = Guid.NewGuid()
 
-			workQueue.Enqueue(messageId, stream);
+			}, stream);
 
 			var receivedMessage = workQueue.GetMessage();
 
@@ -36,9 +37,11 @@ namespace Shuttle.Esb.Tests
 		{
 			var workQueue = GetWorkQueue(workQueueUriFormat);
 
-			var messageId = Guid.NewGuid();
+			workQueue.Enqueue(new TransportMessage
+			{
+				MessageId = Guid.NewGuid()
 
-			workQueue.Enqueue(messageId, new MemoryStream());
+			}, new MemoryStream());
 
 			var receivedMessage = workQueue.GetMessage();
 
@@ -63,9 +66,11 @@ namespace Shuttle.Esb.Tests
 		{
 			var workQueue = GetWorkQueue(workQueueUriFormat);
 
-			var messageId = Guid.NewGuid();
+			workQueue.Enqueue(new TransportMessage
+			{
+				MessageId = Guid.NewGuid()
 
-			workQueue.Enqueue(messageId, new MemoryStream());
+			}, new MemoryStream());
 
 			Assert.IsNotNull(workQueue.GetMessage());
 			Assert.IsNull(workQueue.GetMessage());

@@ -1,12 +1,11 @@
 ﻿using System;
 using System.Collections.Generic;
-using Shuttle.Esb;
 
 namespace Shuttle.Esb.Tests
 {
 	internal class IdempotenceMessageHandlerFactory : IMessageHandlerFactory
 	{
-		private readonly Type _type = typeof(IdempotenceCommand);
+		private readonly Type _type = typeof (IdempotenceCommand);
 		private readonly List<Type> _messageTypesHandled = new List<Type>();
 		private readonly IdempotenceCounter _counter = new IdempotenceCounter();
 
@@ -29,7 +28,8 @@ namespace Shuttle.Esb.Tests
 		{
 		}
 
-		public IEnumerable<Type> MessageTypesHandled {
+		public IEnumerable<Type> MessageTypesHandled
+		{
 			get { return _messageTypesHandled; }
 		}
 

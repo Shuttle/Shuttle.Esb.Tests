@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using Shuttle.Core.Infrastructure;
-using Shuttle.Esb;
 
 namespace Shuttle.Esb.Tests
 {
@@ -12,7 +11,10 @@ namespace Shuttle.Esb.Tests
 		internal const string SCHEME = "memory";
 
 		private static readonly object _padlock = new object();
-		private static Dictionary<string, Dictionary<int, MemoryQueueItem>> _queues = new Dictionary<string, Dictionary<int, MemoryQueueItem>>();
+
+		private static Dictionary<string, Dictionary<int, MemoryQueueItem>> _queues =
+			new Dictionary<string, Dictionary<int, MemoryQueueItem>>();
+
 		private readonly List<int> _unacknowledgedMessageIds = new List<int>();
 		private int _itemId = 0;
 
@@ -42,11 +44,11 @@ namespace Shuttle.Esb.Tests
 			if (Uri.Host != Environment.MachineName.ToLower())
 			{
 				throw new UriFormatException(string.Format(EsbResources.UriFormatException,
-														   string.Format("memory://{{.|{0}}}/{{name}}",
-																		 Environment.MachineName.ToLower()), uri));
+					string.Format("memory://{{.|{0}}}/{{name}}",
+						Environment.MachineName.ToLower()), uri));
 			}
 
-            Create();
+			Create();
 		}
 
 		public Uri Uri { get; private set; }
@@ -59,13 +61,13 @@ namespace Shuttle.Esb.Tests
 			}
 		}
 
-		public void Enqueue(Guid messageId, Stream stream)
+		public void Enqueue(TransportMessage transportMessage, Stream stream)
 		{
 			lock (_padlock)
 			{
 				_itemId++;
 
-				_queues[Uri.ToString()].Add(_itemId, new MemoryQueueItem(_itemId, messageId, stream.Copy()));
+				_queues[Uri.ToString()].Add(_itemId, new MemoryQueueItem(_itemId, transportMessage.MessageId, stream.Copy()));
 			}
 		}
 
@@ -87,7 +89,7 @@ namespace Shuttle.Esb.Tests
 
 						return new ReceivedMessage(pair.Value.Stream, pair.Value.ItemId);
 					}
-					
+
 					index++;
 				}
 
@@ -97,7 +99,7 @@ namespace Shuttle.Esb.Tests
 
 		public void Acknowledge(object acknowledgementToken)
 		{
-			var itemId = (int)acknowledgementToken;
+			var itemId = (int) acknowledgementToken;
 
 			lock (_padlock)
 			{
@@ -158,21 +160,21 @@ namespace Shuttle.Esb.Tests
 			_queues = new Dictionary<string, Dictionary<int, MemoryQueueItem>>();
 		}
 
-	    public void Create()
-	    {
-            if (!_queues.ContainsKey(Uri.ToString()))
-            {
-                _queues.Add(Uri.ToString(), new Dictionary<int, MemoryQueueItem>());
-            }
-        }
+		public void Create()
+		{
+			if (!_queues.ContainsKey(Uri.ToString()))
+			{
+				_queues.Add(Uri.ToString(), new Dictionary<int, MemoryQueueItem>());
+			}
+		}
 
-	    public void Purge()
-	    {
-            lock (_padlock)
-            {
-                _queues[Uri.ToString()].Clear();
-            }
-        }
+		public void Purge()
+		{
+			lock (_padlock)
+			{
+				_queues[Uri.ToString()].Clear();
+			}
+		}
 	}
 
 	internal class MemoryQueueItem

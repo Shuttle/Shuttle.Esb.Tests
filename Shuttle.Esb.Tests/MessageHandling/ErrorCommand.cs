@@ -1,6 +1,6 @@
 namespace Shuttle.Esb.Tests
 {
-    public class ErrorCommand
-    {
-    }
+	public class ErrorCommand
+	{
+	}
 }

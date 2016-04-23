@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Threading;
 using NUnit.Framework;
-using Shuttle.Esb;
 
 namespace Shuttle.Esb.Tests
 {
@@ -24,25 +23,25 @@ namespace Shuttle.Esb.Tests
 				for (var i = 0; i < 5; i++)
 				{
 					var warmup = bus.CreateTransportMessage(new SimpleCommand("warmup"),
-					                                        c => c.WithRecipient(configuration.Inbox.WorkQueue));
+						c => c.WithRecipient(configuration.Inbox.WorkQueue));
 
-					configuration.Inbox.WorkQueue.Enqueue(warmup.MessageId, configuration.Serializer.Serialize(warmup));
+					configuration.Inbox.WorkQueue.Enqueue(warmup, configuration.Serializer.Serialize(warmup));
 				}
 
 				var idleThreads = new List<int>();
 
 				bus.Events.ThreadWaiting += (sender, args) =>
+				{
+					lock (padlock)
 					{
-						lock (padlock)
+						if (idleThreads.Contains(Thread.CurrentThread.ManagedThreadId))
 						{
-							if (idleThreads.Contains(Thread.CurrentThread.ManagedThreadId))
-							{
-								return;
-							}
-
-							idleThreads.Add(Thread.CurrentThread.ManagedThreadId);
+							return;
 						}
-					};
+
+						idleThreads.Add(Thread.CurrentThread.ManagedThreadId);
+					}
+				};
 
 				bus.Start();
 
@@ -58,15 +57,15 @@ namespace Shuttle.Esb.Tests
 				for (var i = 0; i < count; i++)
 				{
 					var message = bus.CreateTransportMessage(new SimpleCommand("command " + i),
-					                                         c => c.WithRecipient(configuration.Inbox.WorkQueue));
+						c => c.WithRecipient(configuration.Inbox.WorkQueue));
 
-					configuration.Inbox.WorkQueue.Enqueue(message.MessageId, configuration.Serializer.Serialize(message));
+					configuration.Inbox.WorkQueue.Enqueue(message, configuration.Serializer.Serialize(message));
 				}
 
 				sw.Stop();
 
 				Console.WriteLine("Took {0} ms to send {1} messages.  Starting processing.", sw.ElapsedMilliseconds,
-				                  count);
+					count);
 
 				idleThreads.Clear();
 				bus.Start();
@@ -89,8 +88,8 @@ namespace Shuttle.Esb.Tests
 			Console.WriteLine("Processed {0} messages in {1} ms", count, ms);
 
 			Assert.IsTrue(ms < timeoutMilliseconds,
-			              "Should be able to process at least {0} messages in {1} ms but it ook {2} ms.",
-			              count, timeoutMilliseconds, ms);
+				"Should be able to process at least {0} messages in {1} ms but it ook {2} ms.",
+				count, timeoutMilliseconds, ms);
 		}
 
 		protected void TestInboxError(string queueUriFormat, bool isTransactional)
@@ -101,24 +100,24 @@ namespace Shuttle.Esb.Tests
 			using (var bus = new ServiceBus(configuration))
 			{
 				var message = bus.CreateTransportMessage(new ErrorCommand(),
-				                                         c => c.WithRecipient(configuration.Inbox.WorkQueue));
+					c => c.WithRecipient(configuration.Inbox.WorkQueue));
 
-				configuration.Inbox.WorkQueue.Enqueue(message.MessageId, configuration.Serializer.Serialize(message));
+				configuration.Inbox.WorkQueue.Enqueue(message, configuration.Serializer.Serialize(message));
 
 				var idleThreads = new List<int>();
 
 				bus.Events.ThreadWaiting += (sender, args) =>
+				{
+					lock (padlock)
 					{
-						lock (padlock)
+						if (idleThreads.Contains(Thread.CurrentThread.ManagedThreadId))
 						{
-							if (idleThreads.Contains(Thread.CurrentThread.ManagedThreadId))
-							{
-								return;
-							}
-
-							idleThreads.Add(Thread.CurrentThread.ManagedThreadId);
+							return;
 						}
-					};
+
+						idleThreads.Add(Thread.CurrentThread.ManagedThreadId);
+					}
+				};
 
 				bus.Start();
 
@@ -144,13 +143,13 @@ namespace Shuttle.Esb.Tests
 
 			configuration.Inbox =
 				new InboxQueueConfiguration
-					{
-						WorkQueue = inboxWorkQueue,
-						ErrorQueue = errorQueue,
-						DurationToSleepWhenIdle = new[] {TimeSpan.FromMilliseconds(5)},
-						DurationToIgnoreOnFailure = new[] {TimeSpan.FromMilliseconds(5)},
-						ThreadCount = threadCount
-					};
+				{
+					WorkQueue = inboxWorkQueue,
+					ErrorQueue = errorQueue,
+					DurationToSleepWhenIdle = new[] {TimeSpan.FromMilliseconds(5)},
+					DurationToIgnoreOnFailure = new[] {TimeSpan.FromMilliseconds(5)},
+					ThreadCount = threadCount
+				};
 
 			inboxWorkQueue.AttemptDrop();
 			errorQueue.AttemptDrop();
@@ -178,27 +177,27 @@ namespace Shuttle.Esb.Tests
 				for (var i = 0; i < threadCount; i++)
 				{
 					var message = bus.CreateTransportMessage(new ConcurrentCommand
-						{
-							MessageIndex = i
-						}, c => c.WithRecipient(configuration.Inbox.WorkQueue));
+					{
+						MessageIndex = i
+					}, c => c.WithRecipient(configuration.Inbox.WorkQueue));
 
-					configuration.Inbox.WorkQueue.Enqueue(message.MessageId, configuration.Serializer.Serialize(message));
+					configuration.Inbox.WorkQueue.Enqueue(message, configuration.Serializer.Serialize(message));
 				}
 
 				var idleThreads = new List<int>();
 
 				bus.Events.ThreadWaiting += (sender, args) =>
+				{
+					lock (padlock)
 					{
-						lock (padlock)
+						if (idleThreads.Contains(Thread.CurrentThread.ManagedThreadId))
 						{
-							if (idleThreads.Contains(Thread.CurrentThread.ManagedThreadId))
-							{
-								return;
-							}
-
-							idleThreads.Add(Thread.CurrentThread.ManagedThreadId);
+							return;
 						}
-					};
+
+						idleThreads.Add(Thread.CurrentThread.ManagedThreadId);
+					}
+				};
 
 				bus.Start();
 
@@ -211,10 +210,10 @@ namespace Shuttle.Esb.Tests
 			AttemptDropQueues(workQueueUriFormat);
 
 			Assert.AreEqual(threadCount, module.OnAfterGetMessageCount,
-			                string.Format("Got {0} messages but {1} were sent.", module.OnAfterGetMessageCount, threadCount));
+				string.Format("Got {0} messages but {1} were sent.", module.OnAfterGetMessageCount, threadCount));
 
 			Assert.IsTrue(module.AllMessagesReceivedWithinTimespan(msToComplete),
-			              "All dequeued messages have to be within {0} ms of first get message.", msToComplete);
+				"All dequeued messages have to be within {0} ms of first get message.", msToComplete);
 		}
 
 		protected void TestInboxDeferred(string queueUriFormat)
@@ -233,7 +232,7 @@ namespace Shuttle.Esb.Tests
 				bus.Start();
 
 				var transportMessage = bus.Send(new ReceivePipelineCommand(), c => c.Defer(DateTime.Now.AddMilliseconds(500))
-				                                                                    .WithRecipient(configuration.Inbox.WorkQueue));
+					.WithRecipient(configuration.Inbox.WorkQueue));
 
 				var timeout = DateTime.Now.AddMilliseconds(1000);
 
@@ -250,6 +249,38 @@ namespace Shuttle.Esb.Tests
 			Assert.IsNotNull(module.TransportMessage);
 			Assert.True(messageId.Equals(module.TransportMessage.MessageId));
 			Assert.True(messageType.Equals(module.TransportMessage.MessageType, StringComparison.OrdinalIgnoreCase));
+		}
+
+		protected void TestInboxExpiry(string queueUriFormat)
+		{
+			var configuration = GetConfiguration(queueUriFormat, 1, false);
+			var expired = false;
+
+			using (var bus = new ServiceBus(configuration))
+			{
+				bus.Events.MessageExpired += (sender, eventArgs) =>
+				{
+					expired = true;
+				};
+
+				bus.Start();
+
+				var transportMessage = bus.Send(new ReceivePipelineCommand(), c =>
+					c.WillExpire(DateTime.Now.AddMilliseconds(-500))
+						.WithRecipient(configuration.Inbox.WorkQueue));
+
+				Assert.IsNotNull(transportMessage);
+				Assert.IsTrue(transportMessage.ExpiryDate < DateTime.Now);
+
+				var timeout = DateTime.Now.AddMilliseconds(1000);
+
+				while (!expired && DateTime.Now < timeout)
+				{
+					Thread.Sleep(5);
+				}
+
+				Assert.IsTrue(expired, "The message did not expire.");
+			}
 		}
 	}
 }

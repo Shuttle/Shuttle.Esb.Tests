@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.Threading;
 using Moq;
 using NUnit.Framework;
-using Shuttle.Esb;
 
 namespace Shuttle.Esb.Tests
 {
@@ -42,22 +41,22 @@ namespace Shuttle.Esb.Tests
 				var idleThreads = new List<int>();
 
 				bus.Events.ThreadWaiting += (sender, args) =>
+				{
+					if (!args.PipelineType.FullName.Equals(typeof (OutboxPipeline).FullName))
 					{
-						if (!args.PipelineType.FullName.Equals(typeof (OutboxPipeline).FullName))
+						return;
+					}
+
+					lock (padlock)
+					{
+						if (idleThreads.Contains(Thread.CurrentThread.ManagedThreadId))
 						{
 							return;
 						}
 
-						lock (padlock)
-						{
-							if (idleThreads.Contains(Thread.CurrentThread.ManagedThreadId))
-							{
-								return;
-							}
-
-							idleThreads.Add(Thread.CurrentThread.ManagedThreadId);
-						}
-					};
+						idleThreads.Add(Thread.CurrentThread.ManagedThreadId);
+					}
+				};
 
 				bus.Start();
 
@@ -95,7 +94,7 @@ namespace Shuttle.Esb.Tests
 		}
 
 		private static ServiceBusConfiguration GetConfiguration(string workQueueUriFormat, string errorQueueUriFormat,
-		                                                        int threadCount, bool isTransactional)
+			int threadCount, bool isTransactional)
 		{
 			var configuration = DefaultConfiguration(isTransactional);
 
@@ -105,12 +104,12 @@ namespace Shuttle.Esb.Tests
 
 			configuration.Outbox =
 				new OutboxQueueConfiguration
-					{
-						WorkQueue = outboxWorkQueue,
-						ErrorQueue = errorQueue,
-						DurationToSleepWhenIdle = new[] {TimeSpan.FromMilliseconds(5)},
-						ThreadCount = threadCount
-					};
+				{
+					WorkQueue = outboxWorkQueue,
+					ErrorQueue = errorQueue,
+					DurationToSleepWhenIdle = new[] {TimeSpan.FromMilliseconds(5)},
+					ThreadCount = threadCount
+				};
 
 			var receiverWorkQueue =
 				configuration.QueueManager.GetQueue(string.Format(workQueueUriFormat, "test-receiver-work"));

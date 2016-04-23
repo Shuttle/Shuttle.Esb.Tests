@@ -1,6 +1,5 @@
 using System;
 using Shuttle.Core.Infrastructure;
-using Shuttle.Esb;
 
 namespace Shuttle.Esb.Tests
 {
@@ -19,7 +18,7 @@ namespace Shuttle.Esb.Tests
 		{
 			if (
 				!e.Pipeline.GetType()
-				  .FullName.Equals(typeof (InboxMessagePipeline).FullName, StringComparison.InvariantCultureIgnoreCase))
+					.FullName.Equals(typeof (InboxMessagePipeline).FullName, StringComparison.InvariantCultureIgnoreCase))
 			{
 				return;
 			}

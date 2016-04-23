@@ -1,6 +1,5 @@
 ﻿using System;
 using Shuttle.Core.Infrastructure;
-using Shuttle.Esb;
 
 namespace Shuttle.Esb.Tests
 {
@@ -9,7 +8,7 @@ namespace Shuttle.Esb.Tests
 		IPipelineObserver<OnAfterHandleMessage>,
 		IPipelineObserver<OnAfterProcessDeferredMessage>
 	{
-		private readonly object padlock =new object();
+		private readonly object padlock = new object();
 		private readonly int _deferredMessageCount;
 		private readonly ILog _log;
 
@@ -32,9 +31,11 @@ namespace Shuttle.Esb.Tests
 
 		private void PipelineCreated(object sender, PipelineEventArgs e)
 		{
-			if (!e.Pipeline.GetType().FullName.Equals(typeof(InboxMessagePipeline).FullName, StringComparison.InvariantCultureIgnoreCase)
+			if (!e.Pipeline.GetType()
+				.FullName.Equals(typeof (InboxMessagePipeline).FullName, StringComparison.InvariantCultureIgnoreCase)
 			    &&
-			    !e.Pipeline.GetType().FullName.Equals(typeof(DeferredMessagePipeline).FullName, StringComparison.InvariantCultureIgnoreCase))
+			    !e.Pipeline.GetType()
+				    .FullName.Equals(typeof (DeferredMessagePipeline).FullName, StringComparison.InvariantCultureIgnoreCase))
 			{
 				return;
 			}
@@ -54,7 +55,8 @@ namespace Shuttle.Esb.Tests
 
 		public void Execute(OnAfterProcessDeferredMessage pipelineEvent)
 		{
-			_log.Information(string.Format("[OnAfterProcessDeferredMessage] : deferred message returned = '{0}'", pipelineEvent.Pipeline.State.GetDeferredMessageReturned()));
+			_log.Information(string.Format("[OnAfterProcessDeferredMessage] : deferred message returned = '{0}'",
+				pipelineEvent.Pipeline.State.GetDeferredMessageReturned()));
 
 			if (pipelineEvent.Pipeline.State.GetDeferredMessageReturned())
 			{

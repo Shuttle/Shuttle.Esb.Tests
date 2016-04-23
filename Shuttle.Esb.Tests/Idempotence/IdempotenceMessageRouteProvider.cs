@@ -1,5 +1,5 @@
-﻿using System.Collections.Generic;
-using Shuttle.Esb;
+﻿using System;
+using System.Collections.Generic;
 
 namespace Shuttle.Esb.Tests
 {
@@ -7,22 +7,22 @@ namespace Shuttle.Esb.Tests
 	{
 		public IEnumerable<string> GetRouteUris(string messageType)
 		{
-			return new List<string> { "memory://./idempotence-inbox-work" };
+			return new List<string> {"memory://./idempotence-inbox-work"};
 		}
 
 		public void Add(IMessageRoute messageRoute)
 		{
-			throw new System.NotImplementedException();
+			throw new NotImplementedException();
 		}
 
 		public IMessageRoute Find(string uri)
 		{
-			throw new System.NotImplementedException();
+			throw new NotImplementedException();
 		}
 
-	    public bool Any()
-	    {
-	        throw new System.NotImplementedException();
-	    }
+		public bool Any()
+		{
+			throw new NotImplementedException();
+		}
 	}
 }

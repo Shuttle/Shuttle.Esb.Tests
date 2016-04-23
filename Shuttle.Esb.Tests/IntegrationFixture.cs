@@ -1,7 +1,6 @@
+using log4net;
 using Shuttle.Core.Infrastructure;
 using Shuttle.Core.Log4Net;
-using Shuttle.Esb;
-using log4net;
 
 namespace Shuttle.Esb.Tests
 {
@@ -16,18 +15,18 @@ namespace Shuttle.Esb.Tests
 
 		protected override void FixtureSetUp()
 		{
-			Log.Assign(new Log4NetLog(LogManager.GetLogger(typeof(IntegrationFixture))));
+			Log.Assign(new Log4NetLog(LogManager.GetLogger(typeof (IntegrationFixture))));
 		}
 
 		protected static ServiceBusConfiguration DefaultConfiguration(bool isTransactional)
 		{
 			var configuration = new ServiceBusConfiguration
+			{
+				TransactionScope = new TransactionScopeConfiguration
 				{
-					TransactionScope = new TransactionScopeConfiguration
-						{
-							Enabled = isTransactional
-						}
-				};
+					Enabled = isTransactional
+				}
+			};
 
 			configuration.QueueManager.ScanForQueueFactories();
 

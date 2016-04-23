@@ -2,8 +2,6 @@
 using System.Collections.Generic;
 using NUnit.Framework;
 using Shuttle.Core.Infrastructure;
-using Shuttle.Esb;
-using Guard = Shuttle.Core.Infrastructure.Guard;
 
 namespace Shuttle.Esb.Tests
 {
@@ -64,7 +62,6 @@ namespace Shuttle.Esb.Tests
 			//bus.Events.AfterHandleMessage += (sender, e) => ThrowException("AfterHandleMessage");
 			//bus.Events.BeforeRemoveMessage += (sender, e) => ThrowException("BeforeRemoveMessage");
 			//bus.Events.AfterRemoveMessage += (sender, e) => ThrowException("AfterRemoveMessage");
-
 		}
 
 		private void PipelineObtained(object sender, PipelineEventArgs e)
@@ -77,7 +74,9 @@ namespace Shuttle.Esb.Tests
 
 		private void PipelineCreated(object sender, PipelineEventArgs e)
 		{
-			if (!e.Pipeline.GetType().FullName.Equals(typeof(InboxMessagePipeline).FullName, StringComparison.InvariantCultureIgnoreCase))
+			if (
+				!e.Pipeline.GetType()
+					.FullName.Equals(typeof (InboxMessagePipeline).FullName, StringComparison.InvariantCultureIgnoreCase))
 			{
 				return;
 			}

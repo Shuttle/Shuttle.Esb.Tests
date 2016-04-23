@@ -1,6 +1,4 @@
-﻿using Shuttle.Esb;
-
-namespace Shuttle.Esb.Tests
+﻿namespace Shuttle.Esb.Tests
 {
 	public class IdempotenceHandler : IMessageHandler<IdempotenceCommand>
 	{
@@ -23,7 +21,8 @@ namespace Shuttle.Esb.Tests
 			get { return _counter.ProcessedCount; }
 		}
 
-		public bool IsReusable {
+		public bool IsReusable
+		{
 			get { return true; }
 		}
 	}
