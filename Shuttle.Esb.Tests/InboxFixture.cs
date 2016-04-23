@@ -251,7 +251,7 @@ namespace Shuttle.Esb.Tests
 			Assert.True(messageType.Equals(module.TransportMessage.MessageType, StringComparison.OrdinalIgnoreCase));
 		}
 
-		protected void TestInboxExpiry(string queueUriFormat)
+		protected void TestInboxExpiry(string queueUriFormat, bool queueCanExpireMessages)
 		{
 			var configuration = GetConfiguration(queueUriFormat, 1, false);
 			var expired = false;
@@ -265,18 +265,32 @@ namespace Shuttle.Esb.Tests
 
 				bus.Start();
 
-				var transportMessage = bus.Send(new ReceivePipelineCommand(), c =>
-					c.WillExpire(DateTime.Now.AddMilliseconds(-500))
-						.WithRecipient(configuration.Inbox.WorkQueue));
+				var transportMessage = bus.CreateTransportMessage(new ReceivePipelineCommand(), c =>
+				{
+					c.WillExpire(DateTime.Now.AddMilliseconds(250));
+					c.WithRecipient(configuration.Inbox.WorkQueue);
+				});
+
+				configuration.Inbox.WorkQueue.Enqueue(transportMessage, configuration.Serializer.Serialize(transportMessage));
 
 				Assert.IsNotNull(transportMessage);
-				Assert.IsTrue(transportMessage.ExpiryDate < DateTime.Now);
+				Assert.IsFalse(transportMessage.HasExpired());
 
-				var timeout = DateTime.Now.AddMilliseconds(1000);
+				// wait until the message expires
+				Thread.Sleep(300);
 
-				while (!expired && DateTime.Now < timeout)
+				if (queueCanExpireMessages)
 				{
-					Thread.Sleep(5);
+					expired = (configuration.Inbox.WorkQueue.GetMessage() == null);
+				}
+				else
+				{
+					var timeout = DateTime.Now.AddMilliseconds(250);
+
+					while (!expired && DateTime.Now < timeout)
+					{
+						Thread.Sleep(5);
+					}
 				}
 
 				Assert.IsTrue(expired, "The message did not expire.");
