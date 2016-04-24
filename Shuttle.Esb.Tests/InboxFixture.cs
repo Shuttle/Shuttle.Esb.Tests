@@ -251,23 +251,17 @@ namespace Shuttle.Esb.Tests
 			Assert.True(messageType.Equals(module.TransportMessage.MessageType, StringComparison.OrdinalIgnoreCase));
 		}
 
-		protected void TestInboxExpiry(string queueUriFormat, bool queueCanExpireMessages)
+		protected void TestInboxExpiry(string queueUriFormat)
 		{
 			var configuration = GetConfiguration(queueUriFormat, 1, false);
-			var expired = false;
 
 			using (var bus = new ServiceBus(configuration))
 			{
-				bus.Events.MessageExpired += (sender, eventArgs) =>
-				{
-					expired = true;
-				};
-
 				bus.Start();
 
 				var transportMessage = bus.CreateTransportMessage(new ReceivePipelineCommand(), c =>
 				{
-					c.WillExpire(DateTime.Now.AddMilliseconds(1000));
+					c.WillExpire(DateTime.Now.AddMilliseconds(500));
 					c.WithRecipient(configuration.Inbox.WorkQueue);
 				});
 
@@ -277,23 +271,9 @@ namespace Shuttle.Esb.Tests
 				Assert.IsFalse(transportMessage.HasExpired(), "The message has already expired before being processed.");
 
 				// wait until the message expires
-				Thread.Sleep(1050);
+				Thread.Sleep(550);
 
-				if (queueCanExpireMessages)
-				{
-					expired = (configuration.Inbox.WorkQueue.GetMessage() == null);
-				}
-				else
-				{
-					var timeout = DateTime.Now.AddMilliseconds(250);
-
-					while (!expired && DateTime.Now < timeout)
-					{
-						Thread.Sleep(5);
-					}
-				}
-
-				Assert.IsTrue(expired, "The message did not expire.");
+				Assert.IsNull(configuration.Inbox.WorkQueue.GetMessage(), "The message did not expire.  Call this test only if your queue actully supports message expiry internally.");
 			}
 		}
 	}
