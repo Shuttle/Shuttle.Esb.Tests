@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Reflection;
 
 namespace Shuttle.Esb.Tests
 {
@@ -28,7 +29,17 @@ namespace Shuttle.Esb.Tests
 		{
 		}
 
-		public IEnumerable<Type> MessageTypesHandled
+	    public IMessageHandlerFactory RegisterHandlers()
+	    {
+	        return this;
+	    }
+
+	    public IMessageHandlerFactory RegisterHandlers(Assembly assembly)
+	    {
+            return this;
+        }
+
+	    public IEnumerable<Type> MessageTypesHandled
 		{
 			get { return _messageTypesHandled; }
 		}

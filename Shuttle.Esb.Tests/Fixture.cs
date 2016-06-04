@@ -1,4 +1,5 @@
 using System;
+using System.Transactions;
 using NUnit.Framework;
 using Shuttle.Core.Infrastructure;
 
@@ -47,7 +48,7 @@ namespace Shuttle.Esb.Tests
 				Serializer = new DefaultSerializer(),
 				MessageHandlerFactory = new DefaultMessageHandlerFactory(),
 				PipelineFactory = new DefaultPipelineFactory(),
-				TransactionScopeFactory = new DefaultTransactionScopeFactory(),
+				TransactionScopeFactory = new DefaultTransactionScopeFactory(true, IsolationLevel.ReadCommitted, TimeSpan.FromSeconds(30)),
 				ThreadActivityFactory = new DefaultThreadActivityFactory()
 			};
 		}
