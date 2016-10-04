@@ -15,7 +15,7 @@ namespace Shuttle.Esb.Tests
 			_messageTypesHandled.Add(_type);
 		}
 
-		public IMessageHandler GetHandler(object message)
+		public object GetHandler(object message)
 		{
 			if (message.GetType() == _type)
 			{
@@ -25,7 +25,7 @@ namespace Shuttle.Esb.Tests
 			throw new Exception("Can only handle type of 'IdempotenceCommand'.");
 		}
 
-		public void ReleaseHandler(IMessageHandler handler)
+		public void ReleaseHandler(object handler)
 		{
 		}
 
@@ -38,6 +38,11 @@ namespace Shuttle.Esb.Tests
 	    {
             return this;
         }
+
+	    public IMessageHandlerFactory RegisterHandler(Type type)
+	    {
+	        return this;
+	    }
 
 	    public IEnumerable<Type> MessageTypesHandled
 		{
