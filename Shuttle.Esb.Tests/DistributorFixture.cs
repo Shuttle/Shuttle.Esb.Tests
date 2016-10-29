@@ -7,7 +7,7 @@ namespace Shuttle.Esb.Tests
 {
 	public class DistributorFixture : IntegrationFixture
 	{
-		private class WorkerModule : IModule, IPipelineObserver<OnAfterHandleMessage>
+		private class WorkerModule : IPipelineModule, IPipelineObserver<OnAfterHandleMessage>
 		{
 			private readonly object padlock = new object();
 			private readonly int _messageCount;
@@ -19,11 +19,6 @@ namespace Shuttle.Esb.Tests
 				_messageCount = messageCount;
 
 				_log = Log.For(this);
-			}
-
-			public void Initialize(IServiceBus bus)
-			{
-				bus.Events.PipelineCreated += PipelineCreated;
 			}
 
 			private void PipelineCreated(object sender, PipelineEventArgs e)
@@ -42,7 +37,7 @@ namespace Shuttle.Esb.Tests
 
 			public void Execute(OnAfterHandleMessage pipelineEvent1)
 			{
-				_log.Information(string.Format("[OnAfterHandleMessage]"));
+				_log.Information("[OnAfterHandleMessage]");
 
 				lock (padlock)
 				{
@@ -54,6 +49,11 @@ namespace Shuttle.Esb.Tests
 			{
 				return _messagesHandled == _messageCount;
 			}
+
+		    public void Start(IPipelineFactory pipelineFactory)
+		    {
+		        pipelineFactory.PipelineCreated += PipelineCreated;
+            }
 		}
 
 		private readonly ILog _log;
@@ -148,7 +148,7 @@ namespace Shuttle.Esb.Tests
 		}
 
 		private static ServiceBusConfiguration GetWorkerConfiguration(string queueUriFormat, bool isTransactional,
-			IModule module)
+			IPipelineModule module)
 		{
 			var configuration = DefaultConfiguration(isTransactional);
 

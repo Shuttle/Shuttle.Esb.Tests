@@ -6,17 +6,12 @@ using Shuttle.Core.Infrastructure;
 namespace Shuttle.Esb.Tests
 {
 	public class InboxConcurrencyModule :
-		IModule,
+		IPipelineModule,
 		IPipelineObserver<OnAfterGetMessage>
 	{
 		private readonly object _padlock = new object();
 		private readonly List<DateTime> _datesAfterGetMessage = new List<DateTime>();
 		private DateTime _firstDateAfterGetMessage = DateTime.MinValue;
-
-		public void Initialize(IServiceBus bus)
-		{
-			bus.Events.PipelineCreated += PipelineCreated;
-		}
 
 		private void PipelineCreated(object sender, PipelineEventArgs e)
 		{
@@ -60,5 +55,10 @@ namespace Shuttle.Esb.Tests
 				_datesAfterGetMessage.All(
 					dateTime => dateTime.Subtract(_firstDateAfterGetMessage) <= TimeSpan.FromMilliseconds(msToComplete));
 		}
+
+	    public void Start(IPipelineFactory pipelineFactory)
+	    {
+	        pipelineFactory.PipelineCreated += PipelineCreated;
+        }
 	}
 }

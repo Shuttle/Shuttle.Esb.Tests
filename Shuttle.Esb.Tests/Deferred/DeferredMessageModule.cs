@@ -4,7 +4,7 @@ using Shuttle.Core.Infrastructure;
 namespace Shuttle.Esb.Tests
 {
 	public class DeferredMessageModule :
-		IModule,
+		IPipelineModule,
 		IPipelineObserver<OnAfterHandleMessage>,
 		IPipelineObserver<OnAfterProcessDeferredMessage>
 	{
@@ -22,13 +22,6 @@ namespace Shuttle.Esb.Tests
 		public int NumberOfDeferredMessagesReturned { get; private set; }
 		public int NumberOfMessagesHandled { get; private set; }
 
-		public void Initialize(IServiceBus bus)
-		{
-			Guard.AgainstNull(bus, "bus");
-
-			bus.Events.PipelineCreated += PipelineCreated;
-		}
-
 		private void PipelineCreated(object sender, PipelineEventArgs e)
 		{
 			if (!e.Pipeline.GetType()
@@ -45,7 +38,7 @@ namespace Shuttle.Esb.Tests
 
 		public void Execute(OnAfterHandleMessage pipelineEvent)
 		{
-			_log.Information(string.Format("[OnAfterHandleMessage]"));
+			_log.Information("[OnAfterHandleMessage]");
 
 			lock (padlock)
 			{
@@ -76,5 +69,10 @@ namespace Shuttle.Esb.Tests
 		{
 			return NumberOfDeferredMessagesReturned == _deferredMessageCount;
 		}
+
+	    public void Start(IPipelineFactory pipelineFactory)
+	    {
+	        pipelineFactory.PipelineCreated += PipelineCreated;
+        }
 	}
 }

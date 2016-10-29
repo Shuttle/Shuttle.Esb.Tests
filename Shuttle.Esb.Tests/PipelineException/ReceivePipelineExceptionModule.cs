@@ -6,7 +6,7 @@ using Shuttle.Core.Infrastructure;
 namespace Shuttle.Esb.Tests
 {
 	public class ReceivePipelineExceptionModule :
-		IModule,
+		IPipelineModule,
 		IPipelineObserver<OnGetMessage>,
 		IPipelineObserver<OnAfterGetMessage>,
 		IPipelineObserver<OnDeserializeTransportMessage>,
@@ -36,32 +36,10 @@ namespace Shuttle.Esb.Tests
 		{
 			Guard.AgainstNull(bus, "bus");
 
-			bus.Events.PipelineCreated += PipelineCreated;
-			bus.Events.PipelineReleased += PipelineReleased;
-			bus.Events.PipelineObtained += PipelineObtained;
-
-			//AddAssertion("BeforeDequeueStream", Assertion);
 			AddAssertion("OnGetMessage");
 			AddAssertion("OnAfterGetMessage");
 			AddAssertion("OnDeserializeTransportMessage");
 			AddAssertion("OnAfterDeserializeTransportMessage");
-			//AddAssertion("AfterMessageDeserialization", Assertion);
-			//AddAssertion("BeforeEnqueueStream", Assertion);
-			//AddAssertion("AfterEnqueueStream", Assertion);
-			//AddAssertion("BeforeHandleMessage", Assertion);
-			//AddAssertion("AfterHandleMessage", Assertion);
-			//AddAssertion("BeforeRemoveMessage", Assertion);
-			//AddAssertion("AfterRemoveMessage", Assertion);
-
-			//bus.Events.BeforeDequeueStream += (sender, e) => ThrowException("BeforeDequeueStream");
-			//bus.Events.AfterDequeueStream += (sender, e) => ThrowException("AfterDequeueStream");
-			//bus.Events.AfterMessageDeserialization += (sender, e) => ThrowException("AfterMessageDeserialization");
-			//bus.Events.BeforeEnqueueStream += (sender, e) => ThrowException("BeforeEnqueueStream");
-			//bus.Events.AfterEnqueueStream += (sender, e) => ThrowException("AfterEnqueueStream");
-			//bus.Events.BeforeHandleMessage += (sender, e) => ThrowException("BeforeHandleMessage");
-			//bus.Events.AfterHandleMessage += (sender, e) => ThrowException("AfterHandleMessage");
-			//bus.Events.BeforeRemoveMessage += (sender, e) => ThrowException("BeforeRemoveMessage");
-			//bus.Events.AfterRemoveMessage += (sender, e) => ThrowException("AfterRemoveMessage");
 		}
 
 		private void PipelineObtained(object sender, PipelineEventArgs e)
@@ -183,5 +161,12 @@ namespace Shuttle.Esb.Tests
 		{
 			ThrowException("OnAfterDeserializeTransportMessage");
 		}
-	}
+
+	    public void Start(IPipelineFactory pipelineFactory)
+	    {
+            pipelineFactory.PipelineCreated += PipelineCreated;
+            pipelineFactory.PipelineReleased += PipelineReleased;
+            pipelineFactory.PipelineObtained += PipelineObtained;
+        }
+    }
 }

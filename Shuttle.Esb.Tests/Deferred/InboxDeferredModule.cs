@@ -4,15 +4,10 @@ using Shuttle.Core.Infrastructure;
 namespace Shuttle.Esb.Tests
 {
 	public class InboxDeferredModule :
-		IModule,
+		IPipelineModule,
 		IPipelineObserver<OnAfterDeserializeTransportMessage>
 	{
 		public TransportMessage TransportMessage { get; private set; }
-
-		public void Initialize(IServiceBus bus)
-		{
-			bus.Events.PipelineCreated += PipelineCreated;
-		}
 
 		private void PipelineCreated(object sender, PipelineEventArgs e)
 		{
@@ -30,5 +25,10 @@ namespace Shuttle.Esb.Tests
 		{
 			TransportMessage = pipelineEvent.Pipeline.State.GetTransportMessage();
 		}
+
+	    public void Start(IPipelineFactory pipelineFactory)
+	    {
+	        pipelineFactory.PipelineCreated += PipelineCreated;
+        }
 	}
 }
