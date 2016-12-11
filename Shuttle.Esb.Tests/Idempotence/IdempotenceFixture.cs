@@ -2,114 +2,126 @@
 using System.Collections.Generic;
 using System.Threading;
 using NUnit.Framework;
+using Shuttle.Core.Infrastructure;
 
 namespace Shuttle.Esb.Tests
 {
-	public class IdempotenceFixture : IntegrationFixture
-	{
-		protected void TestIdempotenceProcessing(IIdempotenceService idempotenceService, string queueUriFormat,
-			bool isTransactional, bool enqueueUniqueMessages)
-		{
-			const int threadCount = 1;
-			const int messageCount = 5;
+    public class IdempotenceFixture : IntegrationFixture
+    {
+        protected void TestIdempotenceProcessing(IIdempotenceService idempotenceService, string queueUriFormat,
+            bool isTransactional, bool enqueueUniqueMessages)
+        {
+            const int threadCount = 1;
+            const int messageCount = 5;
 
-			var configuration = GetInboxConfiguration(idempotenceService, queueUriFormat, threadCount, isTransactional);
-			var padlock = new object();
+            var padlock = new object();
+            var configuration = GetInboxConfiguration(queueUriFormat, threadCount, isTransactional);
+            var container = new DefaultComponentContainer();
 
-			using (var bus = new ServiceBus(configuration))
-			{
-				if (enqueueUniqueMessages)
-				{
-					for (var i = 0; i < messageCount; i++)
-					{
-						var message = bus.CreateTransportMessage(new IdempotenceCommand(),
-							c => c.WithRecipient(configuration.Inbox.WorkQueue));
+            var defaultConfigurator = new DefaultConfigurator(container);
 
-						configuration.Inbox.WorkQueue.Enqueue(message, configuration.Serializer.Serialize(message));
-					}
-				}
-				else
-				{
-					var message = bus.CreateTransportMessage(new IdempotenceCommand(),
-						c => c.WithRecipient(configuration.Inbox.WorkQueue));
+            container.Register(typeof(IdempotenceCounter), typeof(IdempotenceCounter));
+            container.Register<IMessageRouteProvider>(new IdempotenceMessageRouteProvider());
+            container.Register(idempotenceService);
+            container.Register<IMessageHandlerInvoker, IdempotenceMessageHandlerInvoker>();
 
-					for (var i = 0; i < messageCount; i++)
-					{
-						configuration.Inbox.WorkQueue.Enqueue(message, configuration.Serializer.Serialize(message));
-					}
-				}
+            defaultConfigurator.DontRegister<IMessageRouteProvider>();
+            defaultConfigurator.DontRegister<IIdempotenceService>();
+            defaultConfigurator.DontRegister<IMessageHandlerInvoker>();
 
-				var idleThreads = new List<int>();
+            defaultConfigurator.RegisterComponents(configuration);
 
-				bus.Events.ThreadWaiting += (sender, args) =>
-				{
-					lock (padlock)
-					{
-						if (idleThreads.Contains(Thread.CurrentThread.ManagedThreadId))
-						{
-							return;
-						}
+            var transportMessageFactory = container.Resolve<ITransportMessageFactory>();
+            var serializer = container.Resolve<ISerializer>();
+            var events = container.Resolve<IServiceBusEvents>();
+            var messageHandlerInvoker = (IdempotenceMessageHandlerInvoker)container.Resolve<IMessageHandlerInvoker>();
 
-						idleThreads.Add(Thread.CurrentThread.ManagedThreadId);
-					}
-				};
+            container.Resolve<IQueueManager>().ScanForQueueFactories();
 
-				bus.Start();
+            using (var bus = ServiceBus.Create(container))
+            {
+                if (enqueueUniqueMessages)
+                {
+                    for (var i = 0; i < messageCount; i++)
+                    {
+                        var message = transportMessageFactory.Create(new IdempotenceCommand(),
+                            c => c.WithRecipient(configuration.Inbox.WorkQueue));
 
-				while (idleThreads.Count < threadCount)
-				{
-					Thread.Sleep(5);
-				}
+                        configuration.Inbox.WorkQueue.Enqueue(message, serializer.Serialize(message));
+                    }
+                }
+                else
+                {
+                    var message = transportMessageFactory.Create(new IdempotenceCommand(),
+                        c => c.WithRecipient(configuration.Inbox.WorkQueue));
 
-				Assert.IsNull(configuration.Inbox.ErrorQueue.GetMessage());
-				Assert.IsNull(configuration.Inbox.WorkQueue.GetMessage());
+                    for (var i = 0; i < messageCount; i++)
+                    {
+                        configuration.Inbox.WorkQueue.Enqueue(message, serializer.Serialize(message));
+                    }
+                }
 
-				if (enqueueUniqueMessages)
-				{
-					Assert.AreEqual(messageCount,
-						((IdempotenceMessageHandlerFactory) bus.Configuration.MessageHandlerFactory).ProcessedCount);
-				}
-				else
-				{
-					Assert.AreEqual(1, ((IdempotenceMessageHandlerFactory) bus.Configuration.MessageHandlerFactory).ProcessedCount);
-				}
-			}
+                var idleThreads = new List<int>();
 
-			AttemptDropQueues(queueUriFormat);
-		}
+                events.ThreadWaiting += (sender, args) =>
+                {
+                    lock (padlock)
+                    {
+                        if (idleThreads.Contains(Thread.CurrentThread.ManagedThreadId))
+                        {
+                            return;
+                        }
 
-		private static ServiceBusConfiguration GetInboxConfiguration(IIdempotenceService idempotenceService,
-			string queueUriFormat, int threadCount, bool isTransactional)
-		{
-			var configuration = DefaultConfiguration(isTransactional);
+                        idleThreads.Add(Thread.CurrentThread.ManagedThreadId);
+                    }
+                };
 
-			configuration.MessageRouteProvider = new IdempotenceMessageRouteProvider();
-			configuration.MessageHandlerFactory = new IdempotenceMessageHandlerFactory();
-			configuration.IdempotenceService = idempotenceService;
+                bus.Start();
 
-			var inboxWorkQueue =
-				configuration.QueueManager.GetQueue(string.Format(queueUriFormat, "test-inbox-work"));
-			var errorQueue = configuration.QueueManager.GetQueue(string.Format(queueUriFormat, "test-error"));
+                while (idleThreads.Count < threadCount)
+                {
+                    Thread.Sleep(5);
+                }
 
-			configuration.Inbox =
-				new InboxQueueConfiguration
-				{
-					WorkQueue = inboxWorkQueue,
-					ErrorQueue = errorQueue,
-					DurationToIgnoreOnFailure = new[] {TimeSpan.FromMilliseconds(5)},
-					DurationToSleepWhenIdle = new[] {TimeSpan.FromMilliseconds(5)},
-					ThreadCount = threadCount
-				};
+                Assert.IsNull(configuration.Inbox.ErrorQueue.GetMessage());
+                Assert.IsNull(configuration.Inbox.WorkQueue.GetMessage());
 
-			inboxWorkQueue.AttemptDrop();
-			errorQueue.AttemptDrop();
+                Assert.AreEqual(enqueueUniqueMessages ? messageCount : 1, messageHandlerInvoker.ProcessedCount);
+            }
 
-			configuration.QueueManager.CreatePhysicalQueues(configuration);
+            AttemptDropQueues(queueUriFormat);
+        }
 
-			inboxWorkQueue.AttemptPurge();
-			errorQueue.AttemptPurge();
+        private static ServiceBusConfiguration GetInboxConfiguration(string queueUriFormat, int threadCount, bool isTransactional)
+        {
+            using (var queueManager = GetQueueManager())
+            {
+                var configuration = DefaultConfiguration(isTransactional);
 
-			return configuration;
-		}
-	}
+                var inboxWorkQueue =
+                    queueManager.GetQueue(string.Format(queueUriFormat, "test-inbox-work"));
+                var errorQueue = queueManager.GetQueue(string.Format(queueUriFormat, "test-error"));
+
+                configuration.Inbox =
+                    new InboxQueueConfiguration
+                    {
+                        WorkQueue = inboxWorkQueue,
+                        ErrorQueue = errorQueue,
+                        DurationToIgnoreOnFailure = new[] {TimeSpan.FromMilliseconds(5)},
+                        DurationToSleepWhenIdle = new[] {TimeSpan.FromMilliseconds(5)},
+                        ThreadCount = threadCount
+                    };
+
+                inboxWorkQueue.AttemptDrop();
+                errorQueue.AttemptDrop();
+
+                queueManager.CreatePhysicalQueues(configuration);
+
+                inboxWorkQueue.AttemptPurge();
+                errorQueue.AttemptPurge();
+
+                return configuration;
+            }
+        }
+    }
 }

@@ -5,175 +5,194 @@ using Shuttle.Core.Infrastructure;
 
 namespace Shuttle.Esb.Tests
 {
-	public class DistributorFixture : IntegrationFixture
-	{
-		private class WorkerModule : IPipelineModule, IPipelineObserver<OnAfterHandleMessage>
-		{
-			private readonly object padlock = new object();
-			private readonly int _messageCount;
-			private int _messagesHandled;
-			private readonly ILog _log;
+    public class DistributorFixture : IntegrationFixture
+    {
+        private class WorkerModule : IPipelineObserver<OnAfterHandleMessage>
+        {
+            private readonly ILog _log;
+            private readonly int _messageCount;
+            private readonly object padlock = new object();
+            private int _messagesHandled;
 
-			public WorkerModule(int messageCount)
-			{
-				_messageCount = messageCount;
+            public WorkerModule(int messageCount)
+            {
+                _messageCount = messageCount;
 
-				_log = Log.For(this);
-			}
-
-			private void PipelineCreated(object sender, PipelineEventArgs e)
-			{
-				if (!e.Pipeline.GetType()
-					.FullName.Equals(typeof (InboxMessagePipeline).FullName, StringComparison.InvariantCultureIgnoreCase)
-				    &&
-				    !e.Pipeline.GetType()
-					    .FullName.Equals(typeof (DeferredMessagePipeline).FullName, StringComparison.InvariantCultureIgnoreCase))
-				{
-					return;
-				}
-
-				e.Pipeline.RegisterObserver(this);
-			}
-
-			public void Execute(OnAfterHandleMessage pipelineEvent1)
-			{
-				_log.Information("[OnAfterHandleMessage]");
-
-				lock (padlock)
-				{
-					_messagesHandled++;
-				}
-			}
-
-			public bool AllMessagesHandled()
-			{
-				return _messagesHandled == _messageCount;
-			}
-
-		    public void Start(IPipelineFactory pipelineFactory)
-		    {
-		        pipelineFactory.PipelineCreated += PipelineCreated;
+                _log = Log.For(this);
             }
-		}
 
-		private readonly ILog _log;
+            public WorkerModule(IPipelineFactory pipelineFactory)
+            {
+                pipelineFactory.PipelineCreated += PipelineCreated;
+            }
 
-		public DistributorFixture()
-		{
-			_log = Log.For(this);
-		}
+            public void Execute(OnAfterHandleMessage pipelineEvent1)
+            {
+                _log.Information("[OnAfterHandleMessage]");
 
-		protected void TestDistributor(string queueUriFormat, bool isTransactional)
-		{
-			const int messageCount = 12;
+                lock (padlock)
+                {
+                    _messagesHandled++;
+                }
+            }
 
-			var module = new WorkerModule(messageCount);
+            private void PipelineCreated(object sender, PipelineEventArgs e)
+            {
+                if (!e.Pipeline.GetType()
+                    .FullName.Equals(typeof (InboxMessagePipeline).FullName, StringComparison.InvariantCultureIgnoreCase)
+                    &&
+                    !e.Pipeline.GetType()
+                        .FullName.Equals(typeof (DeferredMessagePipeline).FullName,
+                            StringComparison.InvariantCultureIgnoreCase))
+                {
+                    return;
+                }
 
-			using (var distibutorBus = new ServiceBus(GetDistributorConfiguration(queueUriFormat, isTransactional)))
-			using (var workerBus = new ServiceBus(GetWorkerConfiguration(queueUriFormat, isTransactional, module)))
-			{
-				for (var i = 0; i < messageCount; i++)
-				{
-					var command = new SimpleCommand
-					{
-						Name = Guid.NewGuid().ToString()
-					};
+                e.Pipeline.RegisterObserver(this);
+            }
 
-					var workQueue = distibutorBus.Configuration.Inbox.WorkQueue;
-					var message = distibutorBus.CreateTransportMessage(command, c => c.WithRecipient(workQueue));
+            public bool AllMessagesHandled()
+            {
+                return _messagesHandled == _messageCount;
+            }
+        }
 
-					workQueue.Enqueue(message, distibutorBus.Configuration.Serializer.Serialize(message));
-				}
+        private readonly ILog _log;
 
-				distibutorBus.Start();
-				workerBus.Start();
+        public DistributorFixture()
+        {
+            _log = Log.For(this);
+        }
 
-				var timeout = DateTime.Now.AddSeconds(15);
-				var timedOut = false;
+        protected void TestDistributor(string queueUriFormat, bool isTransactional)
+        {
+            const int messageCount = 12;
 
-				_log.Information(string.Format("[start wait] : now = '{0}'", DateTime.Now));
+            var module = new WorkerModule(messageCount);
 
-				while (!module.AllMessagesHandled() && !timedOut)
-				{
-					Thread.Sleep(50);
+            var distributorConfiguration = GetDistributorConfiguration(queueUriFormat, isTransactional);
+            var distributorContainer = GetComponentContainer(distributorConfiguration);
 
-					timedOut = timeout < DateTime.Now;
-				}
+            var transportMessageFactory = distributorContainer.Resolve<ITransportMessageFactory>();
+            var serializer = distributorContainer.Resolve<ISerializer>();
 
-				_log.Information(string.Format("[end wait] : now = '{0}' / timeout = '{1}' / timed out = '{2}'", DateTime.Now,
-					timeout, timedOut));
+            var workerContainer = GetComponentContainer(GetWorkerConfiguration(queueUriFormat, isTransactional));
 
-				Assert.IsTrue(module.AllMessagesHandled(), "Not all messages were handled.");
-			}
+            workerContainer.Register<WorkerModule, WorkerModule>();
 
-			AttemptDropQueues(queueUriFormat);
-		}
+            using (var distributorBus = ServiceBus.Create(distributorContainer))
+            using (var workerBus = ServiceBus.Create(workerContainer))
+            {
+                for (var i = 0; i < messageCount; i++)
+                {
+                    var command = new SimpleCommand
+                    {
+                        Name = Guid.NewGuid().ToString()
+                    };
 
-		private static ServiceBusConfiguration GetDistributorConfiguration(string queueUriFormat, bool isTransactional)
-		{
-			var configuration = DefaultConfiguration(isTransactional);
+                    var workQueue = distributorConfiguration.Inbox.WorkQueue;
+                    var message = transportMessageFactory.Create(command, c => c.WithRecipient(workQueue));
 
-			var errorQueue = configuration.QueueManager.GetQueue(string.Format(queueUriFormat, "test-error"));
+                    workQueue.Enqueue(message, serializer.Serialize(message));
+                }
 
-			configuration.Inbox =
-				new InboxQueueConfiguration
-				{
-					WorkQueue = configuration.QueueManager.GetQueue(string.Format(queueUriFormat, "test-distributor-work")),
-					ErrorQueue = errorQueue,
-					DurationToSleepWhenIdle = new[] {TimeSpan.FromMilliseconds(5)},
-					ThreadCount = 1,
-					Distribute = true,
-					DistributeSendCount = 3
-				};
+                distributorBus.Start();
+                workerBus.Start();
 
-			configuration.ControlInbox = new ControlInboxQueueConfiguration
-			{
-				WorkQueue = configuration.QueueManager.GetQueue(string.Format(queueUriFormat, "test-distributor-control")),
-				ErrorQueue = errorQueue,
-				DurationToSleepWhenIdle = new[] {TimeSpan.FromMilliseconds(5)},
-				ThreadCount = 1
-			};
+                var timeout = DateTime.Now.AddSeconds(15);
+                var timedOut = false;
 
-			configuration.Inbox.WorkQueue.AttemptDrop();
-			configuration.ControlInbox.WorkQueue.AttemptDrop();
-			errorQueue.AttemptDrop();
+                _log.Information(string.Format("[start wait] : now = '{0}'", DateTime.Now));
 
-			configuration.QueueManager.CreatePhysicalQueues(configuration);
+                while (!module.AllMessagesHandled() && !timedOut)
+                {
+                    Thread.Sleep(50);
 
-			configuration.Inbox.WorkQueue.AttemptPurge();
-			configuration.ControlInbox.WorkQueue.AttemptPurge();
-			errorQueue.AttemptPurge();
+                    timedOut = timeout < DateTime.Now;
+                }
 
-			return configuration;
-		}
+                _log.Information(string.Format("[end wait] : now = '{0}' / timeout = '{1}' / timed out = '{2}'",
+                    DateTime.Now, timeout, timedOut));
 
-		private static ServiceBusConfiguration GetWorkerConfiguration(string queueUriFormat, bool isTransactional,
-			IPipelineModule module)
-		{
-			var configuration = DefaultConfiguration(isTransactional);
+                Assert.IsTrue(module.AllMessagesHandled(), "Not all messages were handled.");
+            }
 
-			configuration.Modules.Add(module);
+            AttemptDropQueues(queueUriFormat);
+        }
 
-			configuration.Inbox =
-				new InboxQueueConfiguration
-				{
-					WorkQueue = configuration.QueueManager.GetQueue(string.Format(queueUriFormat, "test-worker-work")),
-					ErrorQueue = configuration.QueueManager.GetQueue(string.Format(queueUriFormat, "test-error")),
-					DurationToSleepWhenIdle = new[] {TimeSpan.FromMilliseconds(5)},
-					ThreadCount = 1
-				};
+        private static ServiceBusConfiguration GetDistributorConfiguration(string queueUriFormat, bool isTransactional)
+        {
+            using (var queueManager = GetQueueManager())
+            {
+                var configuration = DefaultConfiguration(isTransactional);
 
-			configuration.Worker =
-				new WorkerConfiguration(
-					configuration.QueueManager.GetQueue(string.Format(queueUriFormat, "test-distributor-control")), 30);
+                var errorQueue = queueManager.GetQueue(string.Format(queueUriFormat, "test-error"));
 
-			configuration.Inbox.WorkQueue.AttemptDrop();
+                configuration.Inbox =
+                    new InboxQueueConfiguration
+                    {
+                        WorkQueue =
+                            queueManager.GetQueue(string.Format(queueUriFormat, "test-distributor-work")),
+                        ErrorQueue = errorQueue,
+                        DurationToSleepWhenIdle = new[] {TimeSpan.FromMilliseconds(5)},
+                        ThreadCount = 1,
+                        Distribute = true,
+                        DistributeSendCount = 3
+                    };
 
-			configuration.QueueManager.CreatePhysicalQueues(configuration);
+                configuration.ControlInbox = new ControlInboxQueueConfiguration
+                {
+                    WorkQueue = queueManager.GetQueue(string.Format(queueUriFormat, "test-distributor-control")),
+                    ErrorQueue = errorQueue,
+                    DurationToSleepWhenIdle = new[] {TimeSpan.FromMilliseconds(5)},
+                    ThreadCount = 1
+                };
 
-			configuration.Inbox.WorkQueue.AttemptPurge();
+                configuration.Inbox.WorkQueue.AttemptDrop();
+                configuration.ControlInbox.WorkQueue.AttemptDrop();
+                errorQueue.AttemptDrop();
 
-			return configuration;
-		}
-	}
+                queueManager.CreatePhysicalQueues(configuration);
+
+                configuration.Inbox.WorkQueue.AttemptPurge();
+                configuration.ControlInbox.WorkQueue.AttemptPurge();
+                errorQueue.AttemptPurge();
+
+                return configuration;
+            }
+        }
+
+        private static ServiceBusConfiguration GetWorkerConfiguration(string queueUriFormat, bool isTransactional)
+        {
+            using (var queueManager = GetQueueManager())
+            {
+                var configuration = DefaultConfiguration(isTransactional);
+
+                configuration.Inbox =
+                    new InboxQueueConfiguration
+                    {
+                        WorkQueue = queueManager.GetQueue(string.Format(queueUriFormat, "test-worker-work")),
+                        ErrorQueue = queueManager.GetQueue(string.Format(queueUriFormat, "test-error")),
+                        DurationToSleepWhenIdle = new[] {TimeSpan.FromMilliseconds(5)},
+                        ThreadCount = 1
+                    };
+
+                configuration.Worker =
+                    new WorkerConfiguration
+                    {
+                        DistributorControlInboxWorkQueue =
+                            queueManager.GetQueue(string.Format(queueUriFormat, "test-distributor-control")),
+                        ThreadAvailableNotificationIntervalSeconds = 30
+                    };
+
+                configuration.Inbox.WorkQueue.AttemptDrop();
+
+                queueManager.CreatePhysicalQueues(configuration);
+
+                configuration.Inbox.WorkQueue.AttemptPurge();
+
+                return configuration;
+            }
+        }
+    }
 }
