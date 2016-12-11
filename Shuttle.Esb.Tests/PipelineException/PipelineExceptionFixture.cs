@@ -11,7 +11,13 @@ namespace Shuttle.Esb.Tests
 		{
 			var configuration = DefaultConfiguration(true);
 
-		    var container = GetComponentContainer(configuration);
+		    var container = new DefaultComponentContainer();
+
+		    var configurator = new DefaultConfigurator(container);
+
+		    configurator.DontRegister<ReceivePipelineExceptionModule>();
+
+            configurator.RegisterComponents(configuration);
 
 		    var queueManager = container.Resolve<IQueueManager>();
 

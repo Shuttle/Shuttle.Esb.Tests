@@ -185,7 +185,13 @@ namespace Shuttle.Esb.Tests
             var configuration = GetConfiguration(workQueueUriFormat, threadCount, isTransactional);
             var module = new InboxConcurrencyModule();
 
-            var container = GetComponentContainer(configuration);
+            var container = new DefaultComponentContainer();
+
+            var configurator = new DefaultConfigurator(container);
+
+            configurator.DontRegister<InboxConcurrencyModule>();
+
+            configurator.RegisterComponents(configuration);
 
             var transportMessageFactory = container.Resolve<ITransportMessageFactory>();
             var serializer = container.Resolve<ISerializer>();
@@ -241,7 +247,13 @@ namespace Shuttle.Esb.Tests
         {
             var configuration = GetConfiguration(queueUriFormat, 1, false);
 
-            var container = GetComponentContainer(configuration);
+            var container = new DefaultComponentContainer();
+
+            var configurator = new DefaultConfigurator(container);
+
+            configurator.DontRegister<InboxDeferredModule>();
+
+            configurator.RegisterComponents(configuration);
 
             var pipelineFactory = container.Resolve<IPipelineFactory>();
 

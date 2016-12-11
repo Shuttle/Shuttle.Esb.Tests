@@ -79,10 +79,8 @@ namespace Shuttle.Esb.Tests
                 }
             }
 
-            using (var queueManager = new QueueManager(new DefaultUriResolver()))
+            using (var queueManager = GetQueueManager())
             {
-                queueManager.ScanForQueueFactories();
-
                 var receiverWorkQueue = queueManager.GetQueue(receiverWorkQueueUri);
 
                 for (var i = 0; i < count; i++)

@@ -21,12 +21,17 @@ namespace Shuttle.Esb.Tests
 
             var configuration = GetInboxConfiguration(queueUriFormat, 1, isTransactional);
 
-            var container = GetComponentContainer(configuration);
+            var container = new DefaultComponentContainer();
+
+            var defaultConfigurator = new DefaultConfigurator(container);
+
+            defaultConfigurator.DontRegister<DeferredMessageModule>();
+
+            defaultConfigurator.RegisterComponents(configuration);
 
             var module = new DeferredMessageModule(container.Resolve<IPipelineFactory>(), deferredMessageCount);
 
             container.Register(module.GetType(), module);
-            container.Register(configuration);
 
             using (var bus = ServiceBus.Create(container))
             {
@@ -95,7 +100,7 @@ namespace Shuttle.Esb.Tests
         private static ServiceBusConfiguration GetInboxConfiguration(string queueUriFormat, int threadCount,
             bool isTransactional)
         {
-            using (var queueManager = new QueueManager(new DefaultUriResolver()))
+            using (var queueManager = GetQueueManager())
             {
                 var configuration = DefaultConfiguration(isTransactional);
 

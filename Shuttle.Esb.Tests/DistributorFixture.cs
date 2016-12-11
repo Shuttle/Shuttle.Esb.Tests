@@ -76,7 +76,13 @@ namespace Shuttle.Esb.Tests
             var transportMessageFactory = distributorContainer.Resolve<ITransportMessageFactory>();
             var serializer = distributorContainer.Resolve<ISerializer>();
 
-            var workerContainer = GetComponentContainer(GetWorkerConfiguration(queueUriFormat, isTransactional));
+            var workerContainer = new DefaultComponentContainer();
+
+            var workerConfigurator = new DefaultConfigurator(workerContainer);
+
+            workerConfigurator.DontRegister<WorkerModule>();
+
+            workerConfigurator.RegisterComponents(GetWorkerConfiguration(queueUriFormat, isTransactional));
 
             workerContainer.Register<WorkerModule, WorkerModule>();
 

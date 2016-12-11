@@ -26,10 +26,8 @@ namespace Shuttle.Esb.Tests
 
 		protected void AttemptDropQueues(string queueUriFormat)
 		{
-			using (var queueManager = new QueueManager(new DefaultUriResolver()))
+			using (var queueManager = GetQueueManager())
 			{
-				queueManager.ScanForQueueFactories();
-
 				queueManager.GetQueue(string.Format(queueUriFormat, "test-worker-work")).AttemptDrop();
 				queueManager.GetQueue(string.Format(queueUriFormat, "test-distributor-work")).AttemptDrop();
 				queueManager.GetQueue(string.Format(queueUriFormat, "test-distributor-control")).AttemptDrop();
@@ -54,7 +52,11 @@ namespace Shuttle.Esb.Tests
 
 	    protected static QueueManager GetQueueManager()
 	    {
-	        return new QueueManager(new DefaultUriResolver());
+	        var queueManager = new QueueManager(new DefaultUriResolver());
+
+            queueManager.ScanForQueueFactories();
+
+	        return queueManager;
 	    }
 	}
 }
