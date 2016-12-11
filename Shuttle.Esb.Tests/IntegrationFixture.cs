@@ -6,13 +6,6 @@ namespace Shuttle.Esb.Tests
 {
 	public class IntegrationFixture : Fixture
 	{
-		protected IServiceBus GetServiceBus()
-		{
-			return ServiceBus
-				.Create()
-				.Start();
-		}
-
 		protected override void FixtureSetUp()
 		{
 			Log.Assign(new Log4NetLog(LogManager.GetLogger(typeof (IntegrationFixture))));
@@ -28,14 +21,12 @@ namespace Shuttle.Esb.Tests
 				}
 			};
 
-			configuration.QueueManager.ScanForQueueFactories();
-
 			return configuration;
 		}
 
 		protected void AttemptDropQueues(string queueUriFormat)
 		{
-			using (var queueManager = new QueueManager())
+			using (var queueManager = new QueueManager(new DefaultUriResolver()))
 			{
 				queueManager.ScanForQueueFactories();
 
@@ -47,5 +38,23 @@ namespace Shuttle.Esb.Tests
 				queueManager.GetQueue(string.Format(queueUriFormat, "test-error")).AttemptDrop();
 			}
 		}
+
+	    protected DefaultComponentContainer GetComponentContainer(ServiceBusConfiguration configuration)
+	    {
+            var container = new DefaultComponentContainer();
+
+            var defaultConfigurator = new DefaultConfigurator(container);
+
+            defaultConfigurator.RegisterComponents(configuration);
+
+            container.Resolve<IQueueManager>().ScanForQueueFactories();
+
+	        return container;
+	    }
+
+	    protected static QueueManager GetQueueManager()
+	    {
+	        return new QueueManager(new DefaultUriResolver());
+	    }
 	}
 }

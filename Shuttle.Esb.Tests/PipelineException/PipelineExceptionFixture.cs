@@ -1,6 +1,7 @@
 using System;
 using System.Threading;
 using NUnit.Framework;
+using Shuttle.Core.Infrastructure;
 
 namespace Shuttle.Esb.Tests
 {
@@ -10,8 +11,14 @@ namespace Shuttle.Esb.Tests
 		{
 			var configuration = DefaultConfiguration(true);
 
-			var inboxWorkQueue = configuration.QueueManager.GetQueue(string.Format(queueUriFormat, "test-inbox-work"));
-			var inboxErrorQueue = configuration.QueueManager.GetQueue(string.Format(queueUriFormat, "test-error"));
+		    var container = GetComponentContainer(configuration);
+
+		    var queueManager = container.Resolve<IQueueManager>();
+
+            queueManager.ScanForQueueFactories();
+
+			var inboxWorkQueue = queueManager.GetQueue(string.Format(queueUriFormat, "test-inbox-work"));
+			var inboxErrorQueue = queueManager.GetQueue(string.Format(queueUriFormat, "test-error"));
 
 			configuration.Inbox =
 				new InboxQueueConfiguration
@@ -28,17 +35,20 @@ namespace Shuttle.Esb.Tests
 			inboxWorkQueue.Drop();
 			inboxErrorQueue.Drop();
 
-			configuration.QueueManager.CreatePhysicalQueues(configuration);
+			queueManager.CreatePhysicalQueues(configuration);
 
 			var module = new ReceivePipelineExceptionModule(inboxWorkQueue);
 
-			configuration.Modules.Add(module);
+            container.Register(module.GetType(), module);
 
-			using (var bus = new ServiceBus(configuration))
+            var transportMessageFactory = container.Resolve<ITransportMessageFactory>();
+            var serializer = container.Resolve<ISerializer>();
+
+            using (var bus = ServiceBus.Create(container))
 			{
-				var message = bus.CreateTransportMessage(new ReceivePipelineCommand(), c => c.WithRecipient(inboxWorkQueue));
+				var message = transportMessageFactory.Create(new ReceivePipelineCommand(), c => c.WithRecipient(inboxWorkQueue));
 
-				inboxWorkQueue.Enqueue(message, configuration.Serializer.Serialize(message));
+				inboxWorkQueue.Enqueue(message, serializer.Serialize(message));
 
 				Assert.IsFalse(inboxWorkQueue.IsEmpty());
 

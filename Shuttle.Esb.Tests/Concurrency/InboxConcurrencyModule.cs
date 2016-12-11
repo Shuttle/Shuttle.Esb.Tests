@@ -6,7 +6,6 @@ using Shuttle.Core.Infrastructure;
 namespace Shuttle.Esb.Tests
 {
 	public class InboxConcurrencyModule :
-		IPipelineModule,
 		IPipelineObserver<OnAfterGetMessage>
 	{
 		private readonly object _padlock = new object();

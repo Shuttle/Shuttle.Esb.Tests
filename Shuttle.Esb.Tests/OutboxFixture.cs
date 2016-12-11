@@ -3,130 +3,145 @@ using System.Collections.Generic;
 using System.Threading;
 using Moq;
 using NUnit.Framework;
+using Shuttle.Core.Infrastructure;
 
 namespace Shuttle.Esb.Tests
 {
-	public abstract class OutboxFixture : IntegrationFixture
-	{
-		protected void TestOutboxSending(string workQueueUriFormat, bool isTransactional)
-		{
-			TestOutboxSending(workQueueUriFormat, workQueueUriFormat, isTransactional);
-		}
+    public abstract class OutboxFixture : IntegrationFixture
+    {
+        protected void TestOutboxSending(string workQueueUriFormat, bool isTransactional)
+        {
+            TestOutboxSending(workQueueUriFormat, workQueueUriFormat, isTransactional);
+        }
 
-		protected void TestOutboxSending(string workQueueUriFormat, string errorQueueUriFormat, bool isTransactional)
-		{
-			const int count = 100;
-			const int threadCount = 3;
+        protected void TestOutboxSending(string workQueueUriFormat, string errorQueueUriFormat, bool isTransactional)
+        {
+            const int count = 100;
+            const int threadCount = 3;
 
-			var padlock = new object();
-			var configuration = GetConfiguration(workQueueUriFormat, errorQueueUriFormat, threadCount, isTransactional);
+            var padlock = new object();
+            var configuration = GetConfiguration(workQueueUriFormat, errorQueueUriFormat, threadCount, isTransactional);
 
-			var messageRouteProvider = new Mock<IMessageRouteProvider>();
+            var container = new DefaultComponentContainer();
 
-			var receiverWorkQueueUri = string.Format(workQueueUriFormat, "test-receiver-work");
+            var defaultConfigurator = new DefaultConfigurator(container);
 
-			messageRouteProvider.Setup(m => m.GetRouteUris(It.IsAny<string>())).Returns(new[] {receiverWorkQueueUri});
+            var messageRouteProvider = new Mock<IMessageRouteProvider>();
 
-			configuration.MessageRouteProvider = messageRouteProvider.Object;
+            var receiverWorkQueueUri = string.Format(workQueueUriFormat, "test-receiver-work");
 
-			Console.WriteLine("Sending {0} messages.", count);
+            messageRouteProvider.Setup(m => m.GetRouteUris(It.IsAny<string>())).Returns(new[] { receiverWorkQueueUri });
 
-			using (var bus = new ServiceBus(configuration))
-			{
-				for (var i = 0; i < count; i++)
-				{
-					bus.Send(new SimpleCommand());
-				}
+            container.Register(messageRouteProvider.Object);
 
-				var idleThreads = new List<int>();
+            defaultConfigurator.DontRegister<IMessageRouteProvider>();
 
-				bus.Events.ThreadWaiting += (sender, args) =>
-				{
-					if (!args.PipelineType.FullName.Equals(typeof (OutboxPipeline).FullName))
-					{
-						return;
-					}
+            defaultConfigurator.RegisterComponents(configuration);
 
-					lock (padlock)
-					{
-						if (idleThreads.Contains(Thread.CurrentThread.ManagedThreadId))
-						{
-							return;
-						}
+            container.Resolve<IQueueManager>().ScanForQueueFactories();
 
-						idleThreads.Add(Thread.CurrentThread.ManagedThreadId);
-					}
-				};
+            var events = container.Resolve<IServiceBusEvents>();
 
-				bus.Start();
+            Console.WriteLine("Sending {0} messages.", count);
 
-				while (idleThreads.Count < threadCount)
-				{
-					Thread.Sleep(25);
-				}
-			}
+            using (var bus = ServiceBus.Create(container))
+            {
+                for (var i = 0; i < count; i++)
+                {
+                    bus.Send(new SimpleCommand());
+                }
 
-			using (var queueManager = new QueueManager())
-			{
-				queueManager.ScanForQueueFactories();
+                var idleThreads = new List<int>();
 
-				var receiverWorkQueue = queueManager.GetQueue(receiverWorkQueueUri);
+                events.ThreadWaiting += (sender, args) =>
+                {
+                    if (!args.PipelineType.FullName.Equals(typeof(OutboxPipeline).FullName))
+                    {
+                        return;
+                    }
 
-				for (var i = 0; i < count; i++)
-				{
-					var receivedMessage = receiverWorkQueue.GetMessage();
+                    lock (padlock)
+                    {
+                        if (idleThreads.Contains(Thread.CurrentThread.ManagedThreadId))
+                        {
+                            return;
+                        }
 
-					Assert.IsNotNull(receivedMessage);
+                        idleThreads.Add(Thread.CurrentThread.ManagedThreadId);
+                    }
+                };
 
-					receiverWorkQueue.Acknowledge(receivedMessage.AcknowledgementToken);
-				}
+                bus.Start();
 
-				receiverWorkQueue.AttemptDrop();
+                while (idleThreads.Count < threadCount)
+                {
+                    Thread.Sleep(25);
+                }
+            }
 
-				var outboxWorkQueue = queueManager.GetQueue(string.Format(workQueueUriFormat, "test-outbox-work"));
+            using (var queueManager = new QueueManager(new DefaultUriResolver()))
+            {
+                queueManager.ScanForQueueFactories();
 
-				Assert.IsTrue(outboxWorkQueue.IsEmpty());
+                var receiverWorkQueue = queueManager.GetQueue(receiverWorkQueueUri);
 
-				outboxWorkQueue.AttemptDrop();
+                for (var i = 0; i < count; i++)
+                {
+                    var receivedMessage = receiverWorkQueue.GetMessage();
 
-				queueManager.GetQueue(string.Format(errorQueueUriFormat, "test-error")).AttemptDrop();
-			}
-		}
+                    Assert.IsNotNull(receivedMessage);
 
-		private static ServiceBusConfiguration GetConfiguration(string workQueueUriFormat, string errorQueueUriFormat,
-			int threadCount, bool isTransactional)
-		{
-			var configuration = DefaultConfiguration(isTransactional);
+                    receiverWorkQueue.Acknowledge(receivedMessage.AcknowledgementToken);
+                }
 
-			var outboxWorkQueue =
-				configuration.QueueManager.GetQueue(string.Format(workQueueUriFormat, "test-outbox-work"));
-			var errorQueue = configuration.QueueManager.GetQueue(string.Format(errorQueueUriFormat, "test-error"));
+                receiverWorkQueue.AttemptDrop();
 
-			configuration.Outbox =
-				new OutboxQueueConfiguration
-				{
-					WorkQueue = outboxWorkQueue,
-					ErrorQueue = errorQueue,
-					DurationToSleepWhenIdle = new[] {TimeSpan.FromMilliseconds(5)},
-					ThreadCount = threadCount
-				};
+                var outboxWorkQueue = queueManager.GetQueue(string.Format(workQueueUriFormat, "test-outbox-work"));
 
-			var receiverWorkQueue =
-				configuration.QueueManager.GetQueue(string.Format(workQueueUriFormat, "test-receiver-work"));
+                Assert.IsTrue(outboxWorkQueue.IsEmpty());
 
-			outboxWorkQueue.AttemptDrop();
-			receiverWorkQueue.AttemptDrop();
-			errorQueue.AttemptDrop();
+                outboxWorkQueue.AttemptDrop();
 
-			outboxWorkQueue.AttemptCreate();
-			receiverWorkQueue.AttemptCreate();
-			errorQueue.AttemptCreate();
+                queueManager.GetQueue(string.Format(errorQueueUriFormat, "test-error")).AttemptDrop();
+            }
+        }
 
-			outboxWorkQueue.AttemptPurge();
-			receiverWorkQueue.AttemptPurge();
-			errorQueue.AttemptPurge();
+        private static ServiceBusConfiguration GetConfiguration(string workQueueUriFormat, string errorQueueUriFormat,
+            int threadCount, bool isTransactional)
+        {
+            using (var queueManager = GetQueueManager())
+            {
+                var configuration = DefaultConfiguration(isTransactional);
 
-			return configuration;
-		}
-	}
+                var outboxWorkQueue = queueManager.GetQueue(string.Format(workQueueUriFormat, "test-outbox-work"));
+                var errorQueue = queueManager.GetQueue(string.Format(errorQueueUriFormat, "test-error"));
+
+                configuration.Outbox =
+                    new OutboxQueueConfiguration
+                    {
+                        WorkQueue = outboxWorkQueue,
+                        ErrorQueue = errorQueue,
+                        DurationToSleepWhenIdle = new[] {TimeSpan.FromMilliseconds(5)},
+                        ThreadCount = threadCount
+                    };
+
+                var receiverWorkQueue =
+                    queueManager.GetQueue(string.Format(workQueueUriFormat, "test-receiver-work"));
+
+                outboxWorkQueue.AttemptDrop();
+                receiverWorkQueue.AttemptDrop();
+                errorQueue.AttemptDrop();
+
+                outboxWorkQueue.AttemptCreate();
+                receiverWorkQueue.AttemptCreate();
+                errorQueue.AttemptCreate();
+
+                outboxWorkQueue.AttemptPurge();
+                receiverWorkQueue.AttemptPurge();
+                errorQueue.AttemptPurge();
+
+                return configuration;
+            }
+        }
+    }
 }

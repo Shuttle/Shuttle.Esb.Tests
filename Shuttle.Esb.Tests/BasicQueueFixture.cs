@@ -101,7 +101,7 @@ namespace Shuttle.Esb.Tests
 
 		private IQueue GetWorkQueue(string workQueueUriFormat, bool refresh)
 		{
-			using (var queueManager = new QueueManager())
+			using (var queueManager = new QueueManager(new DefaultUriResolver()))
 			{
 				queueManager.ScanForQueueFactories();
 

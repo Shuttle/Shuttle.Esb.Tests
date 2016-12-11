@@ -27,7 +27,7 @@ namespace Shuttle.Esb.Tests
 		{
 			MemoryQueue.Clear();
 
-			return new ServiceBusConfiguration
+		    return new ServiceBusConfiguration
 			{
 				Inbox =
 					new InboxQueueConfiguration
@@ -44,12 +44,7 @@ namespace Shuttle.Esb.Tests
 						ErrorQueue = CreateMemoryControlInboxError(),
 						DurationToSleepWhenIdle = new[] {TimeSpan.FromMilliseconds(5)},
 						ThreadCount = 1
-					},
-				Serializer = new DefaultSerializer(),
-				MessageHandlerFactory = new DefaultMessageHandlerFactory(),
-				PipelineFactory = new DefaultPipelineFactory(),
-				TransactionScopeFactory = new DefaultTransactionScopeFactory(true, IsolationLevel.ReadCommitted, TimeSpan.FromSeconds(30)),
-				ThreadActivityFactory = new DefaultThreadActivityFactory()
+					}
 			};
 		}
 

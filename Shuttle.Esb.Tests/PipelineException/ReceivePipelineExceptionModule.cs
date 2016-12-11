@@ -6,7 +6,6 @@ using Shuttle.Core.Infrastructure;
 namespace Shuttle.Esb.Tests
 {
 	public class ReceivePipelineExceptionModule :
-		IPipelineModule,
 		IPipelineObserver<OnGetMessage>,
 		IPipelineObserver<OnAfterGetMessage>,
 		IPipelineObserver<OnDeserializeTransportMessage>,

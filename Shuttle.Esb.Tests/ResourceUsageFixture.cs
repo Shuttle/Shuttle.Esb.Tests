@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Threading;
 using NUnit.Framework;
+using Shuttle.Core.Infrastructure;
 
 namespace Shuttle.Esb.Tests
 {
@@ -14,7 +15,13 @@ namespace Shuttle.Esb.Tests
 
 			var configuration = GetConfiguration(queueUriFormat, isTransactional, threadCount);
 
-			var cpuCounter = new PerformanceCounterValue(new PerformanceCounter
+            var container = GetComponentContainer(configuration);
+
+            var transportMessageFactory = container.Resolve<ITransportMessageFactory>();
+            var serializer = container.Resolve<ISerializer>();
+            var events = container.Resolve<IServiceBusEvents>();
+
+            var cpuCounter = new PerformanceCounterValue(new PerformanceCounter
 			{
 				CategoryName = "Processor",
 				CounterName = "% Processor Time",
@@ -33,9 +40,9 @@ namespace Shuttle.Esb.Tests
 			Thread.Sleep(1000);
 			cpuUsageLimit = cpuCounter.NextValue() + 25F;
 
-			using (var bus = new ServiceBus(configuration).Start())
+			using (var bus = ServiceBus.Create(container).Start())
 			{
-				bus.Events.ThreadWaiting += (sender, args) =>
+				events.ThreadWaiting += (sender, args) =>
 				{
 					lock (padlock)
 					{
@@ -54,10 +61,10 @@ namespace Shuttle.Esb.Tests
 
 					for (var i = 0; i < 5; i++)
 					{
-						var message = bus.CreateTransportMessage(new SimpleCommand("[resource testing]"),
+						var message = transportMessageFactory.Create(new SimpleCommand("[resource testing]"),
 							c => c.WithRecipient(configuration.Inbox.WorkQueue));
 
-						configuration.Inbox.WorkQueue.Enqueue(message, configuration.Serializer.Serialize(message));
+						configuration.Inbox.WorkQueue.Enqueue(message, serializer.Serialize(message));
 					}
 
 					idleThreads.Clear();
@@ -85,32 +92,34 @@ namespace Shuttle.Esb.Tests
 			}
 		}
 
-		private static IServiceBusConfiguration GetConfiguration(string queueUriFormat, bool isTransactional, int threadCount)
+		private static ServiceBusConfiguration GetConfiguration(string queueUriFormat, bool isTransactional, int threadCount)
 		{
-			var configuration = DefaultConfiguration(isTransactional);
+		    using (var queueManager = GetQueueManager())
+		    {
+		        var configuration = DefaultConfiguration(isTransactional);
 
-			var inboxWorkQueue =
-				configuration.QueueManager.GetQueue(string.Format(queueUriFormat, "test-inbox-work"));
-			var errorQueue = configuration.QueueManager.GetQueue(string.Format(queueUriFormat, "test-error"));
+		        var inboxWorkQueue = queueManager.GetQueue(string.Format(queueUriFormat, "test-inbox-work"));
+		        var errorQueue = queueManager.GetQueue(string.Format(queueUriFormat, "test-error"));
 
-			configuration.Inbox =
-				new InboxQueueConfiguration
-				{
-					WorkQueue = inboxWorkQueue,
-					ErrorQueue = errorQueue,
-					DurationToSleepWhenIdle = new[] {TimeSpan.FromSeconds(1)},
-					ThreadCount = threadCount
-				};
+		        configuration.Inbox =
+		            new InboxQueueConfiguration
+		            {
+		                WorkQueue = inboxWorkQueue,
+		                ErrorQueue = errorQueue,
+		                DurationToSleepWhenIdle = new[] {TimeSpan.FromSeconds(1)},
+		                ThreadCount = threadCount
+		            };
 
-			inboxWorkQueue.AttemptDrop();
-			errorQueue.AttemptDrop();
+		        inboxWorkQueue.AttemptDrop();
+		        errorQueue.AttemptDrop();
 
-			configuration.QueueManager.CreatePhysicalQueues(configuration);
+		        queueManager.CreatePhysicalQueues(configuration);
 
-			inboxWorkQueue.AttemptPurge();
-			errorQueue.AttemptPurge();
+		        inboxWorkQueue.AttemptPurge();
+		        errorQueue.AttemptPurge();
 
-			return configuration;
+		        return configuration;
+		    }
 		}
 	}
 }

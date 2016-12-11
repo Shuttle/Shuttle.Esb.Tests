@@ -5,119 +5,126 @@ using Shuttle.Core.Infrastructure;
 
 namespace Shuttle.Esb.Tests
 {
-	public class DeferredFixture : IntegrationFixture
-	{
-		private readonly ILog _log;
+    public class DeferredFixture : IntegrationFixture
+    {
+        private readonly ILog _log;
 
-		public DeferredFixture()
-		{
-			_log = Log.For(this);
-		}
+        public DeferredFixture()
+        {
+            _log = Log.For(this);
+        }
 
-		protected void TestDeferredProcessing(string queueUriFormat, bool isTransactional)
-		{
-			const int deferredMessageCount = 10;
-			const int millisecondsToDefer = 500;
+        protected void TestDeferredProcessing(string queueUriFormat, bool isTransactional)
+        {
+            const int deferredMessageCount = 10;
+            const int millisecondsToDefer = 500;
 
-			var configuration = GetInboxConfiguration(queueUriFormat, 1, isTransactional);
+            var configuration = GetInboxConfiguration(queueUriFormat, 1, isTransactional);
 
-			var module = new DeferredMessageModule(deferredMessageCount);
+            var container = GetComponentContainer(configuration);
 
-			configuration.Modules.Add(module);
+            var module = new DeferredMessageModule(container.Resolve<IPipelineFactory>(), deferredMessageCount);
 
-			using (var bus = new ServiceBus(configuration))
-			{
-				bus.Start();
+            container.Register(module.GetType(), module);
+            container.Register(configuration);
 
-				var ignoreTillDate = DateTime.Now.AddSeconds(5);
+            using (var bus = ServiceBus.Create(container))
+            {
+                bus.Start();
 
-				for (var i = 0; i < deferredMessageCount; i++)
-				{
-					EnqueueDeferredMessage(bus, ignoreTillDate);
+                var ignoreTillDate = DateTime.Now.AddSeconds(5);
 
-					ignoreTillDate = ignoreTillDate.AddMilliseconds(millisecondsToDefer);
-				}
+                for (var i = 0; i < deferredMessageCount; i++)
+                {
+                    EnqueueDeferredMessage(configuration, container.Resolve<ITransportMessageFactory>(), container.Resolve<ISerializer>(), ignoreTillDate);
 
-				// add the extra time else there is no time to process message being returned
-				var timeout = ignoreTillDate.AddSeconds(150);
-				var timedOut = false;
+                    ignoreTillDate = ignoreTillDate.AddMilliseconds(millisecondsToDefer);
+                }
 
-				_log.Information(string.Format("[start wait] : now = '{0}'", DateTime.Now));
+                // add the extra time else there is no time to process message being returned
+                var timeout = ignoreTillDate.AddSeconds(150);
+                var timedOut = false;
 
-				// wait for the message to be returned from the deferred queue
-				while (!module.AllMessagesHandled()
-				       &&
-				       !timedOut)
-				{
-					Thread.Sleep(millisecondsToDefer);
+                _log.Information(string.Format("[start wait] : now = '{0}'", DateTime.Now));
 
-					timedOut = timeout < DateTime.Now;
-				}
+                // wait for the message to be returned from the deferred queue
+                while (!module.AllMessagesHandled()
+                       &&
+                       !timedOut)
+                {
+                    Thread.Sleep(millisecondsToDefer);
 
-				_log.Information(string.Format("[end wait] : now = '{0}' / timeout = '{1}' / timed out = '{2}'", DateTime.Now,
-					timeout, timedOut));
+                    timedOut = timeout < DateTime.Now;
+                }
 
-				_log.Information(string.Format("{0} of {1} deferred messages returned to the inbox.",
-					module.NumberOfDeferredMessagesReturned, deferredMessageCount));
-				_log.Information(string.Format("{0} of {1} deferred messages handled.", module.NumberOfMessagesHandled,
-					deferredMessageCount));
+                _log.Information(string.Format("[end wait] : now = '{0}' / timeout = '{1}' / timed out = '{2}'", DateTime.Now,
+                    timeout, timedOut));
 
-				Assert.IsTrue(module.AllMessagesHandled(), "All the deferred messages were not handled.");
+                _log.Information(string.Format("{0} of {1} deferred messages returned to the inbox.",
+                    module.NumberOfDeferredMessagesReturned, deferredMessageCount));
+                _log.Information(string.Format("{0} of {1} deferred messages handled.", module.NumberOfMessagesHandled,
+                    deferredMessageCount));
 
-				Assert.IsTrue(configuration.Inbox.ErrorQueue.IsEmpty());
-				Assert.IsNull(configuration.Inbox.DeferredQueue.GetMessage());
-				Assert.IsNull(configuration.Inbox.WorkQueue.GetMessage());
-			}
+                Assert.IsTrue(module.AllMessagesHandled(), "All the deferred messages were not handled.");
 
-			AttemptDropQueues(queueUriFormat);
-		}
+                Assert.IsTrue(configuration.Inbox.ErrorQueue.IsEmpty());
+                Assert.IsNull(configuration.Inbox.DeferredQueue.GetMessage());
+                Assert.IsNull(configuration.Inbox.WorkQueue.GetMessage());
+            }
 
-		private void EnqueueDeferredMessage(IServiceBus bus, DateTime ignoreTillDate)
-		{
-			var command = new SimpleCommand
-			{
-				Name = Guid.NewGuid().ToString()
-			};
+            AttemptDropQueues(queueUriFormat);
+        }
 
-			var message = bus.CreateTransportMessage(command, c => c.Defer(ignoreTillDate)
-				.WithRecipient(bus.Configuration.Inbox.WorkQueue));
+        private void EnqueueDeferredMessage(IServiceBusConfiguration configuration, ITransportMessageFactory transportMessageFactory, ISerializer serializer, DateTime ignoreTillDate)
+        {
+            var command = new SimpleCommand
+            {
+                Name = Guid.NewGuid().ToString()
+            };
 
-			bus.Configuration.Inbox.WorkQueue.Enqueue(message, bus.Configuration.Serializer.Serialize(message));
+            var message = transportMessageFactory.Create(command, c => c
+                .Defer(ignoreTillDate)
+                .WithRecipient(configuration.Inbox.WorkQueue), null);
 
-			_log.Information(string.Format("[message enqueued] : name = '{0}' / deferred till date = '{1}'", command.Name,
-				message.IgnoreTillDate));
-		}
+            configuration.Inbox.WorkQueue.Enqueue(message, serializer.Serialize(message));
 
-		private static ServiceBusConfiguration GetInboxConfiguration(string queueUriFormat, int threadCount,
-			bool isTransactional)
-		{
-			var configuration = DefaultConfiguration(isTransactional);
+            _log.Information(string.Format("[message enqueued] : name = '{0}' / deferred till date = '{1}'", command.Name,
+                message.IgnoreTillDate));
+        }
 
-			var inboxWorkQueue = configuration.QueueManager.GetQueue(string.Format(queueUriFormat, "test-inbox-work"));
-			var inboxDeferredQueue = configuration.QueueManager.GetQueue(string.Format(queueUriFormat, "test-inbox-deferred"));
-			var errorQueue = configuration.QueueManager.GetQueue(string.Format(queueUriFormat, "test-error"));
+        private static ServiceBusConfiguration GetInboxConfiguration(string queueUriFormat, int threadCount,
+            bool isTransactional)
+        {
+            using (var queueManager = new QueueManager(new DefaultUriResolver()))
+            {
+                var configuration = DefaultConfiguration(isTransactional);
 
-			configuration.Inbox =
-				new InboxQueueConfiguration
-				{
-					WorkQueue = inboxWorkQueue,
-					DeferredQueue = inboxDeferredQueue,
-					ErrorQueue = errorQueue,
-					DurationToSleepWhenIdle = new[] {TimeSpan.FromMilliseconds(5)},
-					ThreadCount = threadCount
-				};
+                var inboxWorkQueue = queueManager.GetQueue(string.Format(queueUriFormat, "test-inbox-work"));
+                var inboxDeferredQueue = queueManager.GetQueue(string.Format(queueUriFormat, "test-inbox-deferred"));
+                var errorQueue = queueManager.GetQueue(string.Format(queueUriFormat, "test-error"));
 
-			inboxWorkQueue.AttemptDrop();
-			inboxDeferredQueue.AttemptDrop();
-			errorQueue.AttemptDrop();
+                configuration.Inbox =
+                    new InboxQueueConfiguration
+                    {
+                        WorkQueue = inboxWorkQueue,
+                        DeferredQueue = inboxDeferredQueue,
+                        ErrorQueue = errorQueue,
+                        DurationToSleepWhenIdle = new[] {TimeSpan.FromMilliseconds(5)},
+                        ThreadCount = threadCount
+                    };
 
-			configuration.QueueManager.CreatePhysicalQueues(configuration);
+                inboxWorkQueue.AttemptDrop();
+                inboxDeferredQueue.AttemptDrop();
+                errorQueue.AttemptDrop();
 
-			inboxWorkQueue.AttemptPurge();
-			inboxDeferredQueue.AttemptPurge();
-			errorQueue.AttemptPurge();
+                queueManager.CreatePhysicalQueues(configuration);
 
-			return configuration;
-		}
-	}
+                inboxWorkQueue.AttemptPurge();
+                inboxDeferredQueue.AttemptPurge();
+                errorQueue.AttemptPurge();
+
+                return configuration;
+            }
+        }
+    }
 }
