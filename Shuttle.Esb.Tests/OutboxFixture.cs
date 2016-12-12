@@ -38,8 +38,6 @@ namespace Shuttle.Esb.Tests
 
             defaultConfigurator.RegisterComponents(configuration);
 
-            container.Resolve<IQueueManager>().ScanForQueueFactories();
-
             var events = container.Resolve<IServiceBusEvents>();
 
             Console.WriteLine("Sending {0} messages.", count);

@@ -45,8 +45,6 @@ namespace Shuttle.Esb.Tests
 
             defaultConfigurator.RegisterComponents(configuration);
 
-            container.Resolve<IQueueManager>().ScanForQueueFactories();
-
 	        return container;
 	    }
 

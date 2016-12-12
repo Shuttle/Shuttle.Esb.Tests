@@ -47,7 +47,7 @@ namespace Shuttle.Esb.Tests
                 }
 
                 // add the extra time else there is no time to process message being returned
-                var timeout = ignoreTillDate.AddSeconds(150);
+                var timeout = ignoreTillDate.AddSeconds(15);
                 var timedOut = false;
 
                 _log.Information(string.Format("[start wait] : now = '{0}'", DateTime.Now));

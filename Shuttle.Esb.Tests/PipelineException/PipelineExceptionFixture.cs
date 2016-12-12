@@ -19,31 +19,32 @@ namespace Shuttle.Esb.Tests
 
             configurator.RegisterComponents(configuration);
 
-		    var queueManager = container.Resolve<IQueueManager>();
+		    IQueue inboxWorkQueue;
 
-            queueManager.ScanForQueueFactories();
+		    using (var queueManager = GetQueueManager())
+		    {
+		        inboxWorkQueue = queueManager.GetQueue(string.Format(queueUriFormat, "test-inbox-work"));
+		        var inboxErrorQueue = queueManager.GetQueue(string.Format(queueUriFormat, "test-error"));
 
-			var inboxWorkQueue = queueManager.GetQueue(string.Format(queueUriFormat, "test-inbox-work"));
-			var inboxErrorQueue = queueManager.GetQueue(string.Format(queueUriFormat, "test-error"));
-
-			configuration.Inbox =
-				new InboxQueueConfiguration
-				{
-					WorkQueue = inboxWorkQueue,
-					ErrorQueue = inboxErrorQueue,
-					DurationToSleepWhenIdle = new[] {TimeSpan.FromMilliseconds(5)},
-					DurationToIgnoreOnFailure = new[] {TimeSpan.FromMilliseconds(5)},
-					MaximumFailureCount = 100,
-					ThreadCount = 1
-				};
+		        configuration.Inbox =
+		            new InboxQueueConfiguration
+		            {
+		                WorkQueue = inboxWorkQueue,
+		                ErrorQueue = inboxErrorQueue,
+		                DurationToSleepWhenIdle = new[] {TimeSpan.FromMilliseconds(5)},
+		                DurationToIgnoreOnFailure = new[] {TimeSpan.FromMilliseconds(5)},
+		                MaximumFailureCount = 100,
+		                ThreadCount = 1
+		            };
 
 
-			inboxWorkQueue.Drop();
-			inboxErrorQueue.Drop();
+		        inboxWorkQueue.Drop();
+		        inboxErrorQueue.Drop();
 
-			queueManager.CreatePhysicalQueues(configuration);
+		        queueManager.CreatePhysicalQueues(configuration);
+		    }
 
-			var module = new ReceivePipelineExceptionModule(inboxWorkQueue);
+		    var module = new ReceivePipelineExceptionModule(inboxWorkQueue);
 
             container.Register(module.GetType(), module);
 

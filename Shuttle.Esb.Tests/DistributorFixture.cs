@@ -14,16 +14,15 @@ namespace Shuttle.Esb.Tests
             private readonly object padlock = new object();
             private int _messagesHandled;
 
-            public WorkerModule(int messageCount)
+            public WorkerModule(IPipelineFactory pipelineFactory, int messageCount)
             {
+                Guard.AgainstNull(pipelineFactory, "pipelineFactory");
+
+                pipelineFactory.PipelineCreated += PipelineCreated;
+
                 _messageCount = messageCount;
 
                 _log = Log.For(this);
-            }
-
-            public WorkerModule(IPipelineFactory pipelineFactory)
-            {
-                pipelineFactory.PipelineCreated += PipelineCreated;
             }
 
             public void Execute(OnAfterHandleMessage pipelineEvent1)
@@ -39,10 +38,10 @@ namespace Shuttle.Esb.Tests
             private void PipelineCreated(object sender, PipelineEventArgs e)
             {
                 if (!e.Pipeline.GetType()
-                    .FullName.Equals(typeof (InboxMessagePipeline).FullName, StringComparison.InvariantCultureIgnoreCase)
+                    .FullName.Equals(typeof(InboxMessagePipeline).FullName, StringComparison.InvariantCultureIgnoreCase)
                     &&
                     !e.Pipeline.GetType()
-                        .FullName.Equals(typeof (DeferredMessagePipeline).FullName,
+                        .FullName.Equals(typeof(DeferredMessagePipeline).FullName,
                             StringComparison.InvariantCultureIgnoreCase))
                 {
                     return;
@@ -68,8 +67,6 @@ namespace Shuttle.Esb.Tests
         {
             const int messageCount = 12;
 
-            var module = new WorkerModule(messageCount);
-
             var distributorConfiguration = GetDistributorConfiguration(queueUriFormat, isTransactional);
             var distributorContainer = GetComponentContainer(distributorConfiguration);
 
@@ -84,7 +81,9 @@ namespace Shuttle.Esb.Tests
 
             workerConfigurator.RegisterComponents(GetWorkerConfiguration(queueUriFormat, isTransactional));
 
-            workerContainer.Register<WorkerModule, WorkerModule>();
+            var module = new WorkerModule(workerContainer.Resolve<IPipelineFactory>(), messageCount);
+
+            workerContainer.Register<WorkerModule>(module);
 
             using (var distributorBus = ServiceBus.Create(distributorContainer))
             using (var workerBus = ServiceBus.Create(workerContainer))
@@ -105,7 +104,7 @@ namespace Shuttle.Esb.Tests
                 distributorBus.Start();
                 workerBus.Start();
 
-                var timeout = DateTime.Now.AddSeconds(15);
+                var timeout = DateTime.Now.AddSeconds(150);
                 var timedOut = false;
 
                 _log.Information(string.Format("[start wait] : now = '{0}'", DateTime.Now));
@@ -140,7 +139,7 @@ namespace Shuttle.Esb.Tests
                         WorkQueue =
                             queueManager.GetQueue(string.Format(queueUriFormat, "test-distributor-work")),
                         ErrorQueue = errorQueue,
-                        DurationToSleepWhenIdle = new[] {TimeSpan.FromMilliseconds(5)},
+                        DurationToSleepWhenIdle = new[] { TimeSpan.FromMilliseconds(5) },
                         ThreadCount = 1,
                         Distribute = true,
                         DistributeSendCount = 3
@@ -150,7 +149,7 @@ namespace Shuttle.Esb.Tests
                 {
                     WorkQueue = queueManager.GetQueue(string.Format(queueUriFormat, "test-distributor-control")),
                     ErrorQueue = errorQueue,
-                    DurationToSleepWhenIdle = new[] {TimeSpan.FromMilliseconds(5)},
+                    DurationToSleepWhenIdle = new[] { TimeSpan.FromMilliseconds(5) },
                     ThreadCount = 1
                 };
 
@@ -179,7 +178,7 @@ namespace Shuttle.Esb.Tests
                     {
                         WorkQueue = queueManager.GetQueue(string.Format(queueUriFormat, "test-worker-work")),
                         ErrorQueue = queueManager.GetQueue(string.Format(queueUriFormat, "test-error")),
-                        DurationToSleepWhenIdle = new[] {TimeSpan.FromMilliseconds(5)},
+                        DurationToSleepWhenIdle = new[] { TimeSpan.FromMilliseconds(5) },
                         ThreadCount = 1
                     };
 
@@ -202,3 +201,4 @@ namespace Shuttle.Esb.Tests
         }
     }
 }
+

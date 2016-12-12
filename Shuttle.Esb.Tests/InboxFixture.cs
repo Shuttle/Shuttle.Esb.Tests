@@ -183,7 +183,6 @@ namespace Shuttle.Esb.Tests
 
             var padlock = new object();
             var configuration = GetConfiguration(workQueueUriFormat, threadCount, isTransactional);
-            var module = new InboxConcurrencyModule();
 
             var container = new DefaultComponentContainer();
 
@@ -196,6 +195,8 @@ namespace Shuttle.Esb.Tests
             var transportMessageFactory = container.Resolve<ITransportMessageFactory>();
             var serializer = container.Resolve<ISerializer>();
             var events = container.Resolve<IServiceBusEvents>();
+
+            var module = new InboxConcurrencyModule(container.Resolve<IPipelineFactory>());
 
             container.Register(module.GetType(), module);
 
