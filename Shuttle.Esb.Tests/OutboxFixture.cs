@@ -1,8 +1,10 @@
 using System;
 using System.Collections.Generic;
 using System.Threading;
+using Castle.Windsor;
 using Moq;
 using NUnit.Framework;
+using Shuttle.Core.Castle;
 using Shuttle.Core.Infrastructure;
 
 namespace Shuttle.Esb.Tests
@@ -20,11 +22,10 @@ namespace Shuttle.Esb.Tests
             const int threadCount = 3;
 
             var padlock = new object();
-            var configuration = GetConfiguration(workQueueUriFormat, errorQueueUriFormat, threadCount, isTransactional);
 
-            var container = new DefaultComponentContainer();
+            var container = new WindsorComponentContainer(new WindsorContainer());
 
-            var defaultConfigurator = new DefaultConfigurator(container);
+            var configurator = new ServiceBusConfigurator(container);
 
             var messageRouteProvider = new Mock<IMessageRouteProvider>();
 
@@ -34,9 +35,9 @@ namespace Shuttle.Esb.Tests
 
             container.Register(messageRouteProvider.Object);
 
-            defaultConfigurator.DontRegister<IMessageRouteProvider>();
+            configurator.DontRegister<IMessageRouteProvider>();
 
-            defaultConfigurator.RegisterComponents(configuration);
+            configurator.RegisterComponents(GetConfiguration(container.Resolve<IQueueManager>(), workQueueUriFormat, errorQueueUriFormat, isTransactional, threadCount));
 
             var events = container.Resolve<IServiceBusEvents>();
 
@@ -77,67 +78,62 @@ namespace Shuttle.Esb.Tests
                 }
             }
 
-            using (var queueManager = GetQueueManager())
+            var queueManager = container.Resolve<IQueueManager>();
+
+            var receiverWorkQueue = queueManager.GetQueue(receiverWorkQueueUri);
+
+            for (var i = 0; i < count; i++)
             {
-                var receiverWorkQueue = queueManager.GetQueue(receiverWorkQueueUri);
+                var receivedMessage = receiverWorkQueue.GetMessage();
 
-                for (var i = 0; i < count; i++)
-                {
-                    var receivedMessage = receiverWorkQueue.GetMessage();
+                Assert.IsNotNull(receivedMessage);
 
-                    Assert.IsNotNull(receivedMessage);
-
-                    receiverWorkQueue.Acknowledge(receivedMessage.AcknowledgementToken);
-                }
-
-                receiverWorkQueue.AttemptDrop();
-
-                var outboxWorkQueue = queueManager.GetQueue(string.Format(workQueueUriFormat, "test-outbox-work"));
-
-                Assert.IsTrue(outboxWorkQueue.IsEmpty());
-
-                outboxWorkQueue.AttemptDrop();
-
-                queueManager.GetQueue(string.Format(errorQueueUriFormat, "test-error")).AttemptDrop();
+                receiverWorkQueue.Acknowledge(receivedMessage.AcknowledgementToken);
             }
+
+            receiverWorkQueue.AttemptDrop();
+
+            var outboxWorkQueue = queueManager.GetQueue(string.Format(workQueueUriFormat, "test-outbox-work"));
+
+            Assert.IsTrue(outboxWorkQueue.IsEmpty());
+
+            outboxWorkQueue.AttemptDrop();
+
+            queueManager.GetQueue(string.Format(errorQueueUriFormat, "test-error")).AttemptDrop();
         }
 
-        private static ServiceBusConfiguration GetConfiguration(string workQueueUriFormat, string errorQueueUriFormat,
-            int threadCount, bool isTransactional)
+        private ServiceBusConfiguration GetConfiguration(IQueueManager queueManager, string workQueueUriFormat, string errorQueueUriFormat, bool isTransactional, int threadCount)
         {
-            using (var queueManager = GetQueueManager())
-            {
-                var configuration = DefaultConfiguration(isTransactional);
+            var configuration = DefaultConfiguration(isTransactional, threadCount);
 
-                var outboxWorkQueue = queueManager.GetQueue(string.Format(workQueueUriFormat, "test-outbox-work"));
-                var errorQueue = queueManager.GetQueue(string.Format(errorQueueUriFormat, "test-error"));
+            var outboxWorkQueue = queueManager.GetQueue(string.Format(workQueueUriFormat, "test-outbox-work"));
+            var errorQueue = queueManager.GetQueue(string.Format(errorQueueUriFormat, "test-error"));
 
-                configuration.Outbox =
-                    new OutboxQueueConfiguration
-                    {
-                        WorkQueue = outboxWorkQueue,
-                        ErrorQueue = errorQueue,
-                        DurationToSleepWhenIdle = new[] {TimeSpan.FromMilliseconds(5)},
-                        ThreadCount = threadCount
-                    };
+            configuration.Outbox =
+                new OutboxQueueConfiguration
+                {
+                    WorkQueue = outboxWorkQueue,
+                    ErrorQueue = errorQueue,
+                    DurationToSleepWhenIdle = new[] { TimeSpan.FromMilliseconds(5) },
+                    ThreadCount = threadCount
+                };
 
-                var receiverWorkQueue =
-                    queueManager.GetQueue(string.Format(workQueueUriFormat, "test-receiver-work"));
+            var receiverWorkQueue =
+                queueManager.GetQueue(string.Format(workQueueUriFormat, "test-receiver-work"));
 
-                outboxWorkQueue.AttemptDrop();
-                receiverWorkQueue.AttemptDrop();
-                errorQueue.AttemptDrop();
+            outboxWorkQueue.AttemptDrop();
+            receiverWorkQueue.AttemptDrop();
+            errorQueue.AttemptDrop();
 
-                outboxWorkQueue.AttemptCreate();
-                receiverWorkQueue.AttemptCreate();
-                errorQueue.AttemptCreate();
+            outboxWorkQueue.AttemptCreate();
+            receiverWorkQueue.AttemptCreate();
+            errorQueue.AttemptCreate();
 
-                outboxWorkQueue.AttemptPurge();
-                receiverWorkQueue.AttemptPurge();
-                errorQueue.AttemptPurge();
+            outboxWorkQueue.AttemptPurge();
+            receiverWorkQueue.AttemptPurge();
+            errorQueue.AttemptPurge();
 
-                return configuration;
-            }
+            return configuration;
         }
     }
 }

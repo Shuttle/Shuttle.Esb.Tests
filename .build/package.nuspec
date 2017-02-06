@@ -15,7 +15,7 @@
 		<tags>shuttle-esb shuttle-esb-tests</tags>
 		<dependencies>
 			<dependency id="Shuttle.Esb" version="{Shuttle.Esb-version}" />
-			<dependency id="Shuttle.Core.Infrastructure" version="{Shuttle.Core.Infrastructure-version}" />
+			<dependency id="Shuttle.Core.Castle" version="{Shuttle.Core.Castle-version}" />
 			<dependency id="Shuttle.Core.Log4Net" version="{Shuttle.Core.Log4Net-version}" />
 			<dependency id="NUnit" version="{NUnit-version}" />
 			<dependency id="Moq" version="{Moq-version}" />

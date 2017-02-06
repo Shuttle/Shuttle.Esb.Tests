@@ -1,6 +1,8 @@
 using System;
 using System.Threading;
+using Castle.Windsor;
 using NUnit.Framework;
+using Shuttle.Core.Castle;
 using Shuttle.Core.Infrastructure;
 
 namespace Shuttle.Esb.Tests
@@ -9,20 +11,23 @@ namespace Shuttle.Esb.Tests
 	{
 		protected void TestExceptionHandling(string queueUriFormat)
 		{
-			var configuration = DefaultConfiguration(true);
+			var configuration = DefaultConfiguration(true, 1);
 
-		    var container = new DefaultComponentContainer();
+            var container = new WindsorComponentContainer(new WindsorContainer());
 
-		    var configurator = new DefaultConfigurator(container);
+            var configurator = new ServiceBusConfigurator(container);
 
 		    configurator.DontRegister<ReceivePipelineExceptionModule>();
 
             configurator.RegisterComponents(configuration);
 
+            var module = new ReceivePipelineExceptionModule(configuration);
+
+            container.Register(module.GetType(), module);
+
+            var queueManager = container.Resolve<IQueueManager>();
 		    IQueue inboxWorkQueue;
 
-		    using (var queueManager = GetQueueManager())
-		    {
 		        inboxWorkQueue = queueManager.GetQueue(string.Format(queueUriFormat, "test-inbox-work"));
 		        var inboxErrorQueue = queueManager.GetQueue(string.Format(queueUriFormat, "test-error"));
 
@@ -42,12 +47,7 @@ namespace Shuttle.Esb.Tests
 		        inboxErrorQueue.Drop();
 
 		        queueManager.CreatePhysicalQueues(configuration);
-		    }
-
-		    var module = new ReceivePipelineExceptionModule(inboxWorkQueue);
-
-            container.Register(module.GetType(), module);
-
+		
             var transportMessageFactory = container.Resolve<ITransportMessageFactory>();
             var serializer = container.Resolve<ISerializer>();
 

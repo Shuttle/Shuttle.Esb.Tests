@@ -1,6 +1,8 @@
 ﻿using System;
 using System.Threading;
+using Castle.Windsor;
 using NUnit.Framework;
+using Shuttle.Core.Castle;
 using Shuttle.Core.Infrastructure;
 
 namespace Shuttle.Esb.Tests
@@ -19,19 +21,23 @@ namespace Shuttle.Esb.Tests
             const int deferredMessageCount = 10;
             const int millisecondsToDefer = 500;
 
-            var configuration = GetInboxConfiguration(queueUriFormat, 1, isTransactional);
+            var configuration = DefaultConfiguration(isTransactional, 1);
 
-            var container = new DefaultComponentContainer();
+            var container = new WindsorComponentContainer(new WindsorContainer());
 
-            var defaultConfigurator = new DefaultConfigurator(container);
+            var configurator = new ServiceBusConfigurator(container);
 
-            defaultConfigurator.DontRegister<DeferredMessageModule>();
+            configurator.DontRegister<DeferredMessageModule>();
 
-            defaultConfigurator.RegisterComponents(configuration);
+            configurator.RegisterComponents(configuration);
 
             var module = new DeferredMessageModule(container.Resolve<IPipelineFactory>(), deferredMessageCount);
 
             container.Register(module.GetType(), module);
+
+            var queueManager = container.Resolve<IQueueManager>();
+
+            ConfigureQueues(queueManager, configuration, queueUriFormat);
 
             using (var bus = ServiceBus.Create(container))
             {
@@ -77,7 +83,7 @@ namespace Shuttle.Esb.Tests
                 Assert.IsNull(configuration.Inbox.WorkQueue.GetMessage());
             }
 
-            AttemptDropQueues(queueUriFormat);
+            AttemptDropQueues(queueManager, queueUriFormat);
         }
 
         private void EnqueueDeferredMessage(IServiceBusConfiguration configuration, ITransportMessageFactory transportMessageFactory, ISerializer serializer, DateTime ignoreTillDate)
@@ -97,39 +103,25 @@ namespace Shuttle.Esb.Tests
                 message.IgnoreTillDate));
         }
 
-        private static ServiceBusConfiguration GetInboxConfiguration(string queueUriFormat, int threadCount,
-            bool isTransactional)
+        private void ConfigureQueues(IQueueManager queueManager, IServiceBusConfiguration configuration, string queueUriFormat)
         {
-            using (var queueManager = GetQueueManager())
-            {
-                var configuration = DefaultConfiguration(isTransactional);
+            var inboxWorkQueue = queueManager.GetQueue(string.Format(queueUriFormat, "test-inbox-work"));
+            var inboxDeferredQueue = queueManager.GetQueue(string.Format(queueUriFormat, "test-inbox-deferred"));
+            var errorQueue = queueManager.GetQueue(string.Format(queueUriFormat, "test-error"));
 
-                var inboxWorkQueue = queueManager.GetQueue(string.Format(queueUriFormat, "test-inbox-work"));
-                var inboxDeferredQueue = queueManager.GetQueue(string.Format(queueUriFormat, "test-inbox-deferred"));
-                var errorQueue = queueManager.GetQueue(string.Format(queueUriFormat, "test-error"));
+            configuration.Inbox.WorkQueue = inboxWorkQueue;
+            configuration.Inbox.DeferredQueue = inboxDeferredQueue;
+            configuration.Inbox.ErrorQueue = errorQueue;
 
-                configuration.Inbox =
-                    new InboxQueueConfiguration
-                    {
-                        WorkQueue = inboxWorkQueue,
-                        DeferredQueue = inboxDeferredQueue,
-                        ErrorQueue = errorQueue,
-                        DurationToSleepWhenIdle = new[] {TimeSpan.FromMilliseconds(5)},
-                        ThreadCount = threadCount
-                    };
+            inboxWorkQueue.AttemptDrop();
+            inboxDeferredQueue.AttemptDrop();
+            errorQueue.AttemptDrop();
 
-                inboxWorkQueue.AttemptDrop();
-                inboxDeferredQueue.AttemptDrop();
-                errorQueue.AttemptDrop();
+            queueManager.CreatePhysicalQueues(configuration);
 
-                queueManager.CreatePhysicalQueues(configuration);
-
-                inboxWorkQueue.AttemptPurge();
-                inboxDeferredQueue.AttemptPurge();
-                errorQueue.AttemptPurge();
-
-                return configuration;
-            }
+            inboxWorkQueue.AttemptPurge();
+            inboxDeferredQueue.AttemptPurge();
+            errorQueue.AttemptPurge();
         }
     }
 }

@@ -11,9 +11,8 @@ namespace Shuttle.Esb.Tests
 		IPipelineObserver<OnDeserializeTransportMessage>,
 		IPipelineObserver<OnAfterDeserializeTransportMessage>
 	{
-		private static readonly object _padlock = new object();
-
-		private readonly IQueue _inboxWorkQueue;
+	    private readonly IServiceBusConfiguration _configuration;
+	    private static readonly object _padlock = new object();
 
 		private readonly List<ExceptionAssertion> _assertions = new List<ExceptionAssertion>();
 		private string _assertionName;
@@ -22,13 +21,13 @@ namespace Shuttle.Esb.Tests
 
 		private readonly ILog _log;
 
-		public ReceivePipelineExceptionModule(IQueue inboxWorkQueue)
+		public ReceivePipelineExceptionModule(IServiceBusConfiguration configuration)
 		{
-			Guard.AgainstNull(inboxWorkQueue, "_inboxWorkQueue");
+		    Guard.AgainstNull(configuration, "configuration");
 
-			_inboxWorkQueue = inboxWorkQueue;
+            _configuration = configuration;
 
-			_log = Log.For(this);
+            _log = Log.For(this);
 		}
 
 		public void Initialize(IServiceBus bus)
@@ -109,11 +108,11 @@ namespace Shuttle.Esb.Tests
 				try
 				{
 					// IsEmpty does not work for prefetch queues
-					var receivedMessage = _inboxWorkQueue.GetMessage();
+					var receivedMessage = _configuration.Inbox.WorkQueue.GetMessage();
 
 					Assert.IsNotNull(receivedMessage);
 
-					_inboxWorkQueue.Release(receivedMessage.AcknowledgementToken);
+                    _configuration.Inbox.WorkQueue.Release(receivedMessage.AcknowledgementToken);
 				}
 				catch (Exception ex)
 				{
