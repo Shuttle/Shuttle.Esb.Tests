@@ -1,5 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.Threading;
 using NUnit.Framework;
 using Shuttle.Core.Infrastructure;
@@ -8,11 +7,10 @@ namespace Shuttle.Esb.Tests
 {
     public class IdempotenceFixture : IntegrationFixture
     {
-        protected void TestIdempotenceProcessing(IComponentRegistry registry, Func<IComponentResolver> getResolver, string queueUriFormat,
+        protected void TestIdempotenceProcessing(ComponentContainer container, string queueUriFormat,
             bool isTransactional, bool enqueueUniqueMessages)
         {
-            Guard.AgainstNull(registry, "registry");
-            Guard.AgainstNull(getResolver, "getResolver");
+            Guard.AgainstNull(container, "container");
 
             const int threadCount = 1;
             const int messageCount = 5;
@@ -20,10 +18,10 @@ namespace Shuttle.Esb.Tests
             var padlock = new object();
             var configuration = DefaultConfiguration(isTransactional, threadCount);
 
-            var configurator = new ServiceBusConfigurator(registry);
+            var configurator = new ServiceBusConfigurator(container.Registry);
 
-            registry.Register<IMessageRouteProvider>(new IdempotenceMessageRouteProvider());
-            registry.Register<IMessageHandlerInvoker, IdempotenceMessageHandlerInvoker>();
+            container.Registry.Register<IMessageRouteProvider>(new IdempotenceMessageRouteProvider());
+            container.Registry.Register<IMessageHandlerInvoker, IdempotenceMessageHandlerInvoker>();
 
             configurator.DontRegister<IMessageRouteProvider>();
             configurator.DontRegister<IIdempotenceService>();
@@ -31,18 +29,17 @@ namespace Shuttle.Esb.Tests
 
             configurator.RegisterComponents(configuration);
 
-            var resolver = getResolver.Invoke();
-
-            var queueManager = resolver.Resolve<IQueueManager>();
+            var queueManager = ConfigureQueueManager(container.Resolver);
 
             ConfigureQueues(queueManager, configuration, queueUriFormat);
 
-            var transportMessageFactory = resolver.Resolve<ITransportMessageFactory>();
-            var serializer = resolver.Resolve<ISerializer>();
-            var events = resolver.Resolve<IServiceBusEvents>();
-            var messageHandlerInvoker = (IdempotenceMessageHandlerInvoker)resolver.Resolve<IMessageHandlerInvoker>();
+            var transportMessageFactory = container.Resolver.Resolve<ITransportMessageFactory>();
+            var serializer = container.Resolver.Resolve<ISerializer>();
+            var events = container.Resolver.Resolve<IServiceBusEvents>();
+            var messageHandlerInvoker =
+                (IdempotenceMessageHandlerInvoker) container.Resolver.Resolve<IMessageHandlerInvoker>();
 
-            using (var bus = ServiceBus.Create(resolver))
+            using (var bus = ServiceBus.Create(container.Resolver))
             {
                 if (enqueueUniqueMessages)
                 {
@@ -68,10 +65,7 @@ namespace Shuttle.Esb.Tests
                 var idleThreads = new List<int>();
                 var exception = false;
 
-                events.HandlerException += (sender, args) =>
-                {
-                    exception = true;
-                };
+                events.HandlerException += (sender, args) => { exception = true; };
 
                 events.ThreadWaiting += (sender, args) =>
                 {
@@ -102,7 +96,8 @@ namespace Shuttle.Esb.Tests
             AttemptDropQueues(queueManager, queueUriFormat);
         }
 
-        private void ConfigureQueues(IQueueManager queueManager, IServiceBusConfiguration configuration, string queueUriFormat)
+        private void ConfigureQueues(IQueueManager queueManager, IServiceBusConfiguration configuration,
+            string queueUriFormat)
         {
             var inboxWorkQueue = queueManager.GetQueue(string.Format(queueUriFormat, "test-inbox-work"));
             var errorQueue = queueManager.GetQueue(string.Format(queueUriFormat, "test-error"));

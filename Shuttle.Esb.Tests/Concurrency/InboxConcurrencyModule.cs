@@ -12,13 +12,6 @@ namespace Shuttle.Esb.Tests
 		private readonly List<DateTime> _datesAfterGetMessage = new List<DateTime>();
 		private DateTime _firstDateAfterGetMessage = DateTime.MinValue;
 
-        public InboxConcurrencyModule(IPipelineFactory pipelineFactory)
-        {
-            Guard.AgainstNull(pipelineFactory, "pipelineFactory");
-
-            pipelineFactory.PipelineCreated += PipelineCreated;
-        }
-
         private void PipelineCreated(object sender, PipelineEventArgs e)
 		{
 			if (
@@ -61,5 +54,12 @@ namespace Shuttle.Esb.Tests
 				_datesAfterGetMessage.All(
 					dateTime => dateTime.Subtract(_firstDateAfterGetMessage) <= TimeSpan.FromMilliseconds(msToComplete));
 		}
-	}
+
+	    public void Assign(IPipelineFactory pipelineFactory)
+	    {
+            Guard.AgainstNull(pipelineFactory, "pipelineFactory");
+
+            pipelineFactory.PipelineCreated += PipelineCreated;
+        }
+    }
 }

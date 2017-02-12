@@ -1,71 +1,68 @@
 using System;
 using System.Threading;
-using Castle.Windsor;
 using NUnit.Framework;
-using Shuttle.Core.Castle;
 using Shuttle.Core.Infrastructure;
 
 namespace Shuttle.Esb.Tests
 {
-	public class PipelineExceptionFixture : IntegrationFixture
-	{
-		protected void TestExceptionHandling(string queueUriFormat)
-		{
-			var configuration = DefaultConfiguration(true, 1);
+    public class PipelineExceptionFixture : IntegrationFixture
+    {
+        protected void TestExceptionHandling(ComponentContainer container, string queueUriFormat)
+        {
+            var configuration = DefaultConfiguration(true, 1);
 
-            var container = new WindsorComponentContainer(new WindsorContainer());
+            var configurator = new ServiceBusConfigurator(container.Registry);
 
-            var configurator = new ServiceBusConfigurator(container);
-
-		    configurator.DontRegister<ReceivePipelineExceptionModule>();
+            configurator.DontRegister<ReceivePipelineExceptionModule>();
 
             configurator.RegisterComponents(configuration);
 
             var module = new ReceivePipelineExceptionModule(configuration);
 
-            container.Register(module.GetType(), module);
+            container.Registry.Register(module.GetType(), module);
 
-            var queueManager = container.Resolve<IQueueManager>();
-		    IQueue inboxWorkQueue;
+            module.Assign(container.Resolver.Resolve<IPipelineFactory>());
 
-		        inboxWorkQueue = queueManager.GetQueue(string.Format(queueUriFormat, "test-inbox-work"));
-		        var inboxErrorQueue = queueManager.GetQueue(string.Format(queueUriFormat, "test-error"));
+            var queueManager = ConfigureQueueManager(container.Resolver);
 
-		        configuration.Inbox =
-		            new InboxQueueConfiguration
-		            {
-		                WorkQueue = inboxWorkQueue,
-		                ErrorQueue = inboxErrorQueue,
-		                DurationToSleepWhenIdle = new[] {TimeSpan.FromMilliseconds(5)},
-		                DurationToIgnoreOnFailure = new[] {TimeSpan.FromMilliseconds(5)},
-		                MaximumFailureCount = 100,
-		                ThreadCount = 1
-		            };
+            var inboxWorkQueue = queueManager.GetQueue(string.Format(queueUriFormat, "test-inbox-work"));
+            var inboxErrorQueue = queueManager.GetQueue(string.Format(queueUriFormat, "test-error"));
 
+            configuration.Inbox =
+                new InboxQueueConfiguration
+                {
+                    WorkQueue = inboxWorkQueue,
+                    ErrorQueue = inboxErrorQueue,
+                    DurationToSleepWhenIdle = new[] {TimeSpan.FromMilliseconds(5)},
+                    DurationToIgnoreOnFailure = new[] {TimeSpan.FromMilliseconds(5)},
+                    MaximumFailureCount = 100,
+                    ThreadCount = 1
+                };
 
-		        inboxWorkQueue.Drop();
-		        inboxErrorQueue.Drop();
+            inboxWorkQueue.Drop();
+            inboxErrorQueue.Drop();
 
-		        queueManager.CreatePhysicalQueues(configuration);
-		
-            var transportMessageFactory = container.Resolve<ITransportMessageFactory>();
-            var serializer = container.Resolve<ISerializer>();
+            queueManager.CreatePhysicalQueues(configuration);
 
-            using (var bus = ServiceBus.Create(container))
-			{
-				var message = transportMessageFactory.Create(new ReceivePipelineCommand(), c => c.WithRecipient(inboxWorkQueue));
+            var transportMessageFactory = container.Resolver.Resolve<ITransportMessageFactory>();
+            var serializer = container.Resolver.Resolve<ISerializer>();
 
-				inboxWorkQueue.Enqueue(message, serializer.Serialize(message));
+            using (var bus = ServiceBus.Create(container.Resolver))
+            {
+                var message = transportMessageFactory.Create(new ReceivePipelineCommand(),
+                    c => c.WithRecipient(inboxWorkQueue));
 
-				Assert.IsFalse(inboxWorkQueue.IsEmpty());
+                inboxWorkQueue.Enqueue(message, serializer.Serialize(message));
 
-				bus.Start();
+                Assert.IsFalse(inboxWorkQueue.IsEmpty());
 
-				while (module.ShouldWait())
-				{
-					Thread.Sleep(10);
-				}
-			}
-		}
-	}
+                bus.Start();
+
+                while (module.ShouldWait())
+                {
+                    Thread.Sleep(10);
+                }
+            }
+        }
+    }
 }

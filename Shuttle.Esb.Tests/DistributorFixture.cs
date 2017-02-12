@@ -1,8 +1,6 @@
 ﻿using System;
 using System.Threading;
-using Castle.Windsor;
 using NUnit.Framework;
-using Shuttle.Core.Castle;
 using Shuttle.Core.Infrastructure;
 
 namespace Shuttle.Esb.Tests
@@ -16,12 +14,8 @@ namespace Shuttle.Esb.Tests
             private readonly object padlock = new object();
             private int _messagesHandled;
 
-            public WorkerModule(IPipelineFactory pipelineFactory, int messageCount)
+            public WorkerModule(int messageCount)
             {
-                Guard.AgainstNull(pipelineFactory, "pipelineFactory");
-
-                pipelineFactory.PipelineCreated += PipelineCreated;
-
                 _messageCount = messageCount;
 
                 _log = Log.For(this);
@@ -40,10 +34,10 @@ namespace Shuttle.Esb.Tests
             private void PipelineCreated(object sender, PipelineEventArgs e)
             {
                 if (!e.Pipeline.GetType()
-                    .FullName.Equals(typeof(InboxMessagePipeline).FullName, StringComparison.InvariantCultureIgnoreCase)
+                    .FullName.Equals(typeof (InboxMessagePipeline).FullName, StringComparison.InvariantCultureIgnoreCase)
                     &&
                     !e.Pipeline.GetType()
-                        .FullName.Equals(typeof(DeferredMessagePipeline).FullName,
+                        .FullName.Equals(typeof (DeferredMessagePipeline).FullName,
                             StringComparison.InvariantCultureIgnoreCase))
                 {
                     return;
@@ -56,6 +50,13 @@ namespace Shuttle.Esb.Tests
             {
                 return _messagesHandled == _messageCount;
             }
+
+            public void Assign(IPipelineFactory pipelineFactory)
+            {
+                Guard.AgainstNull(pipelineFactory, "pipelineFactory");
+
+                pipelineFactory.PipelineCreated += PipelineCreated;
+            }
         }
 
         private readonly ILog _log;
@@ -65,37 +66,44 @@ namespace Shuttle.Esb.Tests
             _log = Log.For(this);
         }
 
-        protected void TestDistributor(string queueUriFormat, bool isTransactional)
+        protected void TestDistributor(ComponentContainer distributorContainer, ComponentContainer workerContainer,
+            string queueUriFormat, bool isTransactional)
         {
+            Guard.AgainstNull(distributorContainer, "distributorContainer");
+            Guard.AgainstNull(workerContainer, "workerContainer");
+
             const int messageCount = 12;
 
             var distributorConfiguration = DefaultConfiguration(isTransactional, 1);
-            var distributorContainer = GetComponentResolver(distributorConfiguration);
 
-            var queueManager = distributorContainer.Resolve<IQueueManager>();
+            new ServiceBusConfigurator(distributorContainer.Registry).RegisterComponents(distributorConfiguration);
+
+            var queueManager = ConfigureQueueManager(distributorContainer.Resolver);
 
             ConfigureDistributorQueues(queueManager, distributorConfiguration, queueUriFormat);
 
-            var transportMessageFactory = distributorContainer.Resolve<ITransportMessageFactory>();
-            var serializer = distributorContainer.Resolve<ISerializer>();
+            var transportMessageFactory = distributorContainer.Resolver.Resolve<ITransportMessageFactory>();
+            var serializer = distributorContainer.Resolver.Resolve<ISerializer>();
 
-            var workerContainer = new WindsorComponentContainer(new WindsorContainer());
-
-            var workerConfigurator = new ServiceBusConfigurator(workerContainer);
+            var workerConfigurator = new ServiceBusConfigurator(workerContainer.Registry);
 
             workerConfigurator.DontRegister<WorkerModule>();
 
             var workerConfiguration = DefaultConfiguration(isTransactional, 1);
-            workerConfigurator.RegisterComponents(DefaultConfiguration(isTransactional, 1));
 
-            ConfigureWorkerQueues(workerContainer.Resolve<IQueueManager>(), workerConfiguration, queueUriFormat);
+            workerConfigurator.RegisterComponents(workerConfiguration);
 
-            var module = new WorkerModule(workerContainer.Resolve<IPipelineFactory>(), messageCount);
+            var module = new WorkerModule(messageCount);
 
-            workerContainer.Register<WorkerModule>(module);
+            workerContainer.Registry.Register(module);
 
-            using (var distributorBus = ServiceBus.Create(distributorContainer))
-            using (var workerBus = ServiceBus.Create(workerContainer))
+            ConfigureQueueManager(workerContainer.Resolver);
+            ConfigureWorkerQueues(workerContainer.Resolver.Resolve<IQueueManager>(), workerConfiguration, queueUriFormat);
+
+            module.Assign(workerContainer.Resolver.Resolve<IPipelineFactory>());
+
+            using (var distributorBus = ServiceBus.Create(distributorContainer.Resolver))
+            using (var workerBus = ServiceBus.Create(workerContainer.Resolver))
             {
                 for (var i = 0; i < messageCount; i++)
                 {
@@ -113,7 +121,7 @@ namespace Shuttle.Esb.Tests
                 distributorBus.Start();
                 workerBus.Start();
 
-                var timeout = DateTime.Now.AddSeconds(150);
+                var timeout = DateTime.Now.AddSeconds(5);
                 var timedOut = false;
 
                 _log.Information(string.Format("[start wait] : now = '{0}'", DateTime.Now));
@@ -134,16 +142,23 @@ namespace Shuttle.Esb.Tests
             AttemptDropQueues(queueManager, queueUriFormat);
         }
 
-        private void ConfigureDistributorQueues(IQueueManager queueManager, IServiceBusConfiguration configuration, string queueUriFormat)
+        private void ConfigureDistributorQueues(IQueueManager queueManager, IServiceBusConfiguration configuration,
+            string queueUriFormat)
         {
             var errorQueue = queueManager.GetQueue(string.Format(queueUriFormat, "test-error"));
 
             configuration.Inbox.WorkQueue = queueManager.GetQueue(string.Format(queueUriFormat, "test-distributor-work"));
             configuration.Inbox.ErrorQueue = errorQueue;
+            configuration.Inbox.Distribute = true;
 
-            configuration.ControlInbox.WorkQueue =
-                queueManager.GetQueue(string.Format(queueUriFormat, "test-distributor-control"));
-            configuration.ControlInbox.ErrorQueue = errorQueue;
+            configuration.ControlInbox = new ControlInboxQueueConfiguration
+            {
+                WorkQueue = queueManager.GetQueue(string.Format(queueUriFormat, "test-distributor-control")),
+                ErrorQueue = errorQueue,
+                DurationToSleepWhenIdle = new[] { TimeSpan.FromMilliseconds(5) },
+                DurationToIgnoreOnFailure = new[] { TimeSpan.FromMilliseconds(5) },
+                ThreadCount = 1
+            };
 
             configuration.Inbox.WorkQueue.AttemptDrop();
             configuration.ControlInbox.WorkQueue.AttemptDrop();
@@ -161,8 +176,12 @@ namespace Shuttle.Esb.Tests
         {
             configuration.Inbox.WorkQueue = queueManager.GetQueue(string.Format(queueUriFormat, "test-worker-work"));
             configuration.Inbox.ErrorQueue = queueManager.GetQueue(string.Format(queueUriFormat, "test-error"));
-            configuration.Worker.DistributorControlInboxWorkQueue =
-                queueManager.GetQueue(string.Format(queueUriFormat, "test-distributor-control"));
+
+            configuration.Worker = new WorkerConfiguration
+            {
+                DistributorControlInboxWorkQueue =
+                    queueManager.GetQueue(string.Format(queueUriFormat, "test-distributor-control"))
+            };
 
             configuration.Inbox.WorkQueue.AttemptDrop();
 
@@ -177,7 +196,7 @@ namespace Shuttle.Esb.Tests
 
             configuration.ControlInbox = new ControlInboxQueueConfiguration
             {
-                DurationToSleepWhenIdle = new[] { TimeSpan.FromMilliseconds(5) },
+                DurationToSleepWhenIdle = new[] {TimeSpan.FromMilliseconds(5)},
                 ThreadCount = 1
             };
 
@@ -185,4 +204,3 @@ namespace Shuttle.Esb.Tests
         }
     }
 }
-

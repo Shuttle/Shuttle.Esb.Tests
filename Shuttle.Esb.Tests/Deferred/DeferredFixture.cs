@@ -1,8 +1,6 @@
 ﻿using System;
 using System.Threading;
-using Castle.Windsor;
 using NUnit.Framework;
-using Shuttle.Core.Castle;
 using Shuttle.Core.Infrastructure;
 
 namespace Shuttle.Esb.Tests
@@ -16,30 +14,30 @@ namespace Shuttle.Esb.Tests
             _log = Log.For(this);
         }
 
-        protected void TestDeferredProcessing(string queueUriFormat, bool isTransactional)
+        protected void TestDeferredProcessing(ComponentContainer container, string queueUriFormat, bool isTransactional)
         {
+            Guard.AgainstNull(container, "container");
+
             const int deferredMessageCount = 10;
             const int millisecondsToDefer = 500;
 
             var configuration = DefaultConfiguration(isTransactional, 1);
 
-            var container = new WindsorComponentContainer(new WindsorContainer());
-
-            var configurator = new ServiceBusConfigurator(container);
+            var configurator = new ServiceBusConfigurator(container.Registry);
 
             configurator.DontRegister<DeferredMessageModule>();
 
             configurator.RegisterComponents(configuration);
 
-            var module = new DeferredMessageModule(container.Resolve<IPipelineFactory>(), deferredMessageCount);
+            var module = new DeferredMessageModule(container.Resolver.Resolve<IPipelineFactory>(), deferredMessageCount);
 
-            container.Register(module.GetType(), module);
+            container.Registry.Register(module.GetType(), module);
 
-            var queueManager = container.Resolve<IQueueManager>();
+            var queueManager = ConfigureQueueManager(container.Resolver);
 
             ConfigureQueues(queueManager, configuration, queueUriFormat);
 
-            using (var bus = ServiceBus.Create(container))
+            using (var bus = ServiceBus.Create(container.Resolver))
             {
                 bus.Start();
 
@@ -47,7 +45,8 @@ namespace Shuttle.Esb.Tests
 
                 for (var i = 0; i < deferredMessageCount; i++)
                 {
-                    EnqueueDeferredMessage(configuration, container.Resolve<ITransportMessageFactory>(), container.Resolve<ISerializer>(), ignoreTillDate);
+                    EnqueueDeferredMessage(configuration, container.Resolver.Resolve<ITransportMessageFactory>(),
+                        container.Resolver.Resolve<ISerializer>(), ignoreTillDate);
 
                     ignoreTillDate = ignoreTillDate.AddMilliseconds(millisecondsToDefer);
                 }
@@ -68,7 +67,8 @@ namespace Shuttle.Esb.Tests
                     timedOut = timeout < DateTime.Now;
                 }
 
-                _log.Information(string.Format("[end wait] : now = '{0}' / timeout = '{1}' / timed out = '{2}'", DateTime.Now,
+                _log.Information(string.Format("[end wait] : now = '{0}' / timeout = '{1}' / timed out = '{2}'",
+                    DateTime.Now,
                     timeout, timedOut));
 
                 _log.Information(string.Format("{0} of {1} deferred messages returned to the inbox.",
@@ -86,7 +86,8 @@ namespace Shuttle.Esb.Tests
             AttemptDropQueues(queueManager, queueUriFormat);
         }
 
-        private void EnqueueDeferredMessage(IServiceBusConfiguration configuration, ITransportMessageFactory transportMessageFactory, ISerializer serializer, DateTime ignoreTillDate)
+        private void EnqueueDeferredMessage(IServiceBusConfiguration configuration,
+            ITransportMessageFactory transportMessageFactory, ISerializer serializer, DateTime ignoreTillDate)
         {
             var command = new SimpleCommand
             {
@@ -99,11 +100,13 @@ namespace Shuttle.Esb.Tests
 
             configuration.Inbox.WorkQueue.Enqueue(message, serializer.Serialize(message));
 
-            _log.Information(string.Format("[message enqueued] : name = '{0}' / deferred till date = '{1}'", command.Name,
+            _log.Information(string.Format("[message enqueued] : name = '{0}' / deferred till date = '{1}'",
+                command.Name,
                 message.IgnoreTillDate));
         }
 
-        private void ConfigureQueues(IQueueManager queueManager, IServiceBusConfiguration configuration, string queueUriFormat)
+        private void ConfigureQueues(IQueueManager queueManager, IServiceBusConfiguration configuration,
+            string queueUriFormat)
         {
             var inboxWorkQueue = queueManager.GetQueue(string.Format(queueUriFormat, "test-inbox-work"));
             var inboxDeferredQueue = queueManager.GetQueue(string.Format(queueUriFormat, "test-inbox-deferred"));

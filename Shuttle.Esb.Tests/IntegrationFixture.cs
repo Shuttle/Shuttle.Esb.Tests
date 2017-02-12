@@ -1,7 +1,5 @@
 using System;
-using Castle.Windsor;
 using log4net;
-using Shuttle.Core.Castle;
 using Shuttle.Core.Infrastructure;
 using Shuttle.Core.Log4Net;
 
@@ -11,18 +9,7 @@ namespace Shuttle.Esb.Tests
     {
         protected override void FixtureSetUp()
         {
-            Log.Assign(new Log4NetLog(LogManager.GetLogger(typeof(IntegrationFixture))));
-        }
-
-        protected IComponentResolver GetComponentResolver(IServiceBusConfiguration configuration)
-        {
-            var container = new WindsorComponentContainer(new WindsorContainer());
-
-            var configurator = new ServiceBusConfigurator(container);
-
-            configurator.RegisterComponents(configuration);
-
-            return container;
+            Log.Assign(new Log4NetLog(LogManager.GetLogger(typeof (IntegrationFixture))));
         }
 
         protected ServiceBusConfiguration DefaultConfiguration(bool isTransactional, int threadCount)
@@ -36,40 +23,23 @@ namespace Shuttle.Esb.Tests
                 },
                 Inbox = new InboxQueueConfiguration
                 {
-                    DurationToSleepWhenIdle = new[] { TimeSpan.FromMilliseconds(5) },
-                    ThreadCount = threadCount
-                },
-            };
-
-        }
-
-         protected ServiceBusConfiguration DistributorConfiguration(bool isTransactional, int threadCount)
-        {
-            return DefaultConfiguration(isTransactional, threadCount, false);
-        }
-
-        private ServiceBusConfiguration DefaultConfiguration(bool isTransactional, int threadCount, bool hasControlInbox)
-        {
-            var configuration = new ServiceBusConfiguration
-            {
-                ScanForQueueFactories = true,
-                TransactionScope = new TransactionScopeConfiguration
-                {
-                    Enabled = isTransactional
-                },
-                Inbox = new InboxQueueConfiguration
-                {
                     DurationToSleepWhenIdle = new[] {TimeSpan.FromMilliseconds(5)},
                     DurationToIgnoreOnFailure = new[] { TimeSpan.FromMilliseconds(5) },
                     ThreadCount = threadCount
-                },
+                }
             };
+        }
 
-            if (hasControlInbox)
+        protected IQueueManager ConfigureQueueManager(IComponentResolver resolver)
+        {
+            var queueManager = resolver.Resolve<IQueueManager>();
+
+            foreach (var queueFactory in resolver.ResolveAll<IQueueFactory>())
             {
+                queueManager.RegisterQueueFactory(queueFactory);
             }
 
-            return configuration;
+            return queueManager;
         }
 
         protected void AttemptDropQueues(IQueueManager queueManager, string queueUriFormat)

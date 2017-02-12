@@ -6,11 +6,6 @@ namespace Shuttle.Esb.Tests
     public class InboxDeferredModule :
         IPipelineObserver<OnAfterDeserializeTransportMessage>
     {
-        public InboxDeferredModule(IPipelineFactory pipelineFactory)
-        {
-            pipelineFactory.PipelineCreated += PipelineCreated;
-        }
-
         public TransportMessage TransportMessage { get; private set; }
 
         public void Execute(OnAfterDeserializeTransportMessage pipelineEvent)
@@ -22,12 +17,19 @@ namespace Shuttle.Esb.Tests
         {
             if (
                 !e.Pipeline.GetType()
-                    .FullName.Equals(typeof (InboxMessagePipeline).FullName, StringComparison.InvariantCultureIgnoreCase))
+                    .FullName.Equals(typeof(InboxMessagePipeline).FullName, StringComparison.InvariantCultureIgnoreCase))
             {
                 return;
             }
 
             e.Pipeline.RegisterObserver(this);
+        }
+
+        public void Assign(IPipelineFactory pipelineFactory)
+        {
+            Guard.AgainstNull(pipelineFactory, "pipelineFactory");
+
+            pipelineFactory.PipelineCreated += PipelineCreated;
         }
     }
 }

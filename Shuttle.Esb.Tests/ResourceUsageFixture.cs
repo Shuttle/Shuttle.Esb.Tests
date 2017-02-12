@@ -7,101 +7,105 @@ using Shuttle.Core.Infrastructure;
 
 namespace Shuttle.Esb.Tests
 {
-	public class ResourceUsageFixture : IntegrationFixture
-	{
-		public void TestResourceUsage(string queueUriFormat, bool isTransactional)
-		{
-			const int threadCount = 5;
+    public class ResourceUsageFixture : IntegrationFixture
+    {
+        public void TestResourceUsage(ComponentContainer container, string queueUriFormat, bool isTransactional)
+        {
+            const int threadCount = 5;
 
-			var configuration = DefaultConfiguration(isTransactional, threadCount);
+            var configuration = DefaultConfiguration(isTransactional, threadCount);
 
-            var container = GetComponentResolver(configuration);
+            new ServiceBusConfigurator(container.Registry).RegisterComponents(configuration);
 
-            var transportMessageFactory = container.Resolve<ITransportMessageFactory>();
-            var serializer = container.Resolve<ISerializer>();
-            var events = container.Resolve<IServiceBusEvents>();
+            var transportMessageFactory = container.Resolver.Resolve<ITransportMessageFactory>();
+            var serializer = container.Resolver.Resolve<ISerializer>();
+            var events = container.Resolver.Resolve<IServiceBusEvents>();
 
             var cpuCounter = new PerformanceCounterValue(new PerformanceCounter
-			{
-				CategoryName = "Processor",
-				CounterName = "% Processor Time",
-				InstanceName = "_Total"
-			});
+            {
+                CategoryName = "Processor",
+                CounterName = "% Processor Time",
+                InstanceName = "_Total"
+            });
 
-			var padlock = new object();
-			var idleThreads = new List<int>();
-			var startDate = DateTime.Now;
-			var endDate = startDate.AddSeconds(10);
-			var iteration = 0;
-		    float cpuMaximumUsage = 0f;
+            var padlock = new object();
+            var idleThreads = new List<int>();
+            var startDate = DateTime.Now;
+            var endDate = startDate.AddSeconds(10);
+            var iteration = 0;
+            float cpuMaximumUsage = 0f;
 
-			cpuCounter.NextValue();
-			Thread.Sleep(1000);
+            cpuCounter.NextValue();
+            Thread.Sleep(1000);
 
             var cpuUsageLimit = cpuCounter.NextValue() + 25F;
 
-            ConfigureQueues(container.Resolve<IQueueManager>(), configuration, queueUriFormat);
+            var queueManager = ConfigureQueueManager(container.Resolver);
 
-			using (ServiceBus.Create(container).Start())
-			{
-			    events.ThreadWaiting += (sender, args) =>
-			    {
-			        lock (padlock)
-			        {
-			            if (idleThreads.Contains(Thread.CurrentThread.ManagedThreadId))
-			            {
-			                return;
-			            }
+            ConfigureQueues(queueManager, configuration, queueUriFormat);
 
-			            idleThreads.Add(Thread.CurrentThread.ManagedThreadId);
-			        }
-			    };
+            using (ServiceBus.Create(container.Resolver).Start())
+            {
+                events.ThreadWaiting += (sender, args) =>
+                {
+                    lock (padlock)
+                    {
+                        if (idleThreads.Contains(Thread.CurrentThread.ManagedThreadId))
+                        {
+                            return;
+                        }
 
-			    while (DateTime.Now < endDate)
-			    {
-			        iteration++;
+                        idleThreads.Add(Thread.CurrentThread.ManagedThreadId);
+                    }
+                };
 
-			        for (var i = 0; i < 5; i++)
-			        {
-			            var message = transportMessageFactory.Create(new SimpleCommand("[resource testing]"),
-			                c => c.WithRecipient(configuration.Inbox.WorkQueue));
+                while (DateTime.Now < endDate)
+                {
+                    iteration++;
 
-			            configuration.Inbox.WorkQueue.Enqueue(message, serializer.Serialize(message));
-			        }
+                    for (var i = 0; i < 5; i++)
+                    {
+                        var message = transportMessageFactory.Create(new SimpleCommand("[resource testing]"),
+                            c => c.WithRecipient(configuration.Inbox.WorkQueue));
 
-			        idleThreads.Clear();
+                        configuration.Inbox.WorkQueue.Enqueue(message, serializer.Serialize(message));
+                    }
 
-			        Console.WriteLine("[checking usage] : iteration = {0}", iteration);
+                    idleThreads.Clear();
 
-			        while (idleThreads.Count < threadCount)
-			        {
-			            var cpuUsage = cpuCounter.NextValue();
+                    Console.WriteLine("[checking usage] : iteration = {0}", iteration);
 
-			            if (cpuUsage > cpuMaximumUsage)
-			            {
-			                cpuMaximumUsage = cpuUsage;
-			            }
+                    while (idleThreads.Count < threadCount)
+                    {
+                        var cpuUsage = cpuCounter.NextValue();
 
-			            Assert.IsTrue(cpuUsage < cpuUsageLimit,
-			                string.Format("[EXCEEDED] : cpu usage = {0} / limit = {1}", cpuUsage, cpuUsageLimit));
+                        if (cpuUsage > cpuMaximumUsage)
+                        {
+                            cpuMaximumUsage = cpuUsage;
+                        }
 
-			            Thread.Sleep(25);
-			        }
-			    }
+                        Assert.IsTrue(cpuUsage < cpuUsageLimit,
+                            string.Format("[EXCEEDED] : cpu usage = {0} / limit = {1}", cpuUsage, cpuUsageLimit));
 
-			    Console.WriteLine("[done] : started = '{0}' / end = '{1}'", startDate, endDate);
-			    Console.WriteLine("[CPU] : maximum usage = {0} / cpu usage limit = {1}", cpuMaximumUsage, cpuUsageLimit);
-			}
-		}
+                        Thread.Sleep(25);
+                    }
+                }
 
-	    private void ConfigureQueues(IQueueManager queueManager, IServiceBusConfiguration configuration,
-	        string queueUriFormat)
-	    {
+                Console.WriteLine("[done] : started = '{0}' / end = '{1}'", startDate, endDate);
+                Console.WriteLine("[CPU] : maximum usage = {0} / cpu usage limit = {1}", cpuMaximumUsage, cpuUsageLimit);
+            }
+
+            AttemptDropQueues(queueManager, queueUriFormat);
+        }
+
+        private void ConfigureQueues(IQueueManager queueManager, IServiceBusConfiguration configuration,
+            string queueUriFormat)
+        {
             var inboxWorkQueue = queueManager.GetQueue(string.Format(queueUriFormat, "test-inbox-work"));
             var errorQueue = queueManager.GetQueue(string.Format(queueUriFormat, "test-error"));
 
-	        configuration.Inbox.WorkQueue = inboxWorkQueue;
-	        configuration.Inbox.ErrorQueue = errorQueue;
+            configuration.Inbox.WorkQueue = inboxWorkQueue;
+            configuration.Inbox.ErrorQueue = errorQueue;
 
             inboxWorkQueue.AttemptDrop();
             errorQueue.AttemptDrop();
@@ -111,5 +115,5 @@ namespace Shuttle.Esb.Tests
             inboxWorkQueue.AttemptPurge();
             errorQueue.AttemptPurge();
         }
-	}
+    }
 }

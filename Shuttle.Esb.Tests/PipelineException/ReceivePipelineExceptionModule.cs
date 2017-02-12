@@ -27,17 +27,12 @@ namespace Shuttle.Esb.Tests
 
             _configuration = configuration;
 
+            AddAssertion("OnGetMessage");
+            AddAssertion("OnAfterGetMessage");
+            AddAssertion("OnDeserializeTransportMessage");
+            AddAssertion("OnAfterDeserializeTransportMessage");
+
             _log = Log.For(this);
-		}
-
-		public void Initialize(IServiceBus bus)
-		{
-			Guard.AgainstNull(bus, "bus");
-
-			AddAssertion("OnGetMessage");
-			AddAssertion("OnAfterGetMessage");
-			AddAssertion("OnDeserializeTransportMessage");
-			AddAssertion("OnAfterDeserializeTransportMessage");
 		}
 
 		private void PipelineObtained(object sender, PipelineEventArgs e)
@@ -160,8 +155,10 @@ namespace Shuttle.Esb.Tests
 			ThrowException("OnAfterDeserializeTransportMessage");
 		}
 
-	    public void Start(IPipelineFactory pipelineFactory)
+	    public void Assign(IPipelineFactory pipelineFactory)
 	    {
+            Guard.AgainstNull(pipelineFactory, "pipelineFactory");
+
             pipelineFactory.PipelineCreated += PipelineCreated;
             pipelineFactory.PipelineReleased += PipelineReleased;
             pipelineFactory.PipelineObtained += PipelineObtained;
