@@ -26,13 +26,12 @@ namespace Shuttle.Esb.Tests
 		    Guard.AgainstNull(configuration, "configuration");
 
             _configuration = configuration;
+            _log = Log.For(this);
 
             AddAssertion("OnGetMessage");
             AddAssertion("OnAfterGetMessage");
             AddAssertion("OnDeserializeTransportMessage");
             AddAssertion("OnAfterDeserializeTransportMessage");
-
-            _log = Log.For(this);
 		}
 
 		private void PipelineObtained(object sender, PipelineEventArgs e)

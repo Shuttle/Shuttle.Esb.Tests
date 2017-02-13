@@ -23,7 +23,7 @@ namespace Shuttle.Esb.Tests
             const int threadCount = 3;
 
             var padlock = new object();
-            var configuration = GetConfiguration(isTransactional, 1);
+            var configuration = GetConfiguration(isTransactional, threadCount);
 
             var configurator = new ServiceBusConfigurator(container.Registry);
 
@@ -31,7 +31,7 @@ namespace Shuttle.Esb.Tests
 
             var receiverWorkQueueUri = string.Format(workQueueUriFormat, "test-receiver-work");
 
-            messageRouteProvider.Setup(m => m.GetRouteUris(It.IsAny<string>())).Returns(new[] {receiverWorkQueueUri});
+            messageRouteProvider.Setup(m => m.GetRouteUris(It.IsAny<string>())).Returns(new[] { receiverWorkQueueUri });
 
             container.Registry.Register(messageRouteProvider.Object);
 
@@ -58,7 +58,7 @@ namespace Shuttle.Esb.Tests
 
                 events.ThreadWaiting += (sender, args) =>
                 {
-                    if (!args.PipelineType.FullName.Equals(typeof (OutboxPipeline).FullName))
+                    if (!args.PipelineType.FullName.Equals(typeof(OutboxPipeline).FullName))
                     {
                         return;
                     }
@@ -76,10 +76,17 @@ namespace Shuttle.Esb.Tests
 
                 bus.Start();
 
-                while (idleThreads.Count < threadCount)
+                var timedOut = false;
+                var timeout = DateTime.Now.AddSeconds(5);
+
+                while (idleThreads.Count < threadCount && !timedOut)
                 {
                     Thread.Sleep(25);
+
+                    timedOut = timeout < DateTime.Now;
                 }
+
+                Assert.IsFalse(timedOut, "Timed out before processing {0} errors.  Waiting for {1} threads to be idle.", count, threadCount);
             }
 
             var receiverWorkQueue = queueManager.GetQueue(receiverWorkQueueUri);
@@ -141,7 +148,7 @@ namespace Shuttle.Esb.Tests
                 Outbox =
                     new OutboxQueueConfiguration
                     {
-                        DurationToSleepWhenIdle = new[] {TimeSpan.FromMilliseconds(5)},
+                        DurationToSleepWhenIdle = new[] { TimeSpan.FromMilliseconds(5) },
                         ThreadCount = threadCount
                     }
             };
