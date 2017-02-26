@@ -1,13 +1,15 @@
 using System;
 using log4net;
+using NUnit.Framework;
 using Shuttle.Core.Infrastructure;
 using Shuttle.Core.Log4Net;
 
 namespace Shuttle.Esb.Tests
 {
-    public class IntegrationFixture : Fixture
+    public class IntegrationFixture 
     {
-        protected override void FixtureSetUp()
+        [OneTimeSetUp]
+        protected void FixtureSetUp()
         {
             Log.Assign(new Log4NetLog(LogManager.GetLogger(typeof (IntegrationFixture))));
         }
