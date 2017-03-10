@@ -15,7 +15,7 @@ namespace Shuttle.Esb.Tests
 
             var configuration = DefaultConfiguration(isTransactional, threadCount);
 
-            new ServiceBusConfigurator(container.Registry).RegisterComponents(configuration);
+            ServiceBus.Register(container.Registry, configuration);
 
             var transportMessageFactory = container.Resolver.Resolve<ITransportMessageFactory>();
             var serializer = container.Resolver.Resolve<ISerializer>();

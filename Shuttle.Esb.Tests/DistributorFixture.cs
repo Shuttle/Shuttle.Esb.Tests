@@ -76,7 +76,7 @@ namespace Shuttle.Esb.Tests
 
             var distributorConfiguration = DefaultConfiguration(isTransactional, 1);
 
-            new ServiceBusConfigurator(distributorContainer.Registry).RegisterComponents(distributorConfiguration);
+            ServiceBus.Register(distributorContainer.Registry, distributorConfiguration);
 
             var queueManager = ConfigureQueueManager(distributorContainer.Resolver);
 
@@ -85,17 +85,13 @@ namespace Shuttle.Esb.Tests
             var transportMessageFactory = distributorContainer.Resolver.Resolve<ITransportMessageFactory>();
             var serializer = distributorContainer.Resolver.Resolve<ISerializer>();
 
-            var workerConfigurator = new ServiceBusConfigurator(workerContainer.Registry);
+			var module = new WorkerModule(messageCount);
 
-            workerConfigurator.DontRegister<WorkerModule>();
+			workerContainer.Registry.Register(module);
 
             var workerConfiguration = DefaultConfiguration(isTransactional, 1);
 
-            workerConfigurator.RegisterComponents(workerConfiguration);
-
-            var module = new WorkerModule(messageCount);
-
-            workerContainer.Registry.Register(module);
+            ServiceBus.Register(workerContainer.Registry, workerConfiguration);
 
             ConfigureQueueManager(workerContainer.Resolver);
             ConfigureWorkerQueues(workerContainer.Resolver.Resolve<IQueueManager>(), workerConfiguration, queueUriFormat);

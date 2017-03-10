@@ -39,7 +39,7 @@ namespace Shuttle.Esb.Tests
 
         private void Configure(ComponentContainer container)
         {
-            new ServiceBusConfigurator(container.Registry).RegisterComponents(DefaultConfiguration(true, 1));
+            ServiceBus.Register(container.Registry, DefaultConfiguration(true, 1));
 
             ConfigureQueueManager(container.Resolver);
         }

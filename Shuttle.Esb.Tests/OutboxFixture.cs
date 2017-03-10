@@ -25,8 +25,6 @@ namespace Shuttle.Esb.Tests
             var padlock = new object();
             var configuration = GetConfiguration(isTransactional, threadCount);
 
-            var configurator = new ServiceBusConfigurator(container.Registry);
-
             var messageRouteProvider = new Mock<IMessageRouteProvider>();
 
             var receiverWorkQueueUri = string.Format(workQueueUriFormat, "test-receiver-work");
@@ -35,9 +33,7 @@ namespace Shuttle.Esb.Tests
 
             container.Registry.Register(messageRouteProvider.Object);
 
-            configurator.DontRegister<IMessageRouteProvider>();
-
-            configurator.RegisterComponents(configuration);
+            ServiceBus.Register(container.Registry, configuration);
 
             var queueManager = ConfigureQueueManager(container.Resolver);
 

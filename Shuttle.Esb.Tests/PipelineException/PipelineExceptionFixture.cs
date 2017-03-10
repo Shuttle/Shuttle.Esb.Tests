@@ -11,11 +11,7 @@ namespace Shuttle.Esb.Tests
         {
             var configuration = DefaultConfiguration(true, 1);
 
-            var configurator = new ServiceBusConfigurator(container.Registry);
-
-            configurator.DontRegister<ReceivePipelineExceptionModule>();
-
-            configurator.RegisterComponents(configuration);
+            ServiceBus.Register(container.Registry, configuration);
 
             var module = new ReceivePipelineExceptionModule(configuration);
 

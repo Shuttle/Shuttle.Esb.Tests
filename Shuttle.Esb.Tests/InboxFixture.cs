@@ -18,7 +18,7 @@ namespace Shuttle.Esb.Tests
             var padlock = new object();
             var configuration = DefaultConfiguration(isTransactional, threadCount);
 
-            new ServiceBusConfigurator(container.Registry).RegisterComponents(configuration);
+            ServiceBus.Register(container.Registry, configuration);
 
             var transportMessageFactory = container.Resolver.Resolve<ITransportMessageFactory>();
             var serializer = container.Resolver.Resolve<ISerializer>();
@@ -113,7 +113,7 @@ namespace Shuttle.Esb.Tests
 
             configuration.Inbox.MaximumFailureCount = 0;
 
-            new ServiceBusConfigurator(container.Registry).RegisterComponents(configuration);
+            ServiceBus.Register(container.Registry, configuration);
 
             var transportMessageFactory = container.Resolver.Resolve<ITransportMessageFactory>();
             var serializer = container.Resolver.Resolve<ISerializer>();
@@ -185,11 +185,7 @@ namespace Shuttle.Esb.Tests
             var padlock = new object();
             var configuration = DefaultConfiguration(isTransactional, threadCount);
 
-            var configurator = new ServiceBusConfigurator(container.Registry);
-
-            configurator.DontRegister<InboxConcurrencyModule>();
-
-            configurator.RegisterComponents(configuration);
+            ServiceBus.Register(container.Registry, configuration);
 
             var module = new InboxConcurrencyModule();
 
@@ -253,17 +249,11 @@ namespace Shuttle.Esb.Tests
         {
             var configuration = DefaultConfiguration(false, 1);
 
-            var configurator = new ServiceBusConfigurator(container.Registry);
+			var module = new InboxDeferredModule();
 
-            configurator.DontRegister<InboxDeferredModule>();
+			container.Registry.Register(module);
 
-            configurator.RegisterComponents(configuration);
-
-            var module = new InboxDeferredModule();
-
-            container.Registry.Register(module);
-
-            module.Assign(container.Resolver.Resolve<IPipelineFactory>());
+			ServiceBus.Register(container.Registry, configuration);
 
             var messageType = typeof (ReceivePipelineCommand).FullName;
 
@@ -271,7 +261,9 @@ namespace Shuttle.Esb.Tests
 
             ConfigureQueues(queueManager, configuration, queueUriFormat);
 
-            using (var bus = ServiceBus.Create(container.Resolver))
+			module.Assign(container.Resolver.Resolve<IPipelineFactory>());
+
+			using (var bus = ServiceBus.Create(container.Resolver))
             {
                 bus.Start();
 
@@ -302,7 +294,7 @@ namespace Shuttle.Esb.Tests
         {
             var configuration = DefaultConfiguration(false, 1);
 
-            new ServiceBusConfigurator(container.Registry).RegisterComponents(configuration);
+            ServiceBus.Register(container.Registry, configuration);
 
             var transportMessageFactory = container.Resolver.Resolve<ITransportMessageFactory>();
             var serializer = container.Resolver.Resolve<ISerializer>();

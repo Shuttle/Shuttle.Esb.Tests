@@ -7,16 +7,12 @@ namespace Shuttle.Esb.Tests
 		IPipelineObserver<OnAfterHandleMessage>,
 		IPipelineObserver<OnAfterProcessDeferredMessage>
 	{
-		private readonly object padlock = new object();
+		private readonly object _padlock = new object();
 		private readonly ILog _log;
 	    private readonly int _deferredMessageCount;
 
-	    public DeferredMessageModule(IPipelineFactory pipelineFactory, int deferredMessageCount)
+	    public DeferredMessageModule(int deferredMessageCount)
 		{
-            Guard.AgainstNull(pipelineFactory, "pipelineFactory");
-
-            pipelineFactory.PipelineCreated += PipelineCreated;
-
             _deferredMessageCount = deferredMessageCount;
 
 			_log = Log.For(this);
@@ -43,7 +39,7 @@ namespace Shuttle.Esb.Tests
 		{
 			_log.Information("[OnAfterHandleMessage]");
 
-			lock (padlock)
+			lock (_padlock)
 			{
 				NumberOfMessagesHandled++;
 			}
@@ -56,7 +52,7 @@ namespace Shuttle.Esb.Tests
 
 			if (pipelineEvent.Pipeline.State.GetDeferredMessageReturned())
 			{
-				lock (padlock)
+				lock (_padlock)
 				{
 					NumberOfDeferredMessagesReturned++;
 				}
@@ -71,6 +67,13 @@ namespace Shuttle.Esb.Tests
 		public bool AllDeferredMessageReturned()
 		{
 			return NumberOfDeferredMessagesReturned == _deferredMessageCount;
+		}
+
+		public void Assign(IPipelineFactory pipelineFactory)
+		{
+			Guard.AgainstNull(pipelineFactory, "pipelineFactory");
+
+			pipelineFactory.PipelineCreated += PipelineCreated;
 		}
 	}
 }

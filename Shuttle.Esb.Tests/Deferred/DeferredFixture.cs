@@ -21,23 +21,21 @@ namespace Shuttle.Esb.Tests
             const int deferredMessageCount = 10;
             const int millisecondsToDefer = 500;
 
-            var configuration = DefaultConfiguration(isTransactional, 1);
+	        var module = new DeferredMessageModule(deferredMessageCount);
 
-            var configurator = new ServiceBusConfigurator(container.Registry);
+	        container.Registry.Register(module);
 
-            configurator.DontRegister<DeferredMessageModule>();
+			var configuration = DefaultConfiguration(isTransactional, 1);
 
-            configurator.RegisterComponents(configuration);
-
-            var module = new DeferredMessageModule(container.Resolver.Resolve<IPipelineFactory>(), deferredMessageCount);
-
-            container.Registry.Register(module.GetType(), module);
+            ServiceBus.Register(container.Registry, configuration);
 
             var queueManager = ConfigureQueueManager(container.Resolver);
 
             ConfigureQueues(queueManager, configuration, queueUriFormat);
 
-            using (var bus = ServiceBus.Create(container.Resolver))
+			module.Assign(container.Resolver.Resolve<IPipelineFactory>());
+
+			using (var bus = ServiceBus.Create(container.Resolver))
             {
                 bus.Start();
 
