@@ -45,6 +45,8 @@ namespace Shuttle.Esb.Tests
 
             using (var bus = ServiceBus.Create(container.Resolver))
             {
+                bus.Start();
+
                 for (var i = 0; i < count; i++)
                 {
                     bus.Send(new SimpleCommand());
@@ -69,8 +71,6 @@ namespace Shuttle.Esb.Tests
                         idleThreads.Add(Thread.CurrentThread.ManagedThreadId);
                     }
                 };
-
-                bus.Start();
 
                 var timedOut = false;
                 var timeout = DateTime.Now.AddSeconds(5);

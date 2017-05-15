@@ -22,11 +22,11 @@ namespace Shuttle.Esb.Tests
             workQueue.Enqueue(new TransportMessage
             {
                 MessageId = Guid.NewGuid()
-
             }, stream);
 
             var receivedMessage = workQueue.GetMessage();
 
+            Assert.IsNotNull(receivedMessage, "It appears as though the test transport message was not enqueued or was somehow removed before it could be dequeued.");
             Assert.AreEqual(100, receivedMessage.Stream.ReadByte());
             Assert.IsNull(workQueue.GetMessage());
 
