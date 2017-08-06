@@ -45,8 +45,6 @@ namespace Shuttle.Esb.Tests
 
             using (var bus = ServiceBus.Create(container.Resolver).Start())
             {
-                bus.Start();
-
                 for (var i = 0; i < count; i++)
                 {
                     bus.Send(new SimpleCommand());
