@@ -13,7 +13,8 @@ namespace Shuttle.Esb.Tests
 
             Configure(container);
 
-            var workQueue = CreateWorkQueue(container, workQueueUriFormat);
+            var queueManager = container.Resolver.Resolve<IQueueManager>();
+            var workQueue = CreateWorkQueue(queueManager, workQueueUriFormat);
 
             var stream = new MemoryStream();
 
@@ -35,6 +36,9 @@ namespace Shuttle.Esb.Tests
             Assert.IsNull(workQueue.GetMessage());
 
             workQueue.AttemptDrop();
+            workQueue.AttemptDispose();
+
+            queueManager.AttemptDispose();
         }
 
         private void Configure(ComponentContainer container)
@@ -50,7 +54,8 @@ namespace Shuttle.Esb.Tests
 
             Configure(container);
 
-            var workQueue = CreateWorkQueue(container, workQueueUriFormat);
+            var queueManager = container.Resolver.Resolve<IQueueManager>();
+            var workQueue = CreateWorkQueue(queueManager, workQueueUriFormat);
 
             workQueue.Enqueue(new TransportMessage
             {
@@ -75,6 +80,9 @@ namespace Shuttle.Esb.Tests
             Assert.IsNull(workQueue.GetMessage());
 
             workQueue.AttemptDrop();
+            workQueue.AttemptDispose();
+
+            queueManager.AttemptDispose();
         }
 
         protected void TestUnacknowledgedMessage(ComponentContainer container, string workQueueUriFormat)
@@ -83,7 +91,8 @@ namespace Shuttle.Esb.Tests
 
             Configure(container);
 
-            var workQueue = CreateWorkQueue(container, workQueueUriFormat);
+            var queueManager = container.Resolver.Resolve<IQueueManager>();
+            var workQueue = CreateWorkQueue(queueManager, workQueueUriFormat);
 
             workQueue.Enqueue(new TransportMessage
             {
@@ -96,7 +105,7 @@ namespace Shuttle.Esb.Tests
 
             workQueue.AttemptDispose();
 
-            workQueue = CreateWorkQueue(container, workQueueUriFormat, false);
+            workQueue = CreateWorkQueue(queueManager, workQueueUriFormat, false);
 
             var receivedMessage = workQueue.GetMessage();
 
@@ -106,23 +115,26 @@ namespace Shuttle.Esb.Tests
             workQueue.Acknowledge(receivedMessage.AcknowledgementToken);
             workQueue.AttemptDispose();
 
-            workQueue = CreateWorkQueue(container, workQueueUriFormat, false);
+            workQueue = CreateWorkQueue(queueManager, workQueueUriFormat, false);
 
             Assert.IsNull(workQueue.GetMessage());
 
             workQueue.AttemptDrop();
+            workQueue.AttemptDispose();
+
+            queueManager.AttemptDispose();
         }
 
-        private IQueue CreateWorkQueue(ComponentContainer queueManager, string workQueueUriFormat)
+        private IQueue CreateWorkQueue(IQueueManager queueManager, string workQueueUriFormat)
         {
             return CreateWorkQueue(queueManager, workQueueUriFormat, true);
         }
 
-        private IQueue CreateWorkQueue(ComponentContainer container, string workQueueUriFormat, bool refresh)
+        private IQueue CreateWorkQueue(IQueueManager queueManager, string workQueueUriFormat, bool refresh)
         {
-            Guard.AgainstNull(container, "container");
+            Guard.AgainstNull(queueManager, nameof(queueManager));
 
-            var workQueue = container.Resolver.Resolve<IQueueManager>().CreateQueue(string.Format(workQueueUriFormat, "test-work"));
+            var workQueue = queueManager.CreateQueue(string.Format(workQueueUriFormat, "test-work"));
 
             if (refresh)
             {
