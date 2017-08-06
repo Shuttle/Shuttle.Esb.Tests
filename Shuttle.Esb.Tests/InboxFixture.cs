@@ -93,9 +93,9 @@ namespace Shuttle.Esb.Tests
                 }
 
                 sw.Stop();
-            }
 
-            AttemptDropQueues(queueManager, queueUriFormat);
+                AttemptDropQueues(queueManager, queueUriFormat);
+            }
 
             var ms = sw.ElapsedMilliseconds;
 
@@ -154,9 +154,9 @@ namespace Shuttle.Esb.Tests
 
                 Assert.Null(configuration.Inbox.WorkQueue.GetMessage());
                 Assert.NotNull(configuration.Inbox.ErrorQueue.GetMessage());
-            }
 
-            AttemptDropQueues(queueManager, queueUriFormat);
+                AttemptDropQueues(queueManager, queueUriFormat);
+            }
         }
 
         private void ConfigureQueues(IQueueManager queueManager, IServiceBusConfiguration configuration,
@@ -234,9 +234,9 @@ namespace Shuttle.Esb.Tests
                 {
                     Thread.Sleep(30);
                 }
-            }
 
-            AttemptDropQueues(queueManager, workQueueUriFormat);
+                AttemptDropQueues(queueManager, workQueueUriFormat);
+            }
 
             Assert.AreEqual(threadCount, module.OnAfterGetMessageCount,
                 string.Format("Got {0} messages but {1} were sent.", module.OnAfterGetMessageCount, threadCount));
@@ -285,9 +285,9 @@ namespace Shuttle.Esb.Tests
                 Assert.IsNotNull(module.TransportMessage);
                 Assert.True(messageId.Equals(module.TransportMessage.MessageId));
                 Assert.True(messageType.Equals(module.TransportMessage.MessageType, StringComparison.OrdinalIgnoreCase));
-            }
 
-            AttemptDropQueues(queueManager, queueUriFormat);
+                AttemptDropQueues(queueManager, queueUriFormat);
+            }
         }
 
         protected void TestInboxExpiry(ComponentContainer container, string queueUriFormat)
@@ -323,9 +323,9 @@ namespace Shuttle.Esb.Tests
 
                 Assert.IsNull(configuration.Inbox.WorkQueue.GetMessage(),
                     "The message did not expire.  Call this test only if your queue actully supports message expiry internally.");
-            }
 
-            AttemptDropQueues(queueManager, queueUriFormat);
+                AttemptDropQueues(queueManager, queueUriFormat);
+            }
         }
     }
 }

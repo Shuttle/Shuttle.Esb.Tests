@@ -133,9 +133,9 @@ namespace Shuttle.Esb.Tests
                     DateTime.Now, timeout, timedOut));
 
                 Assert.IsTrue(module.AllMessagesHandled(), "Not all messages were handled.");
-            }
 
-            AttemptDropQueues(queueManager, queueUriFormat);
+                AttemptDropQueues(queueManager, queueUriFormat);
+            }
         }
 
         private void ConfigureDistributorQueues(IQueueManager queueManager, IServiceBusConfiguration configuration,
@@ -184,19 +184,6 @@ namespace Shuttle.Esb.Tests
             queueManager.CreatePhysicalQueues(configuration);
 
             configuration.Inbox.WorkQueue.AttemptPurge();
-        }
-
-        private IServiceBusConfiguration DistrobutorConfiguration(bool isTransactional, int threadCount)
-        {
-            var configuration = DefaultConfiguration(isTransactional, threadCount);
-
-            configuration.ControlInbox = new ControlInboxQueueConfiguration
-            {
-                DurationToSleepWhenIdle = new[] {TimeSpan.FromMilliseconds(5)},
-                ThreadCount = 1
-            };
-
-            return configuration;
         }
     }
 }

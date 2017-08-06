@@ -93,9 +93,9 @@ namespace Shuttle.Esb.Tests
 
                 Console.WriteLine("[done] : started = '{0}' / end = '{1}'", startDate, endDate);
                 Console.WriteLine("[CPU] : maximum usage = {0} / cpu usage limit = {1}", cpuMaximumUsage, cpuUsageLimit);
-            }
 
-            AttemptDropQueues(queueManager, queueUriFormat);
+                AttemptDropQueues(queueManager, queueUriFormat);
+            }
         }
 
         private void ConfigureQueues(IQueueManager queueManager, IServiceBusConfiguration configuration,

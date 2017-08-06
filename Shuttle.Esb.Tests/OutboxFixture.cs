@@ -43,7 +43,7 @@ namespace Shuttle.Esb.Tests
 
             Console.WriteLine("Sending {0} messages.", count);
 
-            using (var bus = ServiceBus.Create(container.Resolver))
+            using (var bus = ServiceBus.Create(container.Resolver).Start())
             {
                 for (var i = 0; i < count; i++)
                 {
@@ -70,8 +70,6 @@ namespace Shuttle.Esb.Tests
                     }
                 };
 
-                bus.Start();
-
                 var timedOut = false;
                 var timeout = DateTime.Now.AddSeconds(5);
 
@@ -83,28 +81,28 @@ namespace Shuttle.Esb.Tests
                 }
 
                 Assert.IsFalse(timedOut, "Timed out before processing {0} errors.  Waiting for {1} threads to be idle.", count, threadCount);
+
+                var receiverWorkQueue = queueManager.GetQueue(receiverWorkQueueUri);
+
+                for (var i = 0; i < count; i++)
+                {
+                    var receivedMessage = receiverWorkQueue.GetMessage();
+
+                    Assert.IsNotNull(receivedMessage);
+
+                    receiverWorkQueue.Acknowledge(receivedMessage.AcknowledgementToken);
+                }
+
+                receiverWorkQueue.AttemptDrop();
+
+                var outboxWorkQueue = queueManager.GetQueue(string.Format(workQueueUriFormat, "test-outbox-work"));
+
+                Assert.IsTrue(outboxWorkQueue.IsEmpty());
+
+                outboxWorkQueue.AttemptDrop();
+
+                queueManager.GetQueue(string.Format(errorQueueUriFormat, "test-error")).AttemptDrop();
             }
-
-            var receiverWorkQueue = queueManager.GetQueue(receiverWorkQueueUri);
-
-            for (var i = 0; i < count; i++)
-            {
-                var receivedMessage = receiverWorkQueue.GetMessage();
-
-                Assert.IsNotNull(receivedMessage);
-
-                receiverWorkQueue.Acknowledge(receivedMessage.AcknowledgementToken);
-            }
-
-            receiverWorkQueue.AttemptDrop();
-
-            var outboxWorkQueue = queueManager.GetQueue(string.Format(workQueueUriFormat, "test-outbox-work"));
-
-            Assert.IsTrue(outboxWorkQueue.IsEmpty());
-
-            outboxWorkQueue.AttemptDrop();
-
-            queueManager.GetQueue(string.Format(errorQueueUriFormat, "test-error")).AttemptDrop();
         }
 
         private void ConfigureQueues(IQueueManager queueManager, IServiceBusConfiguration configuration,

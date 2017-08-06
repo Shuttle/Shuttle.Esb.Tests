@@ -79,9 +79,9 @@ namespace Shuttle.Esb.Tests
                 Assert.IsTrue(configuration.Inbox.ErrorQueue.IsEmpty());
                 Assert.IsNull(configuration.Inbox.DeferredQueue.GetMessage());
                 Assert.IsNull(configuration.Inbox.WorkQueue.GetMessage());
-            }
 
-            AttemptDropQueues(queueManager, queueUriFormat);
+                AttemptDropQueues(queueManager, queueUriFormat);
+            }
         }
 
         private void EnqueueDeferredMessage(IServiceBusConfiguration configuration,

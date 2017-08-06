@@ -85,9 +85,9 @@ namespace Shuttle.Esb.Tests
                 Assert.IsNull(configuration.Inbox.WorkQueue.GetMessage());
 
                 Assert.AreEqual(enqueueUniqueMessages ? messageCount : 1, messageHandlerInvoker.ProcessedCount);
-            }
 
-            AttemptDropQueues(queueManager, queueUriFormat);
+                AttemptDropQueues(queueManager, queueUriFormat);
+            }
         }
 
         private void ConfigureQueues(IQueueManager queueManager, IServiceBusConfiguration configuration,
