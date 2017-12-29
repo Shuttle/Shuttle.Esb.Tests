@@ -12,7 +12,7 @@ namespace Shuttle.Esb.Tests
 		IPipelineObserver<OnAfterDeserializeTransportMessage>
 	{
 	    private readonly IServiceBusConfiguration _configuration;
-	    private static readonly object _padlock = new object();
+	    private static readonly object Padlock = new object();
 
 		private readonly List<ExceptionAssertion> _assertions = new List<ExceptionAssertion>();
 		private string _assertionName;
@@ -56,7 +56,7 @@ namespace Shuttle.Esb.Tests
 
 		private void ThrowException(string name)
 		{
-			lock (_padlock)
+			lock (Padlock)
 			{
 				_assertionName = name;
 
@@ -67,17 +67,17 @@ namespace Shuttle.Esb.Tests
 					return;
 				}
 
-				throw new AssertionException(string.Format("Testing assertion for '{0}'.", name));
+				throw new AssertionException($"Testing assertion for '{name}'.");
 			}
 		}
 
 		private void AddAssertion(string name)
 		{
-			lock (_padlock)
+			lock (Padlock)
 			{
 				_assertions.Add(new ExceptionAssertion(name));
 
-				_log.Information(string.Format("[added] : assertion = '{0}'.", name));
+				_log.Information($"[added] : assertion = '{name}'.");
 			}
 		}
 
@@ -88,7 +88,7 @@ namespace Shuttle.Esb.Tests
 				return;
 			}
 
-			lock (_padlock)
+			lock (Padlock)
 			{
 				var assertion = GetAssertion(_assertionName);
 
@@ -97,7 +97,7 @@ namespace Shuttle.Esb.Tests
 					return;
 				}
 
-				_log.Information(string.Format("[invoking] : assertion = '{0}'.", assertion.Name));
+				_log.Information($"[invoking] : assertion = '{assertion.Name}'.");
 
 				try
 				{
@@ -117,7 +117,7 @@ namespace Shuttle.Esb.Tests
 
 				assertion.MarkAsRun();
 
-				_log.Information(string.Format("[invoke complete] : assertion = '{0}'.", assertion.Name));
+				_log.Information($"[invoke complete] : assertion = '{assertion.Name}'.");
 			}
 		}
 
@@ -128,7 +128,7 @@ namespace Shuttle.Esb.Tests
 
 		public bool ShouldWait()
 		{
-			lock (_padlock)
+			lock (Padlock)
 			{
 				return !_failed && _assertions.Find(item => !item.HasRun) != null;
 			}
