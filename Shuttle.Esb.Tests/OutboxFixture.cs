@@ -3,7 +3,9 @@ using System.Collections.Generic;
 using System.Threading;
 using Moq;
 using NUnit.Framework;
-using Shuttle.Core.Infrastructure;
+using Shuttle.Core.Container;
+using Shuttle.Core.Contract;
+using Shuttle.Core.Transactions;
 
 namespace Shuttle.Esb.Tests
 {
@@ -54,7 +56,7 @@ namespace Shuttle.Esb.Tests
 
                 events.ThreadWaiting += (sender, args) =>
                 {
-                    if (!args.PipelineType.FullName.Equals(typeof(OutboxPipeline).FullName))
+                    if (args.PipelineType.FullName != null && !args.PipelineType.FullName.Equals(typeof(OutboxPipeline).FullName))
                     {
                         return;
                     }

@@ -1,5 +1,7 @@
 ﻿using System;
-using Shuttle.Core.Infrastructure;
+using Shuttle.Core.Contract;
+using Shuttle.Core.Logging;
+using Shuttle.Core.Pipelines;
 
 namespace Shuttle.Esb.Tests
 {
@@ -23,11 +25,9 @@ namespace Shuttle.Esb.Tests
 
 		private void PipelineCreated(object sender, PipelineEventArgs e)
 		{
-			if (!e.Pipeline.GetType()
-				.FullName.Equals(typeof (InboxMessagePipeline).FullName, StringComparison.InvariantCultureIgnoreCase)
-			    &&
-			    !e.Pipeline.GetType()
-				    .FullName.Equals(typeof (DeferredMessagePipeline).FullName, StringComparison.InvariantCultureIgnoreCase))
+		    var fullName = e.Pipeline.GetType().FullName;
+
+		    if (fullName != null && !fullName.Equals(typeof (InboxMessagePipeline).FullName, StringComparison.InvariantCultureIgnoreCase) && !fullName.Equals(typeof (DeferredMessagePipeline).FullName, StringComparison.InvariantCultureIgnoreCase))
 			{
 				return;
 			}
@@ -47,8 +47,8 @@ namespace Shuttle.Esb.Tests
 
 		public void Execute(OnAfterProcessDeferredMessage pipelineEvent)
 		{
-			_log.Information(string.Format("[OnAfterProcessDeferredMessage] : deferred message returned = '{0}'",
-				pipelineEvent.Pipeline.State.GetDeferredMessageReturned()));
+			_log.Information(
+			    $"[OnAfterProcessDeferredMessage] : deferred message returned = '{pipelineEvent.Pipeline.State.GetDeferredMessageReturned()}'");
 
 			if (pipelineEvent.Pipeline.State.GetDeferredMessageReturned())
 			{

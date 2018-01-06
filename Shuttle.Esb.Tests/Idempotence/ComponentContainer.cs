@@ -1,5 +1,6 @@
 using System;
-using Shuttle.Core.Infrastructure;
+using Shuttle.Core.Container;
+using Shuttle.Core.Contract;
 
 namespace Shuttle.Esb.Tests
 {

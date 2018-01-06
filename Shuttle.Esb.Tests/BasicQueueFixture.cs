@@ -1,7 +1,9 @@
 ﻿using System;
 using System.IO;
 using NUnit.Framework;
-using Shuttle.Core.Infrastructure;
+using Shuttle.Core.Contract;
+using Shuttle.Core.Reflection;
+using Shuttle.Core.Container;
 
 namespace Shuttle.Esb.Tests
 {

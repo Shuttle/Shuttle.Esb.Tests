@@ -1,5 +1,6 @@
 ﻿using System;
-using Shuttle.Core.Infrastructure;
+using Shuttle.Core.Contract;
+using Shuttle.Core.Pipelines;
 
 namespace Shuttle.Esb.Tests
 {
@@ -8,10 +9,7 @@ namespace Shuttle.Esb.Tests
         private readonly IdempotenceCounter _counter = new IdempotenceCounter();
         private readonly Type _type = typeof (IdempotenceCommand);
 
-        public int ProcessedCount
-        {
-            get { return _counter.ProcessedCount; }
-        }
+        public int ProcessedCount => _counter.ProcessedCount;
 
         public MessageHandlerInvokeResult Invoke(IPipelineEvent pipelineEvent)
         {

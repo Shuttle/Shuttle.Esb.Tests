@@ -1,7 +1,9 @@
 using System;
 using System.Threading;
 using NUnit.Framework;
-using Shuttle.Core.Infrastructure;
+using Shuttle.Core.Container;
+using Shuttle.Core.Pipelines;
+using Shuttle.Core.Serialization;
 
 namespace Shuttle.Esb.Tests
 {

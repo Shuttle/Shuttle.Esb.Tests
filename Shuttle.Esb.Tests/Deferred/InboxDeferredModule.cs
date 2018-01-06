@@ -1,5 +1,6 @@
 using System;
-using Shuttle.Core.Infrastructure;
+using Shuttle.Core.Contract;
+using Shuttle.Core.Pipelines;
 
 namespace Shuttle.Esb.Tests
 {
@@ -15,9 +16,10 @@ namespace Shuttle.Esb.Tests
 
         private void PipelineCreated(object sender, PipelineEventArgs e)
         {
-            if (
-                !e.Pipeline.GetType()
-                    .FullName.Equals(typeof(InboxMessagePipeline).FullName, StringComparison.InvariantCultureIgnoreCase))
+            var fullName = e.Pipeline.GetType().FullName;
+
+            if (fullName != null && !fullName.Equals(typeof(InboxMessagePipeline).FullName,
+                    StringComparison.InvariantCultureIgnoreCase))
             {
                 return;
             }

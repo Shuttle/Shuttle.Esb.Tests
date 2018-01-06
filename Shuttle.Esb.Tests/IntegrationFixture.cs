@@ -1,8 +1,10 @@
 using System;
 using log4net;
 using NUnit.Framework;
-using Shuttle.Core.Infrastructure;
+using Shuttle.Core.Container;
 using Shuttle.Core.Log4Net;
+using Shuttle.Core.Logging;
+using Shuttle.Core.Transactions;
 
 namespace Shuttle.Esb.Tests
 {

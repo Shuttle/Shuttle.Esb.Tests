@@ -3,7 +3,10 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Threading;
 using NUnit.Framework;
-using Shuttle.Core.Infrastructure;
+using Shuttle.Core.Container;
+using Shuttle.Core.Contract;
+using Shuttle.Core.Pipelines;
+using Shuttle.Core.Serialization;
 
 namespace Shuttle.Esb.Tests
 {
@@ -239,7 +242,7 @@ namespace Shuttle.Esb.Tests
             }
 
             Assert.AreEqual(threadCount, module.OnAfterGetMessageCount,
-                string.Format("Got {0} messages but {1} were sent.", module.OnAfterGetMessageCount, threadCount));
+                $"Got {module.OnAfterGetMessageCount} messages but {threadCount} were sent.");
 
             Assert.IsTrue(module.AllMessagesReceivedWithinTimespan(msToComplete),
                 "All dequeued messages have to be within {0} ms of first get message.", msToComplete);

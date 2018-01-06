@@ -1,7 +1,11 @@
 ﻿using System;
 using System.Threading;
 using NUnit.Framework;
-using Shuttle.Core.Infrastructure;
+using Shuttle.Core.Container;
+using Shuttle.Core.Contract;
+using Shuttle.Core.Logging;
+using Shuttle.Core.Pipelines;
+using Shuttle.Core.Serialization;
 
 namespace Shuttle.Esb.Tests
 {
@@ -21,11 +25,11 @@ namespace Shuttle.Esb.Tests
             const int deferredMessageCount = 10;
             const int millisecondsToDefer = 500;
 
-	        var module = new DeferredMessageModule(deferredMessageCount);
+            var module = new DeferredMessageModule(deferredMessageCount);
 
-	        container.Registry.Register(module);
+            container.Registry.Register(module);
 
-			var configuration = DefaultConfiguration(isTransactional, 1);
+            var configuration = DefaultConfiguration(isTransactional, 1);
 
             ServiceBus.Register(container.Registry, configuration);
 
@@ -33,9 +37,9 @@ namespace Shuttle.Esb.Tests
 
             ConfigureQueues(queueManager, configuration, queueUriFormat);
 
-			module.Assign(container.Resolver.Resolve<IPipelineFactory>());
+            module.Assign(container.Resolver.Resolve<IPipelineFactory>());
 
-			using (var bus = ServiceBus.Create(container.Resolver))
+            using (var bus = ServiceBus.Create(container.Resolver))
             {
                 bus.Start();
 
@@ -53,7 +57,7 @@ namespace Shuttle.Esb.Tests
                 var timeout = ignoreTillDate.AddSeconds(15);
                 var timedOut = false;
 
-                _log.Information(string.Format("[start wait] : now = '{0}'", DateTime.Now));
+                _log.Information($"[start wait] : now = '{DateTime.Now}'");
 
                 // wait for the message to be returned from the deferred queue
                 while (!module.AllMessagesHandled()
@@ -65,14 +69,13 @@ namespace Shuttle.Esb.Tests
                     timedOut = timeout < DateTime.Now;
                 }
 
-                _log.Information(string.Format("[end wait] : now = '{0}' / timeout = '{1}' / timed out = '{2}'",
-                    DateTime.Now,
-                    timeout, timedOut));
+                _log.Information(
+                    $"[end wait] : now = '{DateTime.Now}' / timeout = '{timeout}' / timed out = '{timedOut}'");
 
-                _log.Information(string.Format("{0} of {1} deferred messages returned to the inbox.",
-                    module.NumberOfDeferredMessagesReturned, deferredMessageCount));
-                _log.Information(string.Format("{0} of {1} deferred messages handled.", module.NumberOfMessagesHandled,
-                    deferredMessageCount));
+                _log.Information(
+                    $"{module.NumberOfDeferredMessagesReturned} of {deferredMessageCount} deferred messages returned to the inbox.");
+                _log.Information(
+                    $"{module.NumberOfMessagesHandled} of {deferredMessageCount} deferred messages handled.");
 
                 Assert.IsTrue(module.AllMessagesHandled(), "All the deferred messages were not handled.");
 
@@ -98,9 +101,8 @@ namespace Shuttle.Esb.Tests
 
             configuration.Inbox.WorkQueue.Enqueue(message, serializer.Serialize(message));
 
-            _log.Information(string.Format("[message enqueued] : name = '{0}' / deferred till date = '{1}'",
-                command.Name,
-                message.IgnoreTillDate));
+            _log.Information(
+                $"[message enqueued] : name = '{command.Name}' / deferred till date = '{message.IgnoreTillDate}'");
         }
 
         private void ConfigureQueues(IQueueManager queueManager, IServiceBusConfiguration configuration,

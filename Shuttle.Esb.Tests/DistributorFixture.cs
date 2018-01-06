@@ -1,64 +1,16 @@
 ﻿using System;
 using System.Threading;
 using NUnit.Framework;
-using Shuttle.Core.Infrastructure;
+using Shuttle.Core.Container;
+using Shuttle.Core.Contract;
+using Shuttle.Core.Logging;
+using Shuttle.Core.Pipelines;
+using Shuttle.Core.Serialization;
 
 namespace Shuttle.Esb.Tests
 {
     public class DistributorFixture : IntegrationFixture
     {
-        private class WorkerModule : IPipelineObserver<OnAfterHandleMessage>
-        {
-            private readonly ILog _log;
-            private readonly int _messageCount;
-            private readonly object padlock = new object();
-            private int _messagesHandled;
-
-            public WorkerModule(int messageCount)
-            {
-                _messageCount = messageCount;
-
-                _log = Log.For(this);
-            }
-
-            public void Execute(OnAfterHandleMessage pipelineEvent1)
-            {
-                _log.Information("[OnAfterHandleMessage]");
-
-                lock (padlock)
-                {
-                    _messagesHandled++;
-                }
-            }
-
-            private void PipelineCreated(object sender, PipelineEventArgs e)
-            {
-                if (!e.Pipeline.GetType()
-                    .FullName.Equals(typeof (InboxMessagePipeline).FullName, StringComparison.InvariantCultureIgnoreCase)
-                    &&
-                    !e.Pipeline.GetType()
-                        .FullName.Equals(typeof (DeferredMessagePipeline).FullName,
-                            StringComparison.InvariantCultureIgnoreCase))
-                {
-                    return;
-                }
-
-                e.Pipeline.RegisterObserver(this);
-            }
-
-            public bool AllMessagesHandled()
-            {
-                return _messagesHandled == _messageCount;
-            }
-
-            public void Assign(IPipelineFactory pipelineFactory)
-            {
-                Guard.AgainstNull(pipelineFactory, "pipelineFactory");
-
-                pipelineFactory.PipelineCreated += PipelineCreated;
-            }
-        }
-
         private readonly ILog _log;
 
         public DistributorFixture()
@@ -85,16 +37,17 @@ namespace Shuttle.Esb.Tests
             var transportMessageFactory = distributorContainer.Resolver.Resolve<ITransportMessageFactory>();
             var serializer = distributorContainer.Resolver.Resolve<ISerializer>();
 
-			var module = new WorkerModule(messageCount);
+            var module = new WorkerModule(messageCount);
 
-			workerContainer.Registry.Register(module);
+            workerContainer.Registry.Register(module);
 
             var workerConfiguration = DefaultConfiguration(isTransactional, 1);
 
             ServiceBus.Register(workerContainer.Registry, workerConfiguration);
 
             ConfigureQueueManager(workerContainer.Resolver);
-            ConfigureWorkerQueues(workerContainer.Resolver.Resolve<IQueueManager>(), workerConfiguration, queueUriFormat);
+            ConfigureWorkerQueues(workerContainer.Resolver.Resolve<IQueueManager>(), workerConfiguration,
+                queueUriFormat);
 
             module.Assign(workerContainer.Resolver.Resolve<IPipelineFactory>());
 
@@ -120,7 +73,7 @@ namespace Shuttle.Esb.Tests
                 var timeout = DateTime.Now.AddSeconds(5);
                 var timedOut = false;
 
-                _log.Information(string.Format("[start wait] : now = '{0}'", DateTime.Now));
+                _log.Information($"[start wait] : now = '{DateTime.Now}'");
 
                 while (!module.AllMessagesHandled() && !timedOut)
                 {
@@ -129,8 +82,8 @@ namespace Shuttle.Esb.Tests
                     timedOut = timeout < DateTime.Now;
                 }
 
-                _log.Information(string.Format("[end wait] : now = '{0}' / timeout = '{1}' / timed out = '{2}'",
-                    DateTime.Now, timeout, timedOut));
+                _log.Information(
+                    $"[end wait] : now = '{DateTime.Now}' / timeout = '{timeout}' / timed out = '{timedOut}'");
 
                 Assert.IsTrue(module.AllMessagesHandled(), "Not all messages were handled.");
 
@@ -143,7 +96,8 @@ namespace Shuttle.Esb.Tests
         {
             var errorQueue = queueManager.GetQueue(string.Format(queueUriFormat, "test-error"));
 
-            configuration.Inbox.WorkQueue = queueManager.GetQueue(string.Format(queueUriFormat, "test-distributor-work"));
+            configuration.Inbox.WorkQueue =
+                queueManager.GetQueue(string.Format(queueUriFormat, "test-distributor-work"));
             configuration.Inbox.ErrorQueue = errorQueue;
             configuration.Inbox.Distribute = true;
 
@@ -151,8 +105,8 @@ namespace Shuttle.Esb.Tests
             {
                 WorkQueue = queueManager.GetQueue(string.Format(queueUriFormat, "test-distributor-control")),
                 ErrorQueue = errorQueue,
-                DurationToSleepWhenIdle = new[] { TimeSpan.FromMilliseconds(5) },
-                DurationToIgnoreOnFailure = new[] { TimeSpan.FromMilliseconds(5) },
+                DurationToSleepWhenIdle = new[] {TimeSpan.FromMilliseconds(5)},
+                DurationToIgnoreOnFailure = new[] {TimeSpan.FromMilliseconds(5)},
                 ThreadCount = 1
             };
 
@@ -184,6 +138,59 @@ namespace Shuttle.Esb.Tests
             queueManager.CreatePhysicalQueues(configuration);
 
             configuration.Inbox.WorkQueue.AttemptPurge();
+        }
+
+        private class WorkerModule : IPipelineObserver<OnAfterHandleMessage>
+        {
+            private readonly ILog _log;
+            private readonly int _messageCount;
+            private readonly object padlock = new object();
+            private int _messagesHandled;
+
+            public WorkerModule(int messageCount)
+            {
+                _messageCount = messageCount;
+
+                _log = Log.For(this);
+            }
+
+            public void Execute(OnAfterHandleMessage pipelineEvent1)
+            {
+                _log.Information("[OnAfterHandleMessage]");
+
+                lock (padlock)
+                {
+                    _messagesHandled++;
+                }
+            }
+
+            private void PipelineCreated(object sender, PipelineEventArgs e)
+            {
+                var fullName = e.Pipeline.GetType().FullName;
+
+                if (fullName != null &&
+                    !fullName.Equals(typeof(InboxMessagePipeline).FullName,
+                        StringComparison.InvariantCultureIgnoreCase) && !fullName.Equals(
+                        typeof(DeferredMessagePipeline).FullName,
+                        StringComparison.InvariantCultureIgnoreCase))
+                {
+                    return;
+                }
+
+                e.Pipeline.RegisterObserver(this);
+            }
+
+            public bool AllMessagesHandled()
+            {
+                return _messagesHandled == _messageCount;
+            }
+
+            public void Assign(IPipelineFactory pipelineFactory)
+            {
+                Guard.AgainstNull(pipelineFactory, "pipelineFactory");
+
+                pipelineFactory.PipelineCreated += PipelineCreated;
+            }
         }
     }
 }

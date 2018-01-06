@@ -1,5 +1,5 @@
 using System.Threading;
-using Shuttle.Core.Infrastructure;
+using Shuttle.Core.Logging;
 
 namespace Shuttle.Esb.Tests
 {
@@ -7,14 +7,9 @@ namespace Shuttle.Esb.Tests
 	{
 		public void ProcessMessage(IHandlerContext<ConcurrentCommand> context)
 		{
-			Log.Debug(string.Format("[processing message] : index = {0}", context.Message.MessageIndex));
+			Log.Debug($"[processing message] : index = {context.Message.MessageIndex}");
 
 			Thread.Sleep(500);
-		}
-
-		public bool IsReusable
-		{
-			get { return true; }
 		}
 	}
 }

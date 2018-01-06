@@ -2,29 +2,30 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using Shuttle.Core.Infrastructure;
+using Shuttle.Core.Contract;
+using Shuttle.Core.Streams;
 
 namespace Shuttle.Esb.Tests
 {
 	public class MemoryQueue : IQueue, ICreateQueue, IPurgeQueue
 	{
-		internal const string SCHEME = "memory";
+		internal const string Scheme = "memory";
 
-		private static readonly object _padlock = new object();
+		private static readonly object Padlock = new object();
 
 		private static Dictionary<string, Dictionary<int, MemoryQueueItem>> _queues =
 			new Dictionary<string, Dictionary<int, MemoryQueueItem>>();
 
 		private readonly List<int> _unacknowledgedMessageIds = new List<int>();
-		private int _itemId = 0;
+		private int _itemId;
 
 		public MemoryQueue(Uri uri)
 		{
 			Guard.AgainstNull(uri, "uri");
 
-			if (!uri.Scheme.Equals(SCHEME, StringComparison.InvariantCultureIgnoreCase))
+			if (!uri.Scheme.Equals(Scheme, StringComparison.InvariantCultureIgnoreCase))
 			{
-				throw new InvalidSchemeException(SCHEME, uri.ToString());
+				throw new InvalidSchemeException(Scheme, uri.ToString());
 			}
 
 			var builder = new UriBuilder(uri);
@@ -43,19 +44,18 @@ namespace Shuttle.Esb.Tests
 
 			if (Uri.Host != Environment.MachineName.ToLower())
 			{
-				throw new UriFormatException(string.Format(EsbResources.UriFormatException,
-					string.Format("memory://{{.|{0}}}/{{name}}",
-						Environment.MachineName.ToLower()), uri));
+				throw new UriFormatException(string.Format(Resources.UriFormatException,
+				    $"memory://{{.|{Environment.MachineName.ToLower()}}}/{{name}}", uri));
 			}
 
 			Create();
 		}
 
-		public Uri Uri { get; private set; }
+		public Uri Uri { get; }
 
 		public bool IsEmpty()
 		{
-			lock (_padlock)
+			lock (Padlock)
 			{
 				return _queues[Uri.ToString()].Count == 0;
 			}
@@ -63,7 +63,7 @@ namespace Shuttle.Esb.Tests
 
 		public void Enqueue(TransportMessage transportMessage, Stream stream)
 		{
-			lock (_padlock)
+			lock (Padlock)
 			{
 				_itemId++;
 
@@ -73,7 +73,7 @@ namespace Shuttle.Esb.Tests
 
 		public ReceivedMessage GetMessage()
 		{
-			lock (_padlock)
+			lock (Padlock)
 			{
 				var queue = _queues[Uri.ToString()];
 
@@ -101,7 +101,7 @@ namespace Shuttle.Esb.Tests
 		{
 			var itemId = (int) acknowledgementToken;
 
-			lock (_padlock)
+			lock (Padlock)
 			{
 				var queue = _queues[Uri.ToString()];
 
@@ -123,7 +123,7 @@ namespace Shuttle.Esb.Tests
 		{
 			var itemId = (int) acknowledgementToken;
 
-			lock (_padlock)
+			lock (Padlock)
 			{
 				var queue = _queues[Uri.ToString()];
 
@@ -145,12 +145,9 @@ namespace Shuttle.Esb.Tests
 			}
 		}
 
-		public bool IsLocal
-		{
-			get { return true; }
-		}
+		public bool IsLocal => true;
 
-		public static IQueue From(string uri)
+	    public static IQueue From(string uri)
 		{
 			return new MemoryQueue(new Uri(uri));
 		}
@@ -170,7 +167,7 @@ namespace Shuttle.Esb.Tests
 
 		public void Purge()
 		{
-			lock (_padlock)
+			lock (Padlock)
 			{
 				_queues[Uri.ToString()].Clear();
 			}
@@ -179,9 +176,9 @@ namespace Shuttle.Esb.Tests
 
 	internal class MemoryQueueItem
 	{
-		public int ItemId { get; private set; }
-		public Guid MessageId { get; private set; }
-		public Stream Stream { get; private set; }
+		public int ItemId { get; }
+		public Guid MessageId { get; }
+		public Stream Stream { get; }
 
 		public MemoryQueueItem(int index, Guid messageId, Stream stream)
 		{

@@ -1,4 +1,4 @@
-using Shuttle.Core.Infrastructure;
+using Shuttle.Core.Logging;
 
 namespace Shuttle.Esb.Tests
 {
@@ -13,12 +13,7 @@ namespace Shuttle.Esb.Tests
 
 		public void ProcessMessage(IHandlerContext<SimpleCommand> context)
 		{
-			_log.Trace(string.Format("[executed] : name = '{0}'", context.Message.Name));
-		}
-
-		public bool IsReusable
-		{
-			get { return true; }
+			_log.Trace($"[executed] : name = '{context.Message.Name}'");
 		}
 	}
 }

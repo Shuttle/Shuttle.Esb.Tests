@@ -1,7 +1,10 @@
 ﻿using System;
 using System.Collections.Generic;
 using NUnit.Framework;
-using Shuttle.Core.Infrastructure;
+using Shuttle.Core.Contract;
+using Shuttle.Core.Logging;
+using Shuttle.Core.Pipelines;
+using Shuttle.Core.Reflection;
 
 namespace Shuttle.Esb.Tests
 {
@@ -39,14 +42,14 @@ namespace Shuttle.Esb.Tests
 			_pipelineCount += 1;
 			_assertionName = string.Empty;
 
-			_log.Information(string.Format("[pipeline obtained] : count = {0}", _pipelineCount));
+			_log.Information($"[pipeline obtained] : count = {_pipelineCount}");
 		}
 
 		private void PipelineCreated(object sender, PipelineEventArgs e)
 		{
-			if (
-				!e.Pipeline.GetType()
-					.FullName.Equals(typeof (InboxMessagePipeline).FullName, StringComparison.InvariantCultureIgnoreCase))
+		    var fullName = e.Pipeline.GetType().FullName;
+
+		    if (fullName != null && !fullName.Equals(typeof (InboxMessagePipeline).FullName, StringComparison.InvariantCultureIgnoreCase))
 			{
 				return;
 			}
