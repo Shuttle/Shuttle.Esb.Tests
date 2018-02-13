@@ -27,7 +27,7 @@ namespace Shuttle.Esb.Tests
 
             var module = new DeferredMessageModule(deferredMessageCount);
 
-            container.Registry.Register(module);
+            container.Registry.RegisterInstance(module);
 
             var configuration = DefaultConfiguration(isTransactional, 1);
 

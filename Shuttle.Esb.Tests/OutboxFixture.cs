@@ -33,7 +33,7 @@ namespace Shuttle.Esb.Tests
 
             messageRouteProvider.Setup(m => m.GetRouteUris(It.IsAny<string>())).Returns(new[] { receiverWorkQueueUri });
 
-            container.Registry.Register(messageRouteProvider.Object);
+            container.Registry.RegisterInstance(messageRouteProvider.Object);
 
             ServiceBus.Register(container.Registry, configuration);
 

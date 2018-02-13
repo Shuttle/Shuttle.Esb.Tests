@@ -17,7 +17,7 @@ namespace Shuttle.Esb.Tests
 
             var module = new ReceivePipelineExceptionModule(configuration);
 
-            container.Registry.Register(module.GetType(), module);
+            container.Registry.RegisterInstance(module.GetType(), module);
 
             module.Assign(container.Resolver.Resolve<IPipelineFactory>());
 

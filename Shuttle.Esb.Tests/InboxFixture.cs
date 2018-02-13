@@ -192,7 +192,7 @@ namespace Shuttle.Esb.Tests
 
             var module = new InboxConcurrencyModule();
 
-            container.Registry.Register(module);
+            container.Registry.RegisterInstance(module);
 
             var transportMessageFactory = container.Resolver.Resolve<ITransportMessageFactory>();
             var serializer = container.Resolver.Resolve<ISerializer>();
@@ -254,7 +254,7 @@ namespace Shuttle.Esb.Tests
 
 			var module = new InboxDeferredModule();
 
-			container.Registry.Register(module);
+			container.Registry.RegisterInstance(module);
 
 			ServiceBus.Register(container.Registry, configuration);
 

@@ -19,7 +19,7 @@ namespace Shuttle.Esb.Tests
         }
 
         protected void TestDistributor(ComponentContainer distributorContainer, ComponentContainer workerContainer,
-            string queueUriFormat, bool isTransactional)
+            string queueUriFormat, bool isTransactional, int timeoutSeconds = 5)
         {
             Guard.AgainstNull(distributorContainer, "distributorContainer");
             Guard.AgainstNull(workerContainer, "workerContainer");
@@ -39,7 +39,7 @@ namespace Shuttle.Esb.Tests
 
             var module = new WorkerModule(messageCount);
 
-            workerContainer.Registry.Register(module);
+            workerContainer.Registry.RegisterInstance(module);
 
             var workerConfiguration = DefaultConfiguration(isTransactional, 1);
 
@@ -70,7 +70,7 @@ namespace Shuttle.Esb.Tests
                 distributorBus.Start();
                 workerBus.Start();
 
-                var timeout = DateTime.Now.AddSeconds(5);
+                var timeout = DateTime.Now.AddSeconds(timeoutSeconds < 5 ? 5 : timeoutSeconds);
                 var timedOut = false;
 
                 _log.Information($"[start wait] : now = '{DateTime.Now}'");

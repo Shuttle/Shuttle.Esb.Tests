@@ -20,7 +20,7 @@ namespace Shuttle.Esb.Tests
             var padlock = new object();
             var configuration = DefaultConfiguration(isTransactional, threadCount);
 
-            container.Registry.Register<IMessageRouteProvider>(new IdempotenceMessageRouteProvider());
+            container.Registry.RegisterInstance<IMessageRouteProvider>(new IdempotenceMessageRouteProvider());
             container.Registry.Register<IMessageHandlerInvoker, IdempotenceMessageHandlerInvoker>();
 
             ServiceBus.Register(container.Registry, configuration);
