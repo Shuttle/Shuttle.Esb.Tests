@@ -9,6 +9,7 @@
     <licenseUrl>https://github.com/shuttle/Shuttle.Esb.Tests/raw/master/LICENSE</licenseUrl>
     <projectUrl>https://github.com/shuttle/Shuttle.Esb.Tests</projectUrl>
     <iconUrl>https://raw.githubusercontent.com/Shuttle/Shuttle.Esb.Tests/master/.media/logo.png</iconUrl>
+    <repository type="git" url="https://github.com/Shuttle/Shuttle.Esb.Tests.git" />
     <requireLicenseAcceptance>false</requireLicenseAcceptance>
     <description>Test fixtures to facilitate testing of components, such as queues, that relate to Shuttle.Esb.</description>
     <releaseNotes />
