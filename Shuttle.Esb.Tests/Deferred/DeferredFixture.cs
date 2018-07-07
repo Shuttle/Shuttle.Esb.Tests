@@ -5,6 +5,7 @@ using Shuttle.Core.Container;
 using Shuttle.Core.Contract;
 using Shuttle.Core.Logging;
 using Shuttle.Core.Pipelines;
+using Shuttle.Core.Reflection;
 using Shuttle.Core.Serialization;
 
 namespace Shuttle.Esb.Tests
@@ -33,57 +34,65 @@ namespace Shuttle.Esb.Tests
 
             ServiceBus.Register(container.Registry, configuration);
 
-            var queueManager = ConfigureQueueManager(container.Resolver);
+            var queueManager = CreateQueueManager(container.Resolver);
 
             ConfigureQueues(queueManager, configuration, queueUriFormat);
 
-            module.Assign(container.Resolver.Resolve<IPipelineFactory>());
-
-            using (var bus = ServiceBus.Create(container.Resolver))
+            try
             {
-                bus.Start();
+                module.Assign(container.Resolver.Resolve<IPipelineFactory>());
 
-                var ignoreTillDate = DateTime.Now.AddSeconds(5);
-
-                for (var i = 0; i < deferredMessageCount; i++)
+                using (var bus = ServiceBus.Create(container.Resolver))
                 {
-                    EnqueueDeferredMessage(configuration, container.Resolver.Resolve<ITransportMessageFactory>(),
-                        container.Resolver.Resolve<ISerializer>(), ignoreTillDate);
+                    bus.Start();
 
-                    ignoreTillDate = ignoreTillDate.AddMilliseconds(millisecondsToDefer);
+                    var ignoreTillDate = DateTime.Now.AddSeconds(5);
+
+                    for (var i = 0; i < deferredMessageCount; i++)
+                    {
+                        EnqueueDeferredMessage(configuration, container.Resolver.Resolve<ITransportMessageFactory>(),
+                            container.Resolver.Resolve<ISerializer>(), ignoreTillDate);
+
+                        ignoreTillDate = ignoreTillDate.AddMilliseconds(millisecondsToDefer);
+                    }
+
+                    // add the extra time else there is no time to process message being returned
+                    var timeout = ignoreTillDate.AddSeconds(15);
+                    var timedOut = false;
+
+                    _log.Information($"[start wait] : now = '{DateTime.Now}'");
+
+                    // wait for the message to be returned from the deferred queue
+                    while (!module.AllMessagesHandled()
+                           &&
+                           !timedOut)
+                    {
+                        Thread.Sleep(millisecondsToDefer);
+
+                        timedOut = timeout < DateTime.Now;
+                    }
+
+                    _log.Information(
+                        $"[end wait] : now = '{DateTime.Now}' / timeout = '{timeout}' / timed out = '{timedOut}'");
+
+                    _log.Information(
+                        $"{module.NumberOfDeferredMessagesReturned} of {deferredMessageCount} deferred messages returned to the inbox.");
+                    _log.Information(
+                        $"{module.NumberOfMessagesHandled} of {deferredMessageCount} deferred messages handled.");
+
+                    Assert.IsTrue(module.AllMessagesHandled(), "All the deferred messages were not handled.");
+
+                    Assert.IsTrue(configuration.Inbox.ErrorQueue.IsEmpty());
+                    Assert.IsNull(configuration.Inbox.DeferredQueue.GetMessage());
+                    Assert.IsNull(configuration.Inbox.WorkQueue.GetMessage());
+
                 }
-
-                // add the extra time else there is no time to process message being returned
-                var timeout = ignoreTillDate.AddSeconds(15);
-                var timedOut = false;
-
-                _log.Information($"[start wait] : now = '{DateTime.Now}'");
-
-                // wait for the message to be returned from the deferred queue
-                while (!module.AllMessagesHandled()
-                       &&
-                       !timedOut)
-                {
-                    Thread.Sleep(millisecondsToDefer);
-
-                    timedOut = timeout < DateTime.Now;
-                }
-
-                _log.Information(
-                    $"[end wait] : now = '{DateTime.Now}' / timeout = '{timeout}' / timed out = '{timedOut}'");
-
-                _log.Information(
-                    $"{module.NumberOfDeferredMessagesReturned} of {deferredMessageCount} deferred messages returned to the inbox.");
-                _log.Information(
-                    $"{module.NumberOfMessagesHandled} of {deferredMessageCount} deferred messages handled.");
-
-                Assert.IsTrue(module.AllMessagesHandled(), "All the deferred messages were not handled.");
-
-                Assert.IsTrue(configuration.Inbox.ErrorQueue.IsEmpty());
-                Assert.IsNull(configuration.Inbox.DeferredQueue.GetMessage());
-                Assert.IsNull(configuration.Inbox.WorkQueue.GetMessage());
 
                 AttemptDropQueues(queueManager, queueUriFormat);
+            }
+            finally
+            {
+                queueManager.AttemptDispose();
             }
         }
 

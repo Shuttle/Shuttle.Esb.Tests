@@ -3,7 +3,6 @@ using System.IO;
 using NUnit.Framework;
 using Shuttle.Core.Contract;
 using Shuttle.Core.Reflection;
-using Shuttle.Core.Container;
 
 namespace Shuttle.Esb.Tests
 {
@@ -15,7 +14,7 @@ namespace Shuttle.Esb.Tests
 
             Configure(container);
 
-            var queueManager = container.Resolver.Resolve<IQueueManager>();
+            var queueManager = CreateQueueManager(container.Resolver);
             var workQueue = CreateWorkQueue(queueManager, workQueueUriFormat);
 
             var stream = new MemoryStream();
@@ -46,8 +45,6 @@ namespace Shuttle.Esb.Tests
         private void Configure(ComponentContainer container)
         {
             ServiceBus.Register(container.Registry, DefaultConfiguration(true, 1));
-
-            ConfigureQueueManager(container.Resolver);
         }
 
         protected void TestReleaseMessage(ComponentContainer container, string workQueueUriFormat)
@@ -56,7 +53,7 @@ namespace Shuttle.Esb.Tests
 
             Configure(container);
 
-            var queueManager = container.Resolver.Resolve<IQueueManager>();
+            var queueManager = CreateQueueManager(container.Resolver);
             var workQueue = CreateWorkQueue(queueManager, workQueueUriFormat);
 
             workQueue.Enqueue(new TransportMessage
@@ -93,7 +90,7 @@ namespace Shuttle.Esb.Tests
 
             Configure(container);
 
-            var queueManager = container.Resolver.Resolve<IQueueManager>();
+            var queueManager = CreateQueueManager(container.Resolver);
             var workQueue = CreateWorkQueue(queueManager, workQueueUriFormat);
 
             workQueue.Enqueue(new TransportMessage

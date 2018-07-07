@@ -5,6 +5,7 @@ using Shuttle.Core.Container;
 using Shuttle.Core.Contract;
 using Shuttle.Core.Logging;
 using Shuttle.Core.Pipelines;
+using Shuttle.Core.Reflection;
 using Shuttle.Core.Serialization;
 
 namespace Shuttle.Esb.Tests
@@ -30,64 +31,72 @@ namespace Shuttle.Esb.Tests
 
             ServiceBus.Register(distributorContainer.Registry, distributorConfiguration);
 
-            var queueManager = ConfigureQueueManager(distributorContainer.Resolver);
+            var queueManager = CreateQueueManager(distributorContainer.Resolver);
 
-            ConfigureDistributorQueues(queueManager, distributorConfiguration, queueUriFormat);
-
-            var transportMessageFactory = distributorContainer.Resolver.Resolve<ITransportMessageFactory>();
-            var serializer = distributorContainer.Resolver.Resolve<ISerializer>();
-
-            var module = new WorkerModule(messageCount);
-
-            workerContainer.Registry.RegisterInstance(module);
-
-            var workerConfiguration = DefaultConfiguration(isTransactional, 1);
-
-            ServiceBus.Register(workerContainer.Registry, workerConfiguration);
-
-            ConfigureQueueManager(workerContainer.Resolver);
-            ConfigureWorkerQueues(workerContainer.Resolver.Resolve<IQueueManager>(), workerConfiguration,
-                queueUriFormat);
-
-            module.Assign(workerContainer.Resolver.Resolve<IPipelineFactory>());
-
-            using (var distributorBus = ServiceBus.Create(distributorContainer.Resolver))
-            using (var workerBus = ServiceBus.Create(workerContainer.Resolver))
+            try
             {
-                for (var i = 0; i < messageCount; i++)
+                ConfigureDistributorQueues(queueManager, distributorConfiguration, queueUriFormat);
+
+                var transportMessageFactory = distributorContainer.Resolver.Resolve<ITransportMessageFactory>();
+                var serializer = distributorContainer.Resolver.Resolve<ISerializer>();
+
+                var module = new WorkerModule(messageCount);
+
+                workerContainer.Registry.RegisterInstance(module);
+
+                var workerConfiguration = DefaultConfiguration(isTransactional, 1);
+
+                ServiceBus.Register(workerContainer.Registry, workerConfiguration);
+
+                var workerQueueManager = workerContainer.Resolver.Resolve<IQueueManager>();
+
+                workerQueueManager.Configure(workerContainer.Resolver);
+                ConfigureWorkerQueues(workerQueueManager, workerConfiguration, queueUriFormat);
+
+                module.Assign(workerContainer.Resolver.Resolve<IPipelineFactory>());
+
+                using (var distributorBus = ServiceBus.Create(distributorContainer.Resolver))
+                using (var workerBus = ServiceBus.Create(workerContainer.Resolver))
                 {
-                    var command = new SimpleCommand
+                    for (var i = 0; i < messageCount; i++)
                     {
-                        Name = Guid.NewGuid().ToString()
-                    };
+                        var command = new SimpleCommand
+                        {
+                            Name = Guid.NewGuid().ToString()
+                        };
 
-                    var workQueue = distributorConfiguration.Inbox.WorkQueue;
-                    var message = transportMessageFactory.Create(command, c => c.WithRecipient(workQueue));
+                        var workQueue = distributorConfiguration.Inbox.WorkQueue;
+                        var message = transportMessageFactory.Create(command, c => c.WithRecipient(workQueue));
 
-                    workQueue.Enqueue(message, serializer.Serialize(message));
+                        workQueue.Enqueue(message, serializer.Serialize(message));
+                    }
+
+                    distributorBus.Start();
+                    workerBus.Start();
+
+                    var timeout = DateTime.Now.AddSeconds(timeoutSeconds < 5 ? 5 : timeoutSeconds);
+                    var timedOut = false;
+
+                    _log.Information($"[start wait] : now = '{DateTime.Now}'");
+
+                    while (!module.AllMessagesHandled() && !timedOut)
+                    {
+                        Thread.Sleep(50);
+
+                        timedOut = timeout < DateTime.Now;
+                    }
+
+                    _log.Information(
+                        $"[end wait] : now = '{DateTime.Now}' / timeout = '{timeout}' / timed out = '{timedOut}'");
+
+                    Assert.IsTrue(module.AllMessagesHandled(), "Not all messages were handled.");
                 }
-
-                distributorBus.Start();
-                workerBus.Start();
-
-                var timeout = DateTime.Now.AddSeconds(timeoutSeconds < 5 ? 5 : timeoutSeconds);
-                var timedOut = false;
-
-                _log.Information($"[start wait] : now = '{DateTime.Now}'");
-
-                while (!module.AllMessagesHandled() && !timedOut)
-                {
-                    Thread.Sleep(50);
-
-                    timedOut = timeout < DateTime.Now;
-                }
-
-                _log.Information(
-                    $"[end wait] : now = '{DateTime.Now}' / timeout = '{timeout}' / timed out = '{timedOut}'");
-
-                Assert.IsTrue(module.AllMessagesHandled(), "Not all messages were handled.");
 
                 AttemptDropQueues(queueManager, queueUriFormat);
+            }
+            finally
+            {
+                queueManager.AttemptDispose();
             }
         }
 

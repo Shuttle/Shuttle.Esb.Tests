@@ -31,13 +31,13 @@ namespace Shuttle.Esb.Tests
 
             var receiverWorkQueueUri = string.Format(workQueueUriFormat, "test-receiver-work");
 
-            messageRouteProvider.Setup(m => m.GetRouteUris(It.IsAny<string>())).Returns(new[] { receiverWorkQueueUri });
+            messageRouteProvider.Setup(m => m.GetRouteUris(It.IsAny<string>())).Returns(new[] {receiverWorkQueueUri});
 
             container.Registry.RegisterInstance(messageRouteProvider.Object);
 
             ServiceBus.Register(container.Registry, configuration);
 
-            var queueManager = ConfigureQueueManager(container.Resolver);
+            var queueManager = CreateQueueManager(container.Resolver);
 
             ConfigureQueues(queueManager, configuration, workQueueUriFormat, errorQueueUriFormat);
 
@@ -56,7 +56,8 @@ namespace Shuttle.Esb.Tests
 
                 events.ThreadWaiting += (sender, args) =>
                 {
-                    if (args.PipelineType.FullName != null && !args.PipelineType.FullName.Equals(typeof(OutboxPipeline).FullName))
+                    if (args.PipelineType.FullName != null &&
+                        !args.PipelineType.FullName.Equals(typeof(OutboxPipeline).FullName))
                     {
                         return;
                     }
@@ -82,7 +83,8 @@ namespace Shuttle.Esb.Tests
                     timedOut = timeout < DateTime.Now;
                 }
 
-                Assert.IsFalse(timedOut, "Timed out before processing {0} errors.  Waiting for {1} threads to be idle.", count, threadCount);
+                Assert.IsFalse(timedOut, "Timed out before processing {0} errors.  Waiting for {1} threads to be idle.",
+                    count, threadCount);
 
                 var receiverWorkQueue = queueManager.GetQueue(receiverWorkQueueUri);
 
@@ -94,17 +96,17 @@ namespace Shuttle.Esb.Tests
 
                     receiverWorkQueue.Acknowledge(receivedMessage.AcknowledgementToken);
                 }
-
-                receiverWorkQueue.AttemptDrop();
-
-                var outboxWorkQueue = queueManager.GetQueue(string.Format(workQueueUriFormat, "test-outbox-work"));
-
-                Assert.IsTrue(outboxWorkQueue.IsEmpty());
-
-                outboxWorkQueue.AttemptDrop();
-
-                queueManager.GetQueue(string.Format(errorQueueUriFormat, "test-error")).AttemptDrop();
             }
+
+            queueManager.GetQueue(receiverWorkQueueUri).AttemptDrop();
+
+            var outboxWorkQueue = queueManager.GetQueue(string.Format(workQueueUriFormat, "test-outbox-work"));
+
+            Assert.IsTrue(outboxWorkQueue.IsEmpty());
+
+            outboxWorkQueue.AttemptDrop();
+
+            queueManager.GetQueue(string.Format(errorQueueUriFormat, "test-error")).AttemptDrop();
         }
 
         private void ConfigureQueues(IQueueManager queueManager, IServiceBusConfiguration configuration,
@@ -144,7 +146,7 @@ namespace Shuttle.Esb.Tests
                 Outbox =
                     new OutboxQueueConfiguration
                     {
-                        DurationToSleepWhenIdle = new[] { TimeSpan.FromMilliseconds(5) },
+                        DurationToSleepWhenIdle = new[] {TimeSpan.FromMilliseconds(5)},
                         ThreadCount = threadCount
                     }
             };

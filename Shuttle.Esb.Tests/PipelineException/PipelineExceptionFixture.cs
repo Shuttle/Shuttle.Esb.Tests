@@ -21,7 +21,7 @@ namespace Shuttle.Esb.Tests
 
             module.Assign(container.Resolver.Resolve<IPipelineFactory>());
 
-            var queueManager = ConfigureQueueManager(container.Resolver);
+            var queueManager = CreateQueueManager(container.Resolver);
 
             var inboxWorkQueue = queueManager.GetQueue(string.Format(queueUriFormat, "test-inbox-work"));
             var inboxErrorQueue = queueManager.GetQueue(string.Format(queueUriFormat, "test-error"));

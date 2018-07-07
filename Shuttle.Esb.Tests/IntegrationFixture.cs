@@ -34,16 +34,9 @@ namespace Shuttle.Esb.Tests
             };
         }
 
-        protected IQueueManager ConfigureQueueManager(IComponentResolver resolver)
+        protected IQueueManager CreateQueueManager(IComponentResolver resolver)
         {
-            var queueManager = resolver.Resolve<IQueueManager>();
-
-            foreach (var queueFactory in resolver.ResolveAll<IQueueFactory>())
-            {
-                queueManager.RegisterQueueFactory(queueFactory);
-            }
-
-            return queueManager;
+            return new QueueManager(resolver.Resolve<IUriResolver>()).Configure(resolver);
         }
 
         protected void AttemptDropQueues(IQueueManager queueManager, string queueUriFormat)
