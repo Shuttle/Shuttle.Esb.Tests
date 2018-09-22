@@ -13,11 +13,11 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="Moq" Version="4.8.3" />
+    <PackageReference Include="Moq" Version="4.10.0" />
     <PackageReference Include="NUnit" Version="3.10.1" />
     <PackageReference Include="Shuttle.Core.Contract" Version="10.0.1" />
     <PackageReference Include="Shuttle.Core.Log4Net" Version="10.0.1" />
-    <PackageReference Include="Shuttle.Esb" Version="10.0.8" />
+    <PackageReference Include="Shuttle.Esb" Version="10.1.1" />
   </ItemGroup>
 
   <ItemGroup>
