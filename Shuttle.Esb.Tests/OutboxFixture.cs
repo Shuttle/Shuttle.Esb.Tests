@@ -11,6 +11,7 @@ namespace Shuttle.Esb.Tests
 {
     public abstract class OutboxFixture : IntegrationFixture
     {
+
         protected void TestOutboxSending(ComponentContainer container, string workQueueUriFormat, bool isTransactional)
         {
             TestOutboxSending(container, workQueueUriFormat, workQueueUriFormat, isTransactional);
@@ -52,6 +53,30 @@ namespace Shuttle.Esb.Tests
                     bus.Send(new SimpleCommand());
                 }
 
+                var receiverWorkQueue = queueManager.GetQueue(receiverWorkQueueUri);
+                var timedOut = false;
+                var messageRetrieved = false;
+                var timeout = DateTime.Now.AddSeconds(5);
+
+                while (!messageRetrieved && !timedOut)
+                {
+                    var receivedMessage = receiverWorkQueue.GetMessage();
+
+                    if (receivedMessage != null)
+                    {
+                        messageRetrieved = true;
+                        receiverWorkQueue.Release(receivedMessage.AcknowledgementToken);
+                    }
+                    else
+                    {
+                        Thread.Sleep(25);
+
+                        timedOut = timeout < DateTime.Now;
+                    }
+                }
+
+                Assert.IsFalse(timedOut, "Timed out before any messages appeared in the receiver queue.");
+
                 var idleThreads = new List<int>();
 
                 events.ThreadWaiting += (sender, args) =>
@@ -73,8 +98,8 @@ namespace Shuttle.Esb.Tests
                     }
                 };
 
-                var timedOut = false;
-                var timeout = DateTime.Now.AddSeconds(5);
+                timedOut = false;
+                timeout = DateTime.Now.AddSeconds(5);
 
                 while (idleThreads.Count < threadCount && !timedOut)
                 {
@@ -83,10 +108,7 @@ namespace Shuttle.Esb.Tests
                     timedOut = timeout < DateTime.Now;
                 }
 
-                Assert.IsFalse(timedOut, "Timed out before processing {0} errors.  Waiting for {1} threads to be idle.",
-                    count, threadCount);
-
-                var receiverWorkQueue = queueManager.GetQueue(receiverWorkQueueUri);
+                Assert.IsFalse(timedOut, "Timed out before processing {0} errors.  Waiting for {1} threads to be idle.", count, threadCount);
 
                 for (var i = 0; i < count; i++)
                 {
