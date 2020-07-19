@@ -121,6 +121,8 @@ namespace Shuttle.Esb.Tests
             }
             finally
             {
+                queueManager.GetQueue(configuration.Inbox.WorkQueue.Uri.ToString()).AttemptDispose();
+                queueManager.GetQueue(configuration.Inbox.ErrorQueue.Uri.ToString()).AttemptDispose();
                 queueManager.AttemptDispose();
             }
 
@@ -199,8 +201,8 @@ namespace Shuttle.Esb.Tests
             var inboxWorkQueue = queueManager.GetQueue(string.Format(queueUriFormat, "test-inbox-work"));
             var errorQueue = queueManager.GetQueue(string.Format(queueUriFormat, "test-error"));
 
-            configuration.Inbox.WorkQueue = inboxWorkQueue;
-            configuration.Inbox.ErrorQueue = errorQueue;
+            configuration.Inbox.WorkQueue = new QueueReference(inboxWorkQueue);
+            configuration.Inbox.ErrorQueue = new QueueReference(errorQueue);
 
             inboxWorkQueue.AttemptDrop();
             errorQueue.AttemptDrop();
