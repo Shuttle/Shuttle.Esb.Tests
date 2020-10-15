@@ -50,10 +50,10 @@ namespace Shuttle.Esb.Tests
 
             try
             {
-                ConfigureQueues(queueManager, configuration, queueUriFormat);
-
                 using (var bus = ServiceBus.Create(container.Resolver))
                 {
+                    ConfigureQueues(container.Resolver, configuration, queueUriFormat);
+
                     Console.WriteLine("Sending {0} messages to input queue '{1}'.", count, configuration.Inbox.WorkQueue.Uri);
 
                     for (var i = 0; i < 5; i++)
@@ -87,6 +87,8 @@ namespace Shuttle.Esb.Tests
                     }
 
                     bus.Stop();
+
+                    ConfigureQueues(container.Resolver, configuration, queueUriFormat);
 
                     sw.Start();
 
@@ -152,7 +154,7 @@ namespace Shuttle.Esb.Tests
 
             try
             {
-                ConfigureQueues(queueManager, configuration, queueUriFormat);
+                ConfigureQueues(container.Resolver, configuration, queueUriFormat);
 
                 using (var bus = ServiceBus.Create(container.Resolver))
                 {
@@ -195,14 +197,15 @@ namespace Shuttle.Esb.Tests
             }
         }
 
-        private void ConfigureQueues(IQueueManager queueManager, IServiceBusConfiguration configuration,
-            string queueUriFormat)
+        private void ConfigureQueues(IComponentResolver resolver, IServiceBusConfiguration configuration,  string queueUriFormat)
         {
+            var queueManager = resolver.Resolve<IQueueManager>().Configure(resolver);
+
             var inboxWorkQueue = queueManager.GetQueue(string.Format(queueUriFormat, "test-inbox-work"));
             var errorQueue = queueManager.GetQueue(string.Format(queueUriFormat, "test-error"));
 
-            configuration.Inbox.WorkQueue = new QueueReference(inboxWorkQueue);
-            configuration.Inbox.ErrorQueue = new QueueReference(errorQueue);
+            configuration.Inbox.WorkQueue = inboxWorkQueue;
+            configuration.Inbox.ErrorQueue = errorQueue;
 
             inboxWorkQueue.AttemptDrop();
             errorQueue.AttemptDrop();
@@ -237,7 +240,7 @@ namespace Shuttle.Esb.Tests
 
             try
             {
-                ConfigureQueues(queueManager, configuration, workQueueUriFormat);
+                ConfigureQueues(container.Resolver, configuration, workQueueUriFormat);
 
                 using (var bus = ServiceBus.Create(container.Resolver))
                 {
@@ -302,7 +305,7 @@ namespace Shuttle.Esb.Tests
 
             var queueManager = CreateQueueManager(container.Resolver);
 
-            ConfigureQueues(queueManager, configuration, queueUriFormat);
+            ConfigureQueues(container.Resolver, configuration, queueUriFormat);
 
             try
             {
@@ -353,7 +356,7 @@ namespace Shuttle.Esb.Tests
 
             try
             {
-                ConfigureQueues(queueManager, configuration, queueUriFormat);
+                ConfigureQueues(container.Resolver, configuration, queueUriFormat);
 
                 using (var bus = ServiceBus.Create(container.Resolver))
                 {

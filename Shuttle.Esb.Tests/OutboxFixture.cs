@@ -40,7 +40,7 @@ namespace Shuttle.Esb.Tests
 
             var queueManager = CreateQueueManager(container.Resolver);
 
-            ConfigureQueues(queueManager, configuration, workQueueUriFormat, errorQueueUriFormat);
+            ConfigureQueues(container.Resolver, configuration, workQueueUriFormat, errorQueueUriFormat);
 
             var events = container.Resolver.Resolve<IServiceBusEvents>();
 
@@ -131,9 +131,9 @@ namespace Shuttle.Esb.Tests
             queueManager.GetQueue(string.Format(errorQueueUriFormat, "test-error")).AttemptDrop();
         }
 
-        private void ConfigureQueues(IQueueManager queueManager, IServiceBusConfiguration configuration,
-            string workQueueUriFormat, string errorQueueUriFormat)
+        private void ConfigureQueues(IComponentResolver resolver, IServiceBusConfiguration configuration, string workQueueUriFormat, string errorQueueUriFormat)
         {
+            var queueManager = resolver.Resolve<IQueueManager>().Configure(resolver);
             var outboxWorkQueue = queueManager.GetQueue(string.Format(workQueueUriFormat, "test-outbox-work"));
             var errorQueue = queueManager.GetQueue(string.Format(errorQueueUriFormat, "test-error"));
 

@@ -28,7 +28,7 @@ namespace Shuttle.Esb.Tests
 
             var queueManager = CreateQueueManager(container.Resolver);
 
-            ConfigureQueues(queueManager, configuration, queueUriFormat);
+            ConfigureQueues(container.Resolver, configuration, queueUriFormat);
 
             try
             {
@@ -101,9 +101,9 @@ namespace Shuttle.Esb.Tests
             }
         }
 
-        private void ConfigureQueues(IQueueManager queueManager, IServiceBusConfiguration configuration,
-            string queueUriFormat)
+        private void ConfigureQueues(IComponentResolver resolver, IServiceBusConfiguration configuration, string queueUriFormat)
         {
+            var queueManager = resolver.Resolve<IQueueManager>().Configure(resolver);
             var inboxWorkQueue = queueManager.GetQueue(string.Format(queueUriFormat, "test-inbox-work"));
             var errorQueue = queueManager.GetQueue(string.Format(queueUriFormat, "test-error"));
 

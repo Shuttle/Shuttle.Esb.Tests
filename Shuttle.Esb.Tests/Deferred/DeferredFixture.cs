@@ -36,7 +36,7 @@ namespace Shuttle.Esb.Tests
 
             var queueManager = CreateQueueManager(container.Resolver);
 
-            ConfigureQueues(queueManager, configuration, queueUriFormat);
+            ConfigureQueues(container.Resolver, configuration, queueUriFormat);
 
             try
             {
@@ -85,7 +85,6 @@ namespace Shuttle.Esb.Tests
                     Assert.IsTrue(configuration.Inbox.ErrorQueue.IsEmpty());
                     Assert.IsNull(configuration.Inbox.DeferredQueue.GetMessage());
                     Assert.IsNull(configuration.Inbox.WorkQueue.GetMessage());
-
                 }
 
                 AttemptDropQueues(queueManager, queueUriFormat);
@@ -114,9 +113,10 @@ namespace Shuttle.Esb.Tests
                 $"[message enqueued] : name = '{command.Name}' / deferred till date = '{message.IgnoreTillDate}'");
         }
 
-        private void ConfigureQueues(IQueueManager queueManager, IServiceBusConfiguration configuration,
-            string queueUriFormat)
+        private void ConfigureQueues(IComponentResolver resolver, IServiceBusConfiguration configuration, string queueUriFormat)
         {
+            var queueManager = resolver.Resolve<IQueueManager>().Configure(resolver);
+
             var inboxWorkQueue = queueManager.GetQueue(string.Format(queueUriFormat, "test-inbox-work"));
             var inboxDeferredQueue = queueManager.GetQueue(string.Format(queueUriFormat, "test-inbox-deferred"));
             var errorQueue = queueManager.GetQueue(string.Format(queueUriFormat, "test-error"));

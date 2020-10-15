@@ -35,7 +35,7 @@ namespace Shuttle.Esb.Tests
 
             try
             {
-                ConfigureDistributorQueues(queueManager, distributorConfiguration, queueUriFormat);
+                ConfigureDistributorQueues(distributorContainer.Resolver, distributorConfiguration, queueUriFormat);
 
                 var transportMessageFactory = distributorContainer.Resolver.Resolve<ITransportMessageFactory>();
                 var serializer = distributorContainer.Resolver.Resolve<ISerializer>();
@@ -51,7 +51,7 @@ namespace Shuttle.Esb.Tests
                 var workerQueueManager = workerContainer.Resolver.Resolve<IQueueManager>();
 
                 workerQueueManager.Configure(workerContainer.Resolver);
-                ConfigureWorkerQueues(workerQueueManager, workerConfiguration, queueUriFormat);
+                ConfigureWorkerQueues(workerContainer.Resolver, workerConfiguration, queueUriFormat);
 
                 module.Assign(workerContainer.Resolver.Resolve<IPipelineFactory>());
 
@@ -100,9 +100,10 @@ namespace Shuttle.Esb.Tests
             }
         }
 
-        private void ConfigureDistributorQueues(IQueueManager queueManager, IServiceBusConfiguration configuration,
-            string queueUriFormat)
+        private void ConfigureDistributorQueues(IComponentResolver resolver, IServiceBusConfiguration configuration,  string queueUriFormat)
         {
+            var queueManager = resolver.Resolve<IQueueManager>().Configure(resolver);
+
             var errorQueue = queueManager.GetQueue(string.Format(queueUriFormat, "test-error"));
 
             configuration.Inbox.WorkQueue =
@@ -130,9 +131,10 @@ namespace Shuttle.Esb.Tests
             errorQueue.AttemptPurge();
         }
 
-        private void ConfigureWorkerQueues(IQueueManager queueManager, IServiceBusConfiguration configuration,
-            string queueUriFormat)
+        private void ConfigureWorkerQueues(IComponentResolver resolver, IServiceBusConfiguration configuration, string queueUriFormat)
         {
+            var queueManager = resolver.Resolve<IQueueManager>().Configure(resolver);
+
             configuration.Inbox.WorkQueue = queueManager.GetQueue(string.Format(queueUriFormat, "test-worker-work"));
             configuration.Inbox.ErrorQueue = queueManager.GetQueue(string.Format(queueUriFormat, "test-error"));
 
