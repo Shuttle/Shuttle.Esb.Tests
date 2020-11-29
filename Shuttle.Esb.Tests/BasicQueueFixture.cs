@@ -96,7 +96,6 @@ namespace Shuttle.Esb.Tests
             workQueue.Enqueue(new TransportMessage
             {
                 MessageId = Guid.NewGuid()
-
             }, new MemoryStream());
 
             Assert.IsNotNull(workQueue.GetMessage());
