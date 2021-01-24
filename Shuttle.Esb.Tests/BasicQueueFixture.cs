@@ -1,5 +1,6 @@
 ﻿using System;
 using System.IO;
+using System.Text;
 using NUnit.Framework;
 using Shuttle.Core.Contract;
 using Shuttle.Core.Reflection;
@@ -59,8 +60,7 @@ namespace Shuttle.Esb.Tests
             workQueue.Enqueue(new TransportMessage
             {
                 MessageId = Guid.NewGuid()
-
-            }, new MemoryStream());
+            }, new MemoryStream(Encoding.ASCII.GetBytes("message-body")));
 
             var receivedMessage = workQueue.GetMessage();
 
@@ -96,7 +96,7 @@ namespace Shuttle.Esb.Tests
             workQueue.Enqueue(new TransportMessage
             {
                 MessageId = Guid.NewGuid()
-            }, new MemoryStream());
+            }, new MemoryStream(Encoding.ASCII.GetBytes("message-body")));
 
             Assert.IsNotNull(workQueue.GetMessage());
             Assert.IsNull(workQueue.GetMessage());
