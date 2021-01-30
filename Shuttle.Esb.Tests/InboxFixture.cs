@@ -369,7 +369,7 @@ namespace Shuttle.Esb.Tests
                     });
 
                     configuration.Inbox.WorkQueue.Enqueue(transportMessage, serializer.Serialize(transportMessage));
-
+                                                                
                     Assert.IsNotNull(transportMessage, "TransportMessage is null.");
                     Assert.IsFalse(transportMessage.HasExpired(), "The message has already expired before being processed.");
 
@@ -377,7 +377,7 @@ namespace Shuttle.Esb.Tests
                     Thread.Sleep(550);
 
                     Assert.IsNull(configuration.Inbox.WorkQueue.GetMessage(),
-                        "The message did not expire.  Call this test only if your queue actully supports message expiry internally.");
+                        "The message did not expire.  Call this test only if your queue actually supports message expiry internally.");
                 }
 
                 AttemptDropQueues(queueManager, queueUriFormat);

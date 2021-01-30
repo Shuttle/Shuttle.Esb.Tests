@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using log4net;
 using NUnit.Framework;
 using Shuttle.Core.Container;
@@ -8,8 +9,18 @@ using Shuttle.Core.Transactions;
 
 namespace Shuttle.Esb.Tests
 {
-    public class IntegrationFixture 
+    public class IntegrationFixture
     {
+        private readonly List<string> _queueUris = new List<string>
+        {
+            "test-worker-work",
+            "test-distributor-work",
+            "test-distributor-control",
+            "test-inbox-work",
+            "test-inbox-deferred",
+            "test-error"
+        };
+        
         [OneTimeSetUp]
         protected void FixtureSetUp()
         {
@@ -34,19 +45,22 @@ namespace Shuttle.Esb.Tests
             };
         }
 
-        protected IQueueManager CreateQueueManager(IComponentResolver resolver)
+        protected QueueManager CreateQueueManager(IComponentResolver resolver)
         {
-            return new QueueManager(resolver.Resolve<IUriResolver>()).Configure(resolver);
+            return (QueueManager)new QueueManager(resolver.Resolve<IUriResolver>()).Configure(resolver);
         }
 
-        protected void AttemptDropQueues(IQueueManager queueManager, string queueUriFormat)
+        protected void AttemptDropQueues(QueueManager queueManager, string queueUriFormat)
         {
-            queueManager.GetQueue(string.Format(queueUriFormat, "test-worker-work")).AttemptDrop();
-            queueManager.GetQueue(string.Format(queueUriFormat, "test-distributor-work")).AttemptDrop();
-            queueManager.GetQueue(string.Format(queueUriFormat, "test-distributor-control")).AttemptDrop();
-            queueManager.GetQueue(string.Format(queueUriFormat, "test-inbox-work")).AttemptDrop();
-            queueManager.GetQueue(string.Format(queueUriFormat, "test-inbox-deferred")).AttemptDrop();
-            queueManager.GetQueue(string.Format(queueUriFormat, "test-error")).AttemptDrop();
+            foreach (var queueUri in _queueUris)
+            {
+                if (!queueManager.ContainsQueue(queueUri))
+                {
+                    continue;
+                }
+                
+                queueManager.GetQueue(string.Format(queueUriFormat, queueUri)).AttemptDrop();
+            }
         }
     }
 }
