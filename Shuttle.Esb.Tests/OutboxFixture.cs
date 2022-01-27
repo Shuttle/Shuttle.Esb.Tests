@@ -11,7 +11,6 @@ namespace Shuttle.Esb.Tests
 {
     public abstract class OutboxFixture : IntegrationFixture
     {
-
         protected void TestOutboxSending(ComponentContainer container, string workQueueUriFormat, bool isTransactional)
         {
             TestOutboxSending(container, workQueueUriFormat, workQueueUriFormat, isTransactional);
@@ -36,7 +35,7 @@ namespace Shuttle.Esb.Tests
 
             container.Registry.RegisterInstance(messageRouteProvider.Object);
 
-            ServiceBus.Register(container.Registry, configuration);
+            container.Registry.RegisterServiceBus(configuration);
 
             var queueManager = CreateQueueManager(container.Resolver);
 
@@ -46,7 +45,7 @@ namespace Shuttle.Esb.Tests
 
             Console.WriteLine("Sending {0} messages.", count);
 
-            using (var bus = ServiceBus.Create(container.Resolver).Start())
+            using (var bus = container.Resolver.ResolveServiceBus().Start())
             {
                 for (var i = 0; i < count; i++)
                 {

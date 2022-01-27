@@ -29,7 +29,7 @@ namespace Shuttle.Esb.Tests
 
             var distributorConfiguration = DefaultConfiguration(isTransactional, 1);
 
-            ServiceBus.Register(distributorContainer.Registry, distributorConfiguration);
+            distributorContainer.Registry.RegisterServiceBus(distributorConfiguration);
 
             var queueManager = CreateQueueManager(distributorContainer.Resolver);
 
@@ -46,7 +46,7 @@ namespace Shuttle.Esb.Tests
 
                 var workerConfiguration = DefaultConfiguration(isTransactional, 1);
 
-                ServiceBus.Register(workerContainer.Registry, workerConfiguration);
+                workerContainer.Registry.RegisterServiceBus(workerConfiguration);
 
                 var workerQueueManager = workerContainer.Resolver.Resolve<IQueueManager>();
 
@@ -55,8 +55,8 @@ namespace Shuttle.Esb.Tests
 
                 module.Assign(workerContainer.Resolver.Resolve<IPipelineFactory>());
 
-                using (var distributorBus = ServiceBus.Create(distributorContainer.Resolver))
-                using (var workerBus = ServiceBus.Create(workerContainer.Resolver))
+                using (var distributorBus = distributorContainer.Resolver.ResolveServiceBus())
+                using (var workerBus = workerContainer.Resolver.ResolveServiceBus())
                 {
                     for (var i = 0; i < messageCount; i++)
                     {
@@ -151,11 +151,11 @@ namespace Shuttle.Esb.Tests
             configuration.Inbox.WorkQueue.AttemptPurge();
         }
 
-        private class WorkerModule : IPipelineObserver<OnAfterHandleMessage>
+        public class WorkerModule : IPipelineObserver<OnAfterHandleMessage>
         {
             private readonly ILog _log;
             private readonly int _messageCount;
-            private readonly object padlock = new object();
+            private readonly object _lock = new object();
             private int _messagesHandled;
 
             public WorkerModule(int messageCount)
@@ -169,7 +169,7 @@ namespace Shuttle.Esb.Tests
             {
                 _log.Information("[OnAfterHandleMessage]");
 
-                lock (padlock)
+                lock (_lock)
                 {
                     _messagesHandled++;
                 }

@@ -24,7 +24,7 @@ namespace Shuttle.Esb.Tests
             container.Registry.RegisterInstance<IMessageRouteProvider>(new IdempotenceMessageRouteProvider());
             container.Registry.Register<IMessageHandlerInvoker, IdempotenceMessageHandlerInvoker>();
 
-            ServiceBus.Register(container.Registry, configuration);
+            container.Registry.RegisterServiceBus(configuration);
 
             var queueManager = CreateQueueManager(container.Resolver);
 
@@ -38,7 +38,7 @@ namespace Shuttle.Esb.Tests
                 var messageHandlerInvoker =
                     (IdempotenceMessageHandlerInvoker) container.Resolver.Resolve<IMessageHandlerInvoker>();
 
-                using (var bus = ServiceBus.Create(container.Resolver))
+                using (var bus = container.Resolver.ResolveServiceBus())
                 {
                     if (enqueueUniqueMessages)
                     {

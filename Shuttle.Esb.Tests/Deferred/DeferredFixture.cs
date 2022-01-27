@@ -32,7 +32,7 @@ namespace Shuttle.Esb.Tests
 
             var configuration = DefaultConfiguration(isTransactional, 1);
 
-            ServiceBus.Register(container.Registry, configuration);
+            container.Registry.RegisterServiceBus(configuration);
 
             var queueManager = CreateQueueManager(container.Resolver);
 
@@ -42,7 +42,7 @@ namespace Shuttle.Esb.Tests
             {
                 module.Assign(container.Resolver.Resolve<IPipelineFactory>());
 
-                using (var bus = ServiceBus.Create(container.Resolver))
+                using (var bus = container.Resolver.ResolveServiceBus())
                 {
                     bus.Start();
 

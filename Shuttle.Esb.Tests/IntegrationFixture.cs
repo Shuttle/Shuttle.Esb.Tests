@@ -20,11 +20,11 @@ namespace Shuttle.Esb.Tests
             "test-inbox-deferred",
             "test-error"
         };
-        
+
         [OneTimeSetUp]
         protected void FixtureSetUp()
         {
-            Log.Assign(new Log4NetLog(LogManager.GetLogger(typeof (IntegrationFixture))));
+            Log.Assign(new Log4NetLog(LogManager.GetLogger(typeof(IntegrationFixture))));
         }
 
         protected ServiceBusConfiguration DefaultConfiguration(bool isTransactional, int threadCount)
@@ -38,7 +38,7 @@ namespace Shuttle.Esb.Tests
                 },
                 Inbox = new InboxQueueConfiguration
                 {
-                    DurationToSleepWhenIdle = new[] {TimeSpan.FromMilliseconds(5)},
+                    DurationToSleepWhenIdle = new[] { TimeSpan.FromMilliseconds(5) },
                     DurationToIgnoreOnFailure = new[] { TimeSpan.FromMilliseconds(5) },
                     ThreadCount = threadCount
                 }
@@ -58,7 +58,7 @@ namespace Shuttle.Esb.Tests
                 {
                     continue;
                 }
-                
+
                 queueManager.GetQueue(string.Format(queueUriFormat, queueUri)).AttemptDrop();
             }
         }

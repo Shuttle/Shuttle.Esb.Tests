@@ -45,7 +45,7 @@ namespace Shuttle.Esb.Tests
 
         private void Configure(ComponentContainer container)
         {
-            ServiceBus.Register(container.Registry, DefaultConfiguration(true, 1));
+            container.Registry.RegisterServiceBus(DefaultConfiguration(true, 1));
         }
 
         protected void TestReleaseMessage(ComponentContainer container, string workQueueUriFormat)

@@ -13,7 +13,7 @@ namespace Shuttle.Esb.Tests
         {
             var configuration = DefaultConfiguration(true, 1);
 
-            ServiceBus.Register(container.Registry, configuration);
+            container.Registry.RegisterServiceBus(configuration);
 
             var module = new ReceivePipelineExceptionModule(configuration);
 
@@ -45,7 +45,7 @@ namespace Shuttle.Esb.Tests
             var transportMessageFactory = container.Resolver.Resolve<ITransportMessageFactory>();
             var serializer = container.Resolver.Resolve<ISerializer>();
 
-            using (var bus = ServiceBus.Create(container.Resolver))
+            using (var bus = container.Resolver.ResolveServiceBus())
             {
                 var message = transportMessageFactory.Create(new ReceivePipelineCommand(),
                     c => c.WithRecipient(inboxWorkQueue));
