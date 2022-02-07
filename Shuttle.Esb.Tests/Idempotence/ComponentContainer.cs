@@ -19,19 +19,8 @@ namespace Shuttle.Esb.Tests
             _resolverFactory = resolverFactory;
         }
 
-        public IComponentRegistry Registry { get; private set; }
+        public IComponentRegistry Registry { get; }
 
-        public IComponentResolver Resolver
-        {
-            get
-            {
-                if (_resolver == null)
-                {
-                    _resolver = _resolverFactory.Invoke();
-                }
-
-                return _resolver;
-            }
-        }
+        public IComponentResolver Resolver => _resolver ?? (_resolver = _resolverFactory.Invoke());
     }
 }

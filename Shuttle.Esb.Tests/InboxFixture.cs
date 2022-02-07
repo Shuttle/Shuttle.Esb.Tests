@@ -50,7 +50,7 @@ namespace Shuttle.Esb.Tests
 
             try
             {
-                using (var bus = container.Resolver.ResolveServiceBus())
+                using (var bus = container.Resolver.Resolve<IServiceBus>())
                 {
                     ConfigureQueues(container.Resolver, configuration, queueUriFormat);
 
@@ -156,7 +156,7 @@ namespace Shuttle.Esb.Tests
             {
                 ConfigureQueues(container.Resolver, configuration, queueUriFormat);
 
-                using (var bus = container.Resolver.ResolveServiceBus())
+                using (var bus = container.Resolver.Resolve<IServiceBus>())
                 {
                     var message = transportMessageFactory.Create(new ErrorCommand(),
                         c => c.WithRecipient(configuration.Inbox.WorkQueue));
@@ -242,7 +242,7 @@ namespace Shuttle.Esb.Tests
             {
                 ConfigureQueues(container.Resolver, configuration, workQueueUriFormat);
 
-                using (var bus = container.Resolver.ResolveServiceBus())
+                using (var bus = container.Resolver.Resolve<IServiceBus>())
                 {
                     for (var i = 0; i < threadCount; i++)
                     {
@@ -311,7 +311,7 @@ namespace Shuttle.Esb.Tests
             {
                 module.Assign(container.Resolver.Resolve<IPipelineFactory>());
 
-                using (var bus = container.Resolver.ResolveServiceBus())
+                using (var bus = container.Resolver.Resolve<IServiceBus>())
                 {
                     bus.Start();
 
@@ -358,7 +358,7 @@ namespace Shuttle.Esb.Tests
             {
                 ConfigureQueues(container.Resolver, configuration, queueUriFormat);
 
-                using (var bus = container.Resolver.ResolveServiceBus())
+                using (var bus = container.Resolver.Resolve<IServiceBus>())
                 {
                     bus.Start();
 

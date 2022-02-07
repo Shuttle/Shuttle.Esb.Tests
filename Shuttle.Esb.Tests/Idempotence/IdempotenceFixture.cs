@@ -38,7 +38,7 @@ namespace Shuttle.Esb.Tests
                 var messageHandlerInvoker =
                     (IdempotenceMessageHandlerInvoker) container.Resolver.Resolve<IMessageHandlerInvoker>();
 
-                using (var bus = container.Resolver.ResolveServiceBus())
+                using (var bus = container.Resolver.Resolve<IServiceBus>())
                 {
                     if (enqueueUniqueMessages)
                     {

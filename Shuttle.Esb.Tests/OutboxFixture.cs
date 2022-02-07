@@ -45,7 +45,7 @@ namespace Shuttle.Esb.Tests
 
             Console.WriteLine("Sending {0} messages.", count);
 
-            using (var bus = container.Resolver.ResolveServiceBus().Start())
+            using (var bus = container.Resolver.Resolve<IServiceBus>().Start())
             {
                 for (var i = 0; i < count; i++)
                 {
@@ -97,7 +97,6 @@ namespace Shuttle.Esb.Tests
                     }
                 };
 
-                timedOut = false;
                 timeout = DateTime.Now.AddSeconds(5);
 
                 while (idleThreads.Count < threadCount && !timedOut)

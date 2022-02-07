@@ -45,7 +45,7 @@ namespace Shuttle.Esb.Tests
             var transportMessageFactory = container.Resolver.Resolve<ITransportMessageFactory>();
             var serializer = container.Resolver.Resolve<ISerializer>();
 
-            using (var bus = container.Resolver.ResolveServiceBus())
+            using (var bus = container.Resolver.Resolve<IServiceBus>())
             {
                 var message = transportMessageFactory.Create(new ReceivePipelineCommand(),
                     c => c.WithRecipient(inboxWorkQueue));

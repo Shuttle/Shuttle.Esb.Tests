@@ -55,8 +55,8 @@ namespace Shuttle.Esb.Tests
 
                 module.Assign(workerContainer.Resolver.Resolve<IPipelineFactory>());
 
-                using (var distributorBus = distributorContainer.Resolver.ResolveServiceBus())
-                using (var workerBus = workerContainer.Resolver.ResolveServiceBus())
+                using (var distributorBus = distributorContainer.Resolver.Resolve<IServiceBus>())
+                using (var workerBus = workerContainer.Resolver.Resolve<IServiceBus>())
                 {
                     for (var i = 0; i < messageCount; i++)
                     {

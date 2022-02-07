@@ -42,7 +42,7 @@ namespace Shuttle.Esb.Tests
             {
                 module.Assign(container.Resolver.Resolve<IPipelineFactory>());
 
-                using (var bus = container.Resolver.ResolveServiceBus())
+                using (var bus = container.Resolver.Resolve<IServiceBus>())
                 {
                     bus.Start();
 
