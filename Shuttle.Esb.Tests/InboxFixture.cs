@@ -2,8 +2,8 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Threading;
+using Microsoft.Extensions.DependencyInjection;
 using NUnit.Framework;
-using Shuttle.Core.Container;
 using Shuttle.Core.Contract;
 using Shuttle.Core.Pipelines;
 using Shuttle.Core.Reflection;
@@ -13,18 +13,25 @@ namespace Shuttle.Esb.Tests
 {
     public abstract class InboxFixture : IntegrationFixture
     {
-        protected void TestInboxThroughput(ComponentContainer container, string queueUriFormat, int timeoutMilliseconds,
+        protected void TestInboxThroughput(IServiceCollection services, string queueUriFormat, int timeoutMilliseconds,
             int count, bool isTransactional)
         {
-            Guard.AgainstNull(container, "container");
+            Guard.AgainstNull(services, nameof(services));
 
             const int threadCount = 15;
             var padlock = new object();
-            var configuration = DefaultConfiguration(isTransactional, threadCount);
 
-            container.Registry.RegisterServiceBus(configuration);
+            var configuration = DefaultConfiguration(threadCount);
 
-            var pipelineFactory = container.Resolver.Resolve<IPipelineFactory>();
+            services.AddSingleton<IServiceBusConfiguration>();
+            services.AddServiceBus(builder =>
+            {
+                builder.Configure(configuration);
+            });
+
+            var serviceProvider = services.BuildServiceProvider();
+
+            var pipelineFactory = serviceProvider.GetRequiredService<IPipelineFactory>();
 
             pipelineFactory.PipelineCreated += delegate(object sender, PipelineEventArgs args)
             {
@@ -40,19 +47,19 @@ namespace Shuttle.Esb.Tests
                 args.Pipeline.RegisterObserver(new ThroughputObserver());
             };
 
-            var transportMessageFactory = container.Resolver.Resolve<ITransportMessageFactory>();
-            var serializer = container.Resolver.Resolve<ISerializer>();
-            var events = container.Resolver.Resolve<IServiceBusEvents>();
+            var transportMessageFactory = serviceProvider.GetRequiredService<ITransportMessageFactory>();
+            var serializer = serviceProvider.GetRequiredService<ISerializer>();
+            var threadActivity = serviceProvider.GetRequiredService<IPipelineThreadActivity>();
 
             var sw = new Stopwatch();
 
-            var queueManager = CreateQueueManager(container.Resolver);
+            var queueService = CreateQueueService(serviceProvider);
 
             try
             {
-                using (var bus = container.Resolver.Resolve<IServiceBus>())
+                using (var bus = serviceProvider.GetRequiredService<IServiceBus>())
                 {
-                    ConfigureQueues(container.Resolver, configuration, queueUriFormat);
+                    ConfigureQueues(serviceProvider, configuration, queueUriFormat);
 
                     Console.WriteLine("Sending {0} messages to input queue '{1}'.", count, configuration.Inbox.WorkQueue.Uri);
 
@@ -66,7 +73,7 @@ namespace Shuttle.Esb.Tests
 
                     var idleThreads = new List<int>();
 
-                    events.ThreadWaiting += (sender, args) =>
+                    threadActivity.ThreadWaiting += (sender, args) =>
                     {
                         lock (padlock)
                         {
@@ -88,7 +95,7 @@ namespace Shuttle.Esb.Tests
 
                     bus.Stop();
 
-                    ConfigureQueues(container.Resolver, configuration, queueUriFormat);
+                    ConfigureQueues(serviceProvider, configuration, queueUriFormat);
 
                     sw.Start();
 
@@ -119,13 +126,13 @@ namespace Shuttle.Esb.Tests
                     sw.Stop();
                 }
 
-                AttemptDropQueues(queueManager, queueUriFormat);
+                AttemptDropQueues(queueService, queueUriFormat);
             }
             finally
             {
-                queueManager.GetQueue(configuration.Inbox.WorkQueue.Uri.ToString()).AttemptDispose();
-                queueManager.GetQueue(configuration.Inbox.ErrorQueue.Uri.ToString()).AttemptDispose();
-                queueManager.AttemptDispose();
+                queueService.Get(configuration.Inbox.WorkQueue.Uri.ToString()).AttemptDispose();
+                queueService.Get(configuration.Inbox.ErrorQueue.Uri.ToString()).AttemptDispose();
+                queueService.AttemptDispose();
             }
 
             var ms = sw.ElapsedMilliseconds;
@@ -137,26 +144,31 @@ namespace Shuttle.Esb.Tests
                 count, timeoutMilliseconds, ms);
         }
 
-        protected void TestInboxError(ComponentContainer container, string queueUriFormat, bool isTransactional)
+        protected void TestInboxError(IServiceCollection services, string queueUriFormat, bool isTransactional)
         {
             var padlock = new object();
-            var configuration = DefaultConfiguration(isTransactional, 1);
+            var configuration = DefaultConfiguration(1);
 
             configuration.Inbox.MaximumFailureCount = 0;
 
-            container.Registry.RegisterServiceBus(configuration);
+            services.AddServiceBus(builder =>
+            {
+                builder.Configure(configuration);
+            });
 
-            var transportMessageFactory = container.Resolver.Resolve<ITransportMessageFactory>();
-            var serializer = container.Resolver.Resolve<ISerializer>();
-            var events = container.Resolver.Resolve<IServiceBusEvents>();
+            var serviceProvider = services.BuildServiceProvider();
 
-            var queueManager = CreateQueueManager(container.Resolver);
+            var transportMessageFactory = serviceProvider.GetRequiredService<ITransportMessageFactory>();
+            var serializer = serviceProvider.GetRequiredService<ISerializer>();
+            var threadActivity = serviceProvider.GetRequiredService<IPipelineThreadActivity>();
+
+            var queueManager = CreateQueueService(serviceProvider);
 
             try
             {
-                ConfigureQueues(container.Resolver, configuration, queueUriFormat);
+                ConfigureQueues(serviceProvider, configuration, queueUriFormat);
 
-                using (var bus = container.Resolver.Resolve<IServiceBus>())
+                using (var bus = serviceProvider.GetRequiredService<IServiceBus>())
                 {
                     var message = transportMessageFactory.Create(new ErrorCommand(),
                         c => c.WithRecipient(configuration.Inbox.WorkQueue));
@@ -165,7 +177,7 @@ namespace Shuttle.Esb.Tests
 
                     var idleThreads = new List<int>();
 
-                    events.ThreadWaiting += (sender, args) =>
+                    threadActivity.ThreadWaiting += (sender, args) =>
                     {
                         lock (padlock)
                         {
@@ -197,12 +209,12 @@ namespace Shuttle.Esb.Tests
             }
         }
 
-        private void ConfigureQueues(IComponentResolver resolver, IServiceBusConfiguration configuration,  string queueUriFormat)
+        private void ConfigureQueues(IServiceProvider serviceProvider, IServiceBusConfiguration configuration,  string queueUriFormat)
         {
-            var queueManager = resolver.Resolve<IQueueManager>().Configure(resolver);
+            var queueService = serviceProvider.GetRequiredService<IQueueService>();
 
-            var inboxWorkQueue = queueManager.GetQueue(string.Format(queueUriFormat, "test-inbox-work"));
-            var errorQueue = queueManager.GetQueue(string.Format(queueUriFormat, "test-error"));
+            var inboxWorkQueue = queueService.Get(string.Format(queueUriFormat, "test-inbox-work"));
+            var errorQueue = queueService.Get(string.Format(queueUriFormat, "test-error"));
 
             configuration.Inbox.WorkQueue = inboxWorkQueue;
             configuration.Inbox.ErrorQueue = errorQueue;
@@ -210,39 +222,44 @@ namespace Shuttle.Esb.Tests
             inboxWorkQueue.AttemptDrop();
             errorQueue.AttemptDrop();
 
-            queueManager.CreatePhysicalQueues(configuration);
+            queueService.CreatePhysicalQueues(configuration);
 
             inboxWorkQueue.AttemptPurge();
             errorQueue.AttemptPurge();
         }
 
-        protected void TestInboxConcurrency(ComponentContainer container, string workQueueUriFormat, int msToComplete,
+        protected void TestInboxConcurrency(IServiceCollection services, string workQueueUriFormat, int msToComplete,
             bool isTransactional)
         {
             const int threadCount = 1;
 
             var padlock = new object();
-            var configuration = DefaultConfiguration(isTransactional, threadCount);
+            var configuration = DefaultConfiguration(threadCount);
 
-            container.Registry.RegisterServiceBus(configuration);
+            services.AddServiceBus(builder =>
+            {
+                builder.Configure(configuration);
+            });
 
             var module = new InboxConcurrencyModule();
 
-            container.Registry.RegisterInstance(module);
+            services.AddSingleton(module);
 
-            var transportMessageFactory = container.Resolver.Resolve<ITransportMessageFactory>();
-            var serializer = container.Resolver.Resolve<ISerializer>();
-            var events = container.Resolver.Resolve<IServiceBusEvents>();
+            var serviceProvider = services.BuildServiceProvider();
 
-            module.Assign(container.Resolver.Resolve<IPipelineFactory>());
+            var transportMessageFactory = serviceProvider.GetRequiredService<ITransportMessageFactory>();
+            var serializer = serviceProvider.GetRequiredService<ISerializer>();
+            var threadActivity = serviceProvider.GetRequiredService<IPipelineThreadActivity>();
 
-            var queueManager = CreateQueueManager(container.Resolver);
+            module.Assign(serviceProvider.GetRequiredService<IPipelineFactory>());
+
+            var queueManager = CreateQueueService(serviceProvider);
 
             try
             {
-                ConfigureQueues(container.Resolver, configuration, workQueueUriFormat);
+                ConfigureQueues(serviceProvider, configuration, workQueueUriFormat);
 
-                using (var bus = container.Resolver.Resolve<IServiceBus>())
+                using (var bus = serviceProvider.GetRequiredService<IServiceBus>())
                 {
                     for (var i = 0; i < threadCount; i++)
                     {
@@ -256,7 +273,7 @@ namespace Shuttle.Esb.Tests
 
                     var idleThreads = new List<int>();
 
-                    events.ThreadWaiting += (sender, args) =>
+                    threadActivity.ThreadWaiting += (sender, args) =>
                     {
                         lock (padlock)
                         {
@@ -291,27 +308,32 @@ namespace Shuttle.Esb.Tests
                 "All dequeued messages have to be within {0} ms of first get message.", msToComplete);
         }
 
-        protected void TestInboxDeferred(ComponentContainer container, string queueUriFormat)
+        protected void TestInboxDeferred(IServiceCollection services, string queueUriFormat)
         {
-            var configuration = DefaultConfiguration(false, 1);
+            var configuration = DefaultConfiguration(1);
 
 			var module = new InboxDeferredModule();
 
-			container.Registry.RegisterInstance(module);
+			services.AddSingleton(module);
 
-            container.Registry.RegisterServiceBus(configuration);
+            services.AddServiceBus(builder =>
+            {
+                builder.Configure(configuration);
+            });
+
+            var serviceProvider = services.BuildServiceProvider();
 
             var messageType = typeof (ReceivePipelineCommand).FullName ?? throw new InvalidOperationException("Could not get the full type name of the ReceivePipelineCommand");
 
-            var queueManager = CreateQueueManager(container.Resolver);
+            var queueManager = CreateQueueService(serviceProvider);
 
-            ConfigureQueues(container.Resolver, configuration, queueUriFormat);
+            ConfigureQueues(serviceProvider, configuration, queueUriFormat);
 
             try
             {
-                module.Assign(container.Resolver.Resolve<IPipelineFactory>());
+                module.Assign(serviceProvider.GetRequiredService<IPipelineFactory>());
 
-                using (var bus = container.Resolver.Resolve<IServiceBus>())
+                using (var bus = serviceProvider.GetRequiredService<IServiceBus>())
                 {
                     bus.Start();
 
@@ -343,22 +365,27 @@ namespace Shuttle.Esb.Tests
             }
         }
 
-        protected void TestInboxExpiry(ComponentContainer container, string queueUriFormat)
+        protected void TestInboxExpiry(IServiceCollection services, string queueUriFormat)
         {
-            var configuration = DefaultConfiguration(false, 1);
+            var configuration = DefaultConfiguration(1);
 
-            container.Registry.RegisterServiceBus(configuration);
+            services.AddServiceBus(builder =>
+            {
+                builder.Configure(configuration);
+            });
 
-            var transportMessageFactory = container.Resolver.Resolve<ITransportMessageFactory>();
-            var serializer = container.Resolver.Resolve<ISerializer>();
+            var serviceProvider = services.BuildServiceProvider();
 
-            var queueManager = CreateQueueManager(container.Resolver);
+            var transportMessageFactory = serviceProvider.GetRequiredService<ITransportMessageFactory>();
+            var serializer = serviceProvider.GetRequiredService<ISerializer>();
+
+            var queueManager = CreateQueueService(serviceProvider);
 
             try
             {
-                ConfigureQueues(container.Resolver, configuration, queueUriFormat);
+                ConfigureQueues(serviceProvider, configuration, queueUriFormat);
 
-                using (var bus = container.Resolver.Resolve<IServiceBus>())
+                using (var bus = serviceProvider.GetRequiredService<IServiceBus>())
                 {
                     bus.Start();
 

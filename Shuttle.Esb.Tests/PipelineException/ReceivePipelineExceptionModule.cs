@@ -2,7 +2,6 @@
 using System.Collections.Generic;
 using NUnit.Framework;
 using Shuttle.Core.Contract;
-using Shuttle.Core.Logging;
 using Shuttle.Core.Pipelines;
 using Shuttle.Core.Reflection;
 
@@ -22,14 +21,11 @@ namespace Shuttle.Esb.Tests
 		private volatile bool _failed;
 		private int _pipelineCount;
 
-		private readonly ILog _log;
-
 		public ReceivePipelineExceptionModule(IServiceBusConfiguration configuration)
 		{
 		    Guard.AgainstNull(configuration, "configuration");
 
             _configuration = configuration;
-            _log = Log.For(this);
 
             AddAssertion("OnGetMessage");
             AddAssertion("OnAfterGetMessage");
@@ -42,7 +38,7 @@ namespace Shuttle.Esb.Tests
 			_pipelineCount += 1;
 			_assertionName = string.Empty;
 
-			_log.Information($"[pipeline obtained] : count = {_pipelineCount}");
+			Console.WriteLine($"[pipeline obtained] : count = {_pipelineCount}");
 		}
 
 		private void PipelineCreated(object sender, PipelineEventArgs e)
@@ -80,7 +76,7 @@ namespace Shuttle.Esb.Tests
 			{
 				_assertions.Add(new ExceptionAssertion(name));
 
-				_log.Information($"[added] : assertion = '{name}'.");
+				Console.WriteLine($"[added] : assertion = '{name}'.");
 			}
 		}
 
@@ -100,7 +96,7 @@ namespace Shuttle.Esb.Tests
 					return;
 				}
 
-				_log.Information($"[invoking] : assertion = '{assertion.Name}'.");
+				Console.WriteLine($"[invoking] : assertion = '{assertion.Name}'.");
 
 				try
 				{
@@ -113,14 +109,14 @@ namespace Shuttle.Esb.Tests
 				}
 				catch (Exception ex)
 				{
-					_log.Error(ex.AllMessages());
+					Console.WriteLine(ex.AllMessages());
 
 					_failed = true;
 				}
 
 				assertion.MarkAsRun();
 
-				_log.Information($"[invoke complete] : assertion = '{assertion.Name}'.");
+				Console.WriteLine($"[invoke complete] : assertion = '{assertion.Name}'.");
 			}
 		}
 

@@ -1,11 +1,6 @@
 using System;
 using System.Collections.Generic;
-using log4net;
-using NUnit.Framework;
-using Shuttle.Core.Container;
-using Shuttle.Core.Log4Net;
-using Shuttle.Core.Logging;
-using Shuttle.Core.Transactions;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Shuttle.Esb.Tests
 {
@@ -21,21 +16,11 @@ namespace Shuttle.Esb.Tests
             "test-error"
         };
 
-        [OneTimeSetUp]
-        protected void FixtureSetUp()
-        {
-            Log.Assign(new Log4NetLog(LogManager.GetLogger(typeof(IntegrationFixture))));
-        }
-
-        protected ServiceBusConfiguration DefaultConfiguration(bool isTransactional, int threadCount)
+        protected ServiceBusConfiguration DefaultConfiguration(int threadCount)
         {
             return new ServiceBusConfiguration
             {
                 ScanForQueueFactories = true,
-                TransactionScope = new TransactionScopeConfiguration
-                {
-                    Enabled = isTransactional
-                },
                 Inbox = new InboxQueueConfiguration
                 {
                     DurationToSleepWhenIdle = new[] { TimeSpan.FromMilliseconds(5) },
@@ -45,21 +30,22 @@ namespace Shuttle.Esb.Tests
             };
         }
 
-        protected QueueManager CreateQueueManager(IComponentResolver resolver)
+        protected QueueService CreateQueueService(IServiceProvider serviceProvider)
         {
-            return (QueueManager)new QueueManager(resolver.Resolve<IUriResolver>()).Configure(resolver);
+            return new QueueService(serviceProvider.GetRequiredService<IQueueFactoryService>(),
+                serviceProvider.GetRequiredService<IUriResolver>());
         }
 
-        protected void AttemptDropQueues(QueueManager queueManager, string queueUriFormat)
+        protected void AttemptDropQueues(QueueService queueService, string queueUriFormat)
         {
             foreach (var queueUri in _queueUris)
             {
-                if (!queueManager.ContainsQueue(queueUri))
+                if (!queueService.Contains(queueUri))
                 {
                     continue;
                 }
 
-                queueManager.GetQueue(string.Format(queueUriFormat, queueUri)).AttemptDrop();
+                queueService.Get(string.Format(queueUriFormat, queueUri)).AttemptDrop();
             }
         }
     }

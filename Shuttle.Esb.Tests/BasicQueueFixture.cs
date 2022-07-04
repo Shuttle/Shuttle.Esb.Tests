@@ -1,21 +1,23 @@
 ﻿using System;
 using System.IO;
 using System.Text;
+using Microsoft.Extensions.DependencyInjection;
 using NUnit.Framework;
 using Shuttle.Core.Contract;
 using Shuttle.Core.Reflection;
+using Shuttle.Core.Transactions;
 
 namespace Shuttle.Esb.Tests
 {
     public class BasicQueueFixture : IntegrationFixture
     {
-        protected void TestSimpleEnqueueAndGetMessage(ComponentContainer container, string workQueueUriFormat)
+        protected void TestSimpleEnqueueAndGetMessage(IServiceCollection services, string workQueueUriFormat)
         {
-            Guard.AgainstNull(container, "container");
+            Guard.AgainstNull(services, nameof(services));
 
-            Configure(container);
+            AddServiceBus(services, false);
 
-            var queueManager = CreateQueueManager(container.Resolver);
+            var queueManager = CreateQueueService(services.BuildServiceProvider());
             var workQueue = CreateWorkQueue(queueManager, workQueueUriFormat);
 
             var stream = new MemoryStream();
@@ -43,18 +45,27 @@ namespace Shuttle.Esb.Tests
             queueManager.AttemptDispose();
         }
 
-        private void Configure(ComponentContainer container)
+        private void AddServiceBus(IServiceCollection services, bool isTransactional)
         {
-            container.Registry.RegisterServiceBus(DefaultConfiguration(true, 1));
+            services.AddTransactionScope(options =>
+            {
+                if (!isTransactional)
+                {
+                    options.Disable();
+                }
+            });
+
+            services.AddSingleton<IServiceBusConfiguration>(DefaultConfiguration(1));
+            services.AddServiceBus();
         }
 
-        protected void TestReleaseMessage(ComponentContainer container, string workQueueUriFormat)
+        protected void TestReleaseMessage(IServiceCollection services, string workQueueUriFormat)
         {
-            Guard.AgainstNull(container, "container");
+            Guard.AgainstNull(services, nameof(services));
 
-            Configure(container);
+            AddServiceBus(services, false);
 
-            var queueManager = CreateQueueManager(container.Resolver);
+            var queueManager = CreateQueueService(services.BuildServiceProvider());
             var workQueue = CreateWorkQueue(queueManager, workQueueUriFormat);
 
             workQueue.Enqueue(new TransportMessage
@@ -84,13 +95,13 @@ namespace Shuttle.Esb.Tests
             queueManager.AttemptDispose();
         }
 
-        protected void TestUnacknowledgedMessage(ComponentContainer container, string workQueueUriFormat)
+        protected void TestUnacknowledgedMessage(IServiceCollection services, string workQueueUriFormat)
         {
-            Guard.AgainstNull(container, "container");
+            Guard.AgainstNull(services, nameof(services));
 
-            Configure(container);
+            AddServiceBus(services, false);
 
-            var queueManager = CreateQueueManager(container.Resolver);
+            var queueManager = CreateQueueService(services.BuildServiceProvider());
             var workQueue = CreateWorkQueue(queueManager, workQueueUriFormat);
 
             workQueue.Enqueue(new TransportMessage
@@ -123,16 +134,11 @@ namespace Shuttle.Esb.Tests
             queueManager.AttemptDispose();
         }
 
-        private IQueue CreateWorkQueue(IQueueManager queueManager, string workQueueUriFormat)
+        private IQueue CreateWorkQueue(IQueueService queueService, string workQueueUriFormat, bool refresh = true)
         {
-            return CreateWorkQueue(queueManager, workQueueUriFormat, true);
-        }
+            Guard.AgainstNull(queueService, nameof(queueService));
 
-        private IQueue CreateWorkQueue(IQueueManager queueManager, string workQueueUriFormat, bool refresh)
-        {
-            Guard.AgainstNull(queueManager, nameof(queueManager));
-
-            var workQueue = queueManager.CreateQueue(string.Format(workQueueUriFormat, "test-work"));
+            var workQueue = queueService.Create(string.Format(workQueueUriFormat, "test-work"));
 
             if (refresh)
             {

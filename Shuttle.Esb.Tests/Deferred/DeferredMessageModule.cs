@@ -1,6 +1,5 @@
 ﻿using System;
 using Shuttle.Core.Contract;
-using Shuttle.Core.Logging;
 using Shuttle.Core.Pipelines;
 
 namespace Shuttle.Esb.Tests
@@ -10,14 +9,11 @@ namespace Shuttle.Esb.Tests
 		IPipelineObserver<OnAfterProcessDeferredMessage>
 	{
 		private readonly object _padlock = new object();
-		private readonly ILog _log;
 	    private readonly int _deferredMessageCount;
 
 	    public DeferredMessageModule(int deferredMessageCount)
 		{
             _deferredMessageCount = deferredMessageCount;
-
-			_log = Log.For(this);
 		}
 
 		public int NumberOfDeferredMessagesReturned { get; private set; }
@@ -37,7 +33,7 @@ namespace Shuttle.Esb.Tests
 
 		public void Execute(OnAfterHandleMessage pipelineEvent)
 		{
-			_log.Information("[OnAfterHandleMessage]");
+			Console.WriteLine("[OnAfterHandleMessage]");
 
 			lock (_padlock)
 			{
@@ -47,8 +43,8 @@ namespace Shuttle.Esb.Tests
 
 		public void Execute(OnAfterProcessDeferredMessage pipelineEvent)
 		{
-			_log.Information(
-			    $"[OnAfterProcessDeferredMessage] : deferred message returned = '{pipelineEvent.Pipeline.State.GetDeferredMessageReturned()}'");
+			Console.WriteLine(
+				$"[OnAfterProcessDeferredMessage] : deferred message returned = '{pipelineEvent.Pipeline.State.GetDeferredMessageReturned()}'");
 
 			if (pipelineEvent.Pipeline.State.GetDeferredMessageReturned())
 			{

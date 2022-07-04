@@ -1,7 +1,8 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 using System.Threading;
+using Microsoft.Extensions.DependencyInjection;
 using NUnit.Framework;
-using Shuttle.Core.Container;
 using Shuttle.Core.Contract;
 using Shuttle.Core.Reflection;
 using Shuttle.Core.Serialization;
@@ -10,35 +11,42 @@ namespace Shuttle.Esb.Tests
 {
     public class IdempotenceFixture : IntegrationFixture
     {
-        protected void TestIdempotenceProcessing(ComponentContainer container, string queueUriFormat,
+        protected void TestIdempotenceProcessing(IServiceCollection services, string queueUriFormat,
             bool isTransactional, bool enqueueUniqueMessages)
         {
-            Guard.AgainstNull(container, "container");
+            Guard.AgainstNull(services, nameof(services));
 
             const int threadCount = 1;
             const int messageCount = 5;
 
             var padlock = new object();
-            var configuration = DefaultConfiguration(isTransactional, threadCount);
+            var configuration = DefaultConfiguration(threadCount);
 
-            container.Registry.RegisterInstance<IMessageRouteProvider>(new IdempotenceMessageRouteProvider());
-            container.Registry.Register<IMessageHandlerInvoker, IdempotenceMessageHandlerInvoker>();
+            services.AddSingleton<IMessageRouteProvider>(new IdempotenceMessageRouteProvider());
+            services.AddSingleton<IMessageHandlerInvoker, IdempotenceMessageHandlerInvoker>();
 
-            container.Registry.RegisterServiceBus(configuration);
+            services.AddServiceBus(builder =>
+            {
+                builder.Configure(configuration);
+            });
 
-            var queueManager = CreateQueueManager(container.Resolver);
+            var serviceProvider = services.BuildServiceProvider();
 
-            ConfigureQueues(container.Resolver, configuration, queueUriFormat);
+            var queueManager = CreateQueueService(serviceProvider);
+            var handleMessageObserver = serviceProvider.GetRequiredService<IHandleMessageObserver>();
+
+            ConfigureQueues(serviceProvider, configuration, queueUriFormat);
 
             try
             {
-                var transportMessageFactory = container.Resolver.Resolve<ITransportMessageFactory>();
-                var serializer = container.Resolver.Resolve<ISerializer>();
-                var events = container.Resolver.Resolve<IServiceBusEvents>();
-                var messageHandlerInvoker =
-                    (IdempotenceMessageHandlerInvoker) container.Resolver.Resolve<IMessageHandlerInvoker>();
+                var transportMessageFactory = serviceProvider.GetRequiredService<ITransportMessageFactory>();
+                var serializer = serviceProvider.GetRequiredService<ISerializer>();
+                var threadActivity = serviceProvider.GetRequiredService<IPipelineThreadActivity>();
 
-                using (var bus = container.Resolver.Resolve<IServiceBus>())
+                var messageHandlerInvoker =
+                    (IdempotenceMessageHandlerInvoker) serviceProvider.GetRequiredService<IMessageHandlerInvoker>();
+
+                using (var bus = serviceProvider.GetRequiredService<IServiceBus>())
                 {
                     if (enqueueUniqueMessages)
                     {
@@ -64,9 +72,9 @@ namespace Shuttle.Esb.Tests
                     var idleThreads = new List<int>();
                     var exception = false;
 
-                    events.HandlerException += (sender, args) => { exception = true; };
+                    handleMessageObserver.HandlerException += (sender, args) => { exception = true; };
 
-                    events.ThreadWaiting += (sender, args) =>
+                    threadActivity.ThreadWaiting += (sender, args) =>
                     {
                         lock (padlock)
                         {
@@ -101,11 +109,11 @@ namespace Shuttle.Esb.Tests
             }
         }
 
-        private void ConfigureQueues(IComponentResolver resolver, IServiceBusConfiguration configuration, string queueUriFormat)
+        private void ConfigureQueues(IServiceProvider serviceProvider, IServiceBusConfiguration configuration, string queueUriFormat)
         {
-            var queueManager = resolver.Resolve<IQueueManager>().Configure(resolver);
-            var inboxWorkQueue = queueManager.GetQueue(string.Format(queueUriFormat, "test-inbox-work"));
-            var errorQueue = queueManager.GetQueue(string.Format(queueUriFormat, "test-error"));
+            var queueManager = serviceProvider.GetRequiredService<IQueueService>();
+            var inboxWorkQueue = queueManager.Get(string.Format(queueUriFormat, "test-inbox-work"));
+            var errorQueue = queueManager.Get(string.Format(queueUriFormat, "test-error"));
 
             configuration.Inbox.WorkQueue = inboxWorkQueue;
             configuration.Inbox.ErrorQueue = errorQueue;

@@ -1,9 +1,8 @@
 ﻿using System;
 using System.Threading;
+using Microsoft.Extensions.DependencyInjection;
 using NUnit.Framework;
-using Shuttle.Core.Container;
 using Shuttle.Core.Contract;
-using Shuttle.Core.Logging;
 using Shuttle.Core.Pipelines;
 using Shuttle.Core.Reflection;
 using Shuttle.Core.Serialization;
@@ -12,37 +11,35 @@ namespace Shuttle.Esb.Tests
 {
     public class DeferredFixture : IntegrationFixture
     {
-        private readonly ILog _log;
-
-        public DeferredFixture()
+        protected void TestDeferredProcessing(IServiceCollection services, string queueUriFormat, bool isTransactional)
         {
-            _log = Log.For(this);
-        }
-
-        protected void TestDeferredProcessing(ComponentContainer container, string queueUriFormat, bool isTransactional)
-        {
-            Guard.AgainstNull(container, "container");
+            Guard.AgainstNull(services, nameof(services));
 
             const int deferredMessageCount = 10;
             const int millisecondsToDefer = 500;
 
             var module = new DeferredMessageModule(deferredMessageCount);
 
-            container.Registry.RegisterInstance(module);
+            services.AddSingleton(module);
 
-            var configuration = DefaultConfiguration(isTransactional, 1);
+            var configuration = DefaultConfiguration(1);
 
-            container.Registry.RegisterServiceBus(configuration);
+            services.AddServiceBus(builder =>
+            {
+                builder.Configure(configuration);
+            });
 
-            var queueManager = CreateQueueManager(container.Resolver);
+            var serviceProvider = services.BuildServiceProvider();
 
-            ConfigureQueues(container.Resolver, configuration, queueUriFormat);
+            var queueManager = CreateQueueService(serviceProvider);
+
+            ConfigureQueues(serviceProvider, configuration, queueUriFormat);
 
             try
             {
-                module.Assign(container.Resolver.Resolve<IPipelineFactory>());
+                module.Assign(serviceProvider.GetRequiredService<IPipelineFactory>());
 
-                using (var bus = container.Resolver.Resolve<IServiceBus>())
+                using (var bus = serviceProvider.GetRequiredService<IServiceBus>())
                 {
                     bus.Start();
 
@@ -50,8 +47,8 @@ namespace Shuttle.Esb.Tests
 
                     for (var i = 0; i < deferredMessageCount; i++)
                     {
-                        EnqueueDeferredMessage(configuration, container.Resolver.Resolve<ITransportMessageFactory>(),
-                            container.Resolver.Resolve<ISerializer>(), ignoreTillDate);
+                        EnqueueDeferredMessage(configuration, serviceProvider.GetRequiredService<ITransportMessageFactory>(),
+                            serviceProvider.GetRequiredService<ISerializer>(), ignoreTillDate);
 
                         ignoreTillDate = ignoreTillDate.AddMilliseconds(millisecondsToDefer);
                     }
@@ -60,7 +57,7 @@ namespace Shuttle.Esb.Tests
                     var timeout = ignoreTillDate.AddSeconds(15);
                     var timedOut = false;
 
-                    _log.Information($"[start wait] : now = '{DateTime.Now}'");
+                    Console.Write($"[start wait] : now = '{DateTime.Now}'");
 
                     // wait for the message to be returned from the deferred queue
                     while (!module.AllMessagesHandled()
@@ -72,12 +69,12 @@ namespace Shuttle.Esb.Tests
                         timedOut = timeout < DateTime.Now;
                     }
 
-                    _log.Information(
+                    Console.Write(
                         $"[end wait] : now = '{DateTime.Now}' / timeout = '{timeout}' / timed out = '{timedOut}'");
 
-                    _log.Information(
+                    Console.Write(
                         $"{module.NumberOfDeferredMessagesReturned} of {deferredMessageCount} deferred messages returned to the inbox.");
-                    _log.Information(
+                    Console.Write(
                         $"{module.NumberOfMessagesHandled} of {deferredMessageCount} deferred messages handled.");
 
                     Assert.IsTrue(module.AllMessagesHandled(), "All the deferred messages were not handled.");
@@ -109,17 +106,17 @@ namespace Shuttle.Esb.Tests
 
             configuration.Inbox.WorkQueue.Enqueue(message, serializer.Serialize(message));
 
-            _log.Information(
+            Console.WriteLine(
                 $"[message enqueued] : name = '{command.Name}' / deferred till date = '{message.IgnoreTillDate}'");
         }
 
-        private void ConfigureQueues(IComponentResolver resolver, IServiceBusConfiguration configuration, string queueUriFormat)
+        private void ConfigureQueues(IServiceProvider serviceProvider, IServiceBusConfiguration configuration, string queueUriFormat)
         {
-            var queueManager = resolver.Resolve<IQueueManager>().Configure(resolver);
+            var queueService = serviceProvider.GetRequiredService<IQueueService>();
 
-            var inboxWorkQueue = queueManager.GetQueue(string.Format(queueUriFormat, "test-inbox-work"));
-            var inboxDeferredQueue = queueManager.GetQueue(string.Format(queueUriFormat, "test-inbox-deferred"));
-            var errorQueue = queueManager.GetQueue(string.Format(queueUriFormat, "test-error"));
+            var inboxWorkQueue = queueService.Get(string.Format(queueUriFormat, "test-inbox-work"));
+            var inboxDeferredQueue = queueService.Get(string.Format(queueUriFormat, "test-inbox-deferred"));
+            var errorQueue = queueService.Get(string.Format(queueUriFormat, "test-error"));
 
             configuration.Inbox.WorkQueue = inboxWorkQueue;
             configuration.Inbox.DeferredQueue = inboxDeferredQueue;
@@ -129,7 +126,7 @@ namespace Shuttle.Esb.Tests
             inboxDeferredQueue.AttemptDrop();
             errorQueue.AttemptDrop();
 
-            queueManager.CreatePhysicalQueues(configuration);
+            queueService.CreatePhysicalQueues(configuration);
 
             inboxWorkQueue.AttemptPurge();
             inboxDeferredQueue.AttemptPurge();

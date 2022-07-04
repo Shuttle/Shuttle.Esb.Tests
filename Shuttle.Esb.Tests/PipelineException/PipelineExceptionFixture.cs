@@ -1,7 +1,7 @@
 using System;
 using System.Threading;
+using Microsoft.Extensions.DependencyInjection;
 using NUnit.Framework;
-using Shuttle.Core.Container;
 using Shuttle.Core.Pipelines;
 using Shuttle.Core.Serialization;
 
@@ -9,22 +9,27 @@ namespace Shuttle.Esb.Tests
 {
     public class PipelineExceptionFixture : IntegrationFixture
     {
-        protected void TestExceptionHandling(ComponentContainer container, string queueUriFormat)
+        protected void TestExceptionHandling(IServiceCollection services, string queueUriFormat)
         {
-            var configuration = DefaultConfiguration(true, 1);
+            var configuration = DefaultConfiguration(1);
 
-            container.Registry.RegisterServiceBus(configuration);
+            services.AddServiceBus(builder =>
+            {
+                builder.Configure(configuration);
+            });
 
             var module = new ReceivePipelineExceptionModule(configuration);
 
-            container.Registry.RegisterInstance(module.GetType(), module);
+            services.AddSingleton(module.GetType(), module);
 
-            module.Assign(container.Resolver.Resolve<IPipelineFactory>());
+            var serviceProvider = services.BuildServiceProvider();
 
-            var queueManager = CreateQueueManager(container.Resolver);
+            module.Assign(serviceProvider.GetRequiredService<IPipelineFactory>());
 
-            var inboxWorkQueue = queueManager.GetQueue(string.Format(queueUriFormat, "test-inbox-work"));
-            var inboxErrorQueue = queueManager.GetQueue(string.Format(queueUriFormat, "test-error"));
+            var queueManager = CreateQueueService(serviceProvider);
+
+            var inboxWorkQueue = queueManager.Get(string.Format(queueUriFormat, "test-inbox-work"));
+            var inboxErrorQueue = queueManager.Get(string.Format(queueUriFormat, "test-error"));
 
             configuration.Inbox =
                 new InboxQueueConfiguration
@@ -42,10 +47,10 @@ namespace Shuttle.Esb.Tests
 
             queueManager.CreatePhysicalQueues(configuration);
 
-            var transportMessageFactory = container.Resolver.Resolve<ITransportMessageFactory>();
-            var serializer = container.Resolver.Resolve<ISerializer>();
+            var transportMessageFactory = serviceProvider.GetRequiredService<ITransportMessageFactory>();
+            var serializer = serviceProvider.GetRequiredService<ISerializer>();
 
-            using (var bus = container.Resolver.Resolve<IServiceBus>())
+            using (var bus = serviceProvider.GetRequiredService<IServiceBus>())
             {
                 var message = transportMessageFactory.Create(new ReceivePipelineCommand(),
                     c => c.WithRecipient(inboxWorkQueue));
