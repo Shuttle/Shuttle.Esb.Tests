@@ -14,7 +14,7 @@ namespace Shuttle.Esb.Tests
 		IPipelineObserver<OnAfterDeserializeTransportMessage>
 	{
 	    private readonly IServiceBusConfiguration _configuration;
-	    private static readonly object Padlock = new object();
+	    private static readonly object Lock = new object();
 
 		private readonly List<ExceptionAssertion> _assertions = new List<ExceptionAssertion>();
 		private string _assertionName;
@@ -55,7 +55,7 @@ namespace Shuttle.Esb.Tests
 
 		private void ThrowException(string name)
 		{
-			lock (Padlock)
+			lock (Lock)
 			{
 				_assertionName = name;
 
@@ -72,7 +72,7 @@ namespace Shuttle.Esb.Tests
 
 		private void AddAssertion(string name)
 		{
-			lock (Padlock)
+			lock (Lock)
 			{
 				_assertions.Add(new ExceptionAssertion(name));
 
@@ -87,7 +87,7 @@ namespace Shuttle.Esb.Tests
 				return;
 			}
 
-			lock (Padlock)
+			lock (Lock)
 			{
 				var assertion = GetAssertion(_assertionName);
 
@@ -127,7 +127,7 @@ namespace Shuttle.Esb.Tests
 
 		public bool ShouldWait()
 		{
-			lock (Padlock)
+			lock (Lock)
 			{
 				return !_failed && _assertions.Find(item => !item.HasRun) != null;
 			}

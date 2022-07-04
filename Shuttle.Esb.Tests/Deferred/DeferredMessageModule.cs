@@ -8,7 +8,7 @@ namespace Shuttle.Esb.Tests
 		IPipelineObserver<OnAfterHandleMessage>,
 		IPipelineObserver<OnAfterProcessDeferredMessage>
 	{
-		private readonly object _padlock = new object();
+		private readonly object _lock = new object();
 	    private readonly int _deferredMessageCount;
 
 	    public DeferredMessageModule(int deferredMessageCount)
@@ -35,7 +35,7 @@ namespace Shuttle.Esb.Tests
 		{
 			Console.WriteLine("[OnAfterHandleMessage]");
 
-			lock (_padlock)
+			lock (_lock)
 			{
 				NumberOfMessagesHandled++;
 			}
@@ -48,7 +48,7 @@ namespace Shuttle.Esb.Tests
 
 			if (pipelineEvent.Pipeline.State.GetDeferredMessageReturned())
 			{
-				lock (_padlock)
+				lock (_lock)
 				{
 					NumberOfDeferredMessagesReturned++;
 				}

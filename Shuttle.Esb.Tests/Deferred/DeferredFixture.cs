@@ -22,12 +22,7 @@ namespace Shuttle.Esb.Tests
 
             services.AddSingleton(module);
 
-            var configuration = DefaultConfiguration(1);
-
-            services.AddServiceBus(builder =>
-            {
-                builder.Configure(configuration);
-            });
+            var configuration = AddServiceBus(services, 1, isTransactional);
 
             var serviceProvider = services.BuildServiceProvider();
 

@@ -21,13 +21,7 @@ namespace Shuttle.Esb.Tests
             const int threadCount = 15;
             var padlock = new object();
 
-            var configuration = DefaultConfiguration(threadCount);
-
-            services.AddSingleton<IServiceBusConfiguration>();
-            services.AddServiceBus(builder =>
-            {
-                builder.Configure(configuration);
-            });
+            var configuration = AddServiceBus(services, threadCount, isTransactional);
 
             var serviceProvider = services.BuildServiceProvider();
 
@@ -147,14 +141,9 @@ namespace Shuttle.Esb.Tests
         protected void TestInboxError(IServiceCollection services, string queueUriFormat, bool isTransactional)
         {
             var padlock = new object();
-            var configuration = DefaultConfiguration(1);
+            var configuration = AddServiceBus(services, 1, isTransactional);
 
             configuration.Inbox.MaximumFailureCount = 0;
-
-            services.AddServiceBus(builder =>
-            {
-                builder.Configure(configuration);
-            });
 
             var serviceProvider = services.BuildServiceProvider();
 
@@ -228,18 +217,12 @@ namespace Shuttle.Esb.Tests
             errorQueue.AttemptPurge();
         }
 
-        protected void TestInboxConcurrency(IServiceCollection services, string workQueueUriFormat, int msToComplete,
-            bool isTransactional)
+        protected void TestInboxConcurrency(IServiceCollection services, string workQueueUriFormat, int msToComplete, bool isTransactional)
         {
             const int threadCount = 1;
 
             var padlock = new object();
-            var configuration = DefaultConfiguration(threadCount);
-
-            services.AddServiceBus(builder =>
-            {
-                builder.Configure(configuration);
-            });
+            var configuration = AddServiceBus(services, threadCount, isTransactional);
 
             var module = new InboxConcurrencyModule();
 

@@ -15,7 +15,7 @@ namespace Shuttle.Esb.Tests
         {
             Guard.AgainstNull(services, nameof(services));
 
-            AddServiceBus(services, false);
+            AddServiceBus(services, 1, false);
 
             var queueManager = CreateQueueService(services.BuildServiceProvider());
             var workQueue = CreateWorkQueue(queueManager, workQueueUriFormat);
@@ -45,25 +45,11 @@ namespace Shuttle.Esb.Tests
             queueManager.AttemptDispose();
         }
 
-        private void AddServiceBus(IServiceCollection services, bool isTransactional)
-        {
-            services.AddTransactionScope(options =>
-            {
-                if (!isTransactional)
-                {
-                    options.Disable();
-                }
-            });
-
-            services.AddSingleton<IServiceBusConfiguration>(DefaultConfiguration(1));
-            services.AddServiceBus();
-        }
-
         protected void TestReleaseMessage(IServiceCollection services, string workQueueUriFormat)
         {
             Guard.AgainstNull(services, nameof(services));
 
-            AddServiceBus(services, false);
+            AddServiceBus(services, 1, false);
 
             var queueManager = CreateQueueService(services.BuildServiceProvider());
             var workQueue = CreateWorkQueue(queueManager, workQueueUriFormat);
@@ -99,7 +85,7 @@ namespace Shuttle.Esb.Tests
         {
             Guard.AgainstNull(services, nameof(services));
 
-            AddServiceBus(services, false);
+            AddServiceBus(services, 1, false);
 
             var queueManager = CreateQueueService(services.BuildServiceProvider());
             var workQueue = CreateWorkQueue(queueManager, workQueueUriFormat);

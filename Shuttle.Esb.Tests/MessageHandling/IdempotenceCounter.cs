@@ -2,13 +2,13 @@
 {
 	public class IdempotenceCounter
 	{
-		private readonly object padlock = new object();
+		private readonly object _lock = new object();
 
 		public int ProcessedCount { get; private set; }
 
 		public void Processed()
 		{
-			lock (padlock)
+			lock (_lock)
 			{
 				ProcessedCount++;
 			}

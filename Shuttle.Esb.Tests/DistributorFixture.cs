@@ -6,6 +6,7 @@ using Shuttle.Core.Contract;
 using Shuttle.Core.Pipelines;
 using Shuttle.Core.Reflection;
 using Shuttle.Core.Serialization;
+using Shuttle.Core.Transactions;
 
 namespace Shuttle.Esb.Tests
 {
@@ -20,6 +21,14 @@ namespace Shuttle.Esb.Tests
             const int messageCount = 12;
 
             var distributorConfiguration = DefaultConfiguration(1);
+
+            distributorServices.AddTransactionScope(options =>
+            {
+                if (!isTransactional)
+                {
+                    options.Disable();
+                }
+            });
 
             distributorServices.AddServiceBus(builder =>
             {
@@ -43,14 +52,20 @@ namespace Shuttle.Esb.Tests
 
                 var workerConfiguration = DefaultConfiguration(1);
 
+                workerServices.AddTransactionScope(options =>
+                {
+                    if (!isTransactional)
+                    {
+                        options.Disable();
+                    }
+                });
+
                 workerServices.AddServiceBus(builder =>
                 {
                     builder.Configure(workerConfiguration);
                 });
 
                 var workerServiceProvider = workerServices.BuildServiceProvider();
-
-                var workerQueueService = workerServiceProvider.GetRequiredService<IQueueService>();
 
                 ConfigureWorkerQueues(workerServiceProvider, workerConfiguration, queueUriFormat);
 

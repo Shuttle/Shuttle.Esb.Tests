@@ -20,15 +20,10 @@ namespace Shuttle.Esb.Tests
             const int messageCount = 5;
 
             var padlock = new object();
-            var configuration = DefaultConfiguration(threadCount);
+            var configuration = AddServiceBus(services, threadCount, isTransactional);
 
             services.AddSingleton<IMessageRouteProvider>(new IdempotenceMessageRouteProvider());
             services.AddSingleton<IMessageHandlerInvoker, IdempotenceMessageHandlerInvoker>();
-
-            services.AddServiceBus(builder =>
-            {
-                builder.Configure(configuration);
-            });
 
             var serviceProvider = services.BuildServiceProvider();
 

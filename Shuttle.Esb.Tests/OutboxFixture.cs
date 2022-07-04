@@ -25,15 +25,6 @@ namespace Shuttle.Esb.Tests
             const int threadCount = 3;
 
             var padlock = new object();
-            var configuration = GetConfiguration(threadCount);
-
-            var messageRouteProvider = new Mock<IMessageRouteProvider>();
-
-            var receiverWorkQueueUri = string.Format(workQueueUriFormat, "test-receiver-work");
-
-            messageRouteProvider.Setup(m => m.GetRouteUris(It.IsAny<string>())).Returns(new[] {receiverWorkQueueUri});
-
-            services.AddSingleton<IMessageRouteProvider>(messageRouteProvider.Object);
 
             services.AddTransactionScope(options =>
             {
@@ -43,10 +34,20 @@ namespace Shuttle.Esb.Tests
                 }
             });
 
+            var configuration = GetConfiguration(threadCount);
+
             services.AddServiceBus(builder =>
             {
                 builder.Configure(configuration);
             });
+
+            var messageRouteProvider = new Mock<IMessageRouteProvider>();
+
+            var receiverWorkQueueUri = string.Format(workQueueUriFormat, "test-receiver-work");
+
+            messageRouteProvider.Setup(m => m.GetRouteUris(It.IsAny<string>())).Returns(new[] {receiverWorkQueueUri});
+
+            services.AddSingleton(messageRouteProvider.Object);
 
             var serviceProvider = services.BuildServiceProvider();
 
@@ -173,7 +174,6 @@ namespace Shuttle.Esb.Tests
         {
             var configuration = new ServiceBusConfiguration
             {
-                ScanForQueueFactories = true,
                 Outbox =
                     new OutboxQueueConfiguration
                     {

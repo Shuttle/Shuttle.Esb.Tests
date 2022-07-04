@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using Microsoft.Extensions.DependencyInjection;
+using Shuttle.Core.Transactions;
 
 namespace Shuttle.Esb.Tests
 {
@@ -20,7 +21,6 @@ namespace Shuttle.Esb.Tests
         {
             return new ServiceBusConfiguration
             {
-                ScanForQueueFactories = true,
                 Inbox = new InboxQueueConfiguration
                 {
                     DurationToSleepWhenIdle = new[] { TimeSpan.FromMilliseconds(5) },
@@ -29,6 +29,27 @@ namespace Shuttle.Esb.Tests
                 }
             };
         }
+
+        protected ServiceBusConfiguration AddServiceBus(IServiceCollection services, int threadCount, bool isTransactional)
+        {
+            services.AddTransactionScope(options =>
+            {
+                if (!isTransactional)
+                {
+                    options.Disable();
+                }
+            });
+
+            var configuration = DefaultConfiguration(threadCount);
+
+            services.AddServiceBus(builder =>
+            {
+                builder.Configure(configuration);
+            });
+
+            return configuration;
+        }
+
 
         protected QueueService CreateQueueService(IServiceProvider serviceProvider)
         {
