@@ -21,7 +21,7 @@ namespace Shuttle.Esb.Tests
 
 		public MemoryQueue(Uri uri)
 		{
-			Guard.AgainstNull(uri, "uri");
+			Guard.AgainstNull(uri, nameof(uri));
 
 			if (!uri.Scheme.Equals(Scheme, StringComparison.InvariantCultureIgnoreCase))
 			{

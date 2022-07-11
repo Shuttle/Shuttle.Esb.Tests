@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using Microsoft.Extensions.DependencyInjection;
+using Shuttle.Core.Contract;
 using Shuttle.Core.Transactions;
 
 namespace Shuttle.Esb.Tests
@@ -17,21 +18,25 @@ namespace Shuttle.Esb.Tests
             "test-error"
         };
 
-        protected ServiceBusConfiguration DefaultConfiguration(int threadCount)
+        protected ServiceBusOptions DefaultServiceBusOptions(int threadCount)
         {
-            return new ServiceBusConfiguration
+            return new ServiceBusOptions
             {
-                Inbox = new InboxQueueConfiguration
+                Inbox = new InboxOptions
                 {
-                    DurationToSleepWhenIdle = new[] { TimeSpan.FromMilliseconds(5) },
-                    DurationToIgnoreOnFailure = new[] { TimeSpan.FromMilliseconds(5) },
+                    DurationToSleepWhenIdle = new List<TimeSpan> { TimeSpan.FromMilliseconds(5) },
+                    DurationToIgnoreOnFailure = new List<TimeSpan> { TimeSpan.FromMilliseconds(5) },
                     ThreadCount = threadCount
                 }
             };
         }
 
-        protected ServiceBusConfiguration AddServiceBus(IServiceCollection services, int threadCount, bool isTransactional)
+        protected ServiceBusOptions AddServiceBus(IServiceCollection services, int threadCount, bool isTransactional,
+            ServiceBusConfiguration serviceBusConfiguration)
         {
+            Guard.AgainstNull(services, nameof(services));
+            Guard.AgainstNull(serviceBusConfiguration, nameof(serviceBusConfiguration));
+            
             services.AddTransactionScope(options =>
             {
                 if (!isTransactional)
@@ -40,14 +45,15 @@ namespace Shuttle.Esb.Tests
                 }
             });
 
-            var configuration = DefaultConfiguration(threadCount);
+            var serviceBusOptions = DefaultServiceBusOptions(threadCount);
 
             services.AddServiceBus(builder =>
             {
-                builder.Configure(configuration);
+                builder.Options = serviceBusOptions;
+                builder.Configuration = serviceBusConfiguration;
             });
 
-            return configuration;
+            return serviceBusOptions;
         }
 
 

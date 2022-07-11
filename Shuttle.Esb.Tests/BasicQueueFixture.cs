@@ -15,7 +15,7 @@ namespace Shuttle.Esb.Tests
         {
             Guard.AgainstNull(services, nameof(services));
 
-            AddServiceBus(services, 1, false);
+            AddServiceBus(services, 1, false, new ServiceBusConfiguration());
 
             var queueManager = CreateQueueService(services.BuildServiceProvider());
             var workQueue = CreateWorkQueue(queueManager, workQueueUriFormat);
@@ -49,7 +49,7 @@ namespace Shuttle.Esb.Tests
         {
             Guard.AgainstNull(services, nameof(services));
 
-            AddServiceBus(services, 1, false);
+            AddServiceBus(services, 1, false, new ServiceBusConfiguration());
 
             var queueManager = CreateQueueService(services.BuildServiceProvider());
             var workQueue = CreateWorkQueue(queueManager, workQueueUriFormat);
@@ -85,7 +85,7 @@ namespace Shuttle.Esb.Tests
         {
             Guard.AgainstNull(services, nameof(services));
 
-            AddServiceBus(services, 1, false);
+            AddServiceBus(services, 1, false, new ServiceBusConfiguration());
 
             var queueManager = CreateQueueService(services.BuildServiceProvider());
             var workQueue = CreateWorkQueue(queueManager, workQueueUriFormat);

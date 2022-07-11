@@ -20,7 +20,10 @@ namespace Shuttle.Esb.Tests
             const int messageCount = 5;
 
             var padlock = new object();
-            var configuration = AddServiceBus(services, threadCount, isTransactional);
+
+            var serviceBusConfiguration = new ServiceBusConfiguration();
+
+            AddServiceBus(services, threadCount, isTransactional, serviceBusConfiguration);
 
             services.AddSingleton<IMessageRouteProvider>(new IdempotenceMessageRouteProvider());
             services.AddSingleton<IMessageHandlerInvoker, IdempotenceMessageHandlerInvoker>();
@@ -30,7 +33,7 @@ namespace Shuttle.Esb.Tests
             var queueManager = CreateQueueService(serviceProvider);
             var handleMessageObserver = serviceProvider.GetRequiredService<IHandleMessageObserver>();
 
-            ConfigureQueues(serviceProvider, configuration, queueUriFormat);
+            ConfigureQueues(serviceProvider, serviceBusConfiguration, queueUriFormat);
 
             try
             {
@@ -39,7 +42,7 @@ namespace Shuttle.Esb.Tests
                 var threadActivity = serviceProvider.GetRequiredService<IPipelineThreadActivity>();
 
                 var messageHandlerInvoker =
-                    (IdempotenceMessageHandlerInvoker) serviceProvider.GetRequiredService<IMessageHandlerInvoker>();
+                    (IdempotenceMessageHandlerInvoker)serviceProvider.GetRequiredService<IMessageHandlerInvoker>();
 
                 using (var bus = serviceProvider.GetRequiredService<IServiceBus>())
                 {
@@ -48,26 +51,29 @@ namespace Shuttle.Esb.Tests
                         for (var i = 0; i < messageCount; i++)
                         {
                             var message = transportMessageFactory.Create(new IdempotenceCommand(),
-                                c => c.WithRecipient(configuration.Inbox.WorkQueue));
+                                c => c.WithRecipient(serviceBusConfiguration.Inbox.WorkQueue));
 
-                            configuration.Inbox.WorkQueue.Enqueue(message, serializer.Serialize(message));
+                            serviceBusConfiguration.Inbox.WorkQueue.Enqueue(message, serializer.Serialize(message));
                         }
                     }
                     else
                     {
                         var message = transportMessageFactory.Create(new IdempotenceCommand(),
-                            c => c.WithRecipient(configuration.Inbox.WorkQueue));
+                            c => c.WithRecipient(serviceBusConfiguration.Inbox.WorkQueue));
 
                         for (var i = 0; i < messageCount; i++)
                         {
-                            configuration.Inbox.WorkQueue.Enqueue(message, serializer.Serialize(message));
+                            serviceBusConfiguration.Inbox.WorkQueue.Enqueue(message, serializer.Serialize(message));
                         }
                     }
 
                     var idleThreads = new List<int>();
                     var exception = false;
 
-                    handleMessageObserver.HandlerException += (sender, args) => { exception = true; };
+                    handleMessageObserver.HandlerException += (sender, args) =>
+                    {
+                        exception = true;
+                    };
 
                     threadActivity.ThreadWaiting += (sender, args) =>
                     {
@@ -89,11 +95,10 @@ namespace Shuttle.Esb.Tests
                         Thread.Sleep(5);
                     }
 
-                    Assert.IsNull(configuration.Inbox.ErrorQueue.GetMessage());
-                    Assert.IsNull(configuration.Inbox.WorkQueue.GetMessage());
+                    Assert.IsNull(serviceBusConfiguration.Inbox.ErrorQueue.GetMessage());
+                    Assert.IsNull(serviceBusConfiguration.Inbox.WorkQueue.GetMessage());
 
                     Assert.AreEqual(enqueueUniqueMessages ? messageCount : 1, messageHandlerInvoker.ProcessedCount);
-
                 }
 
                 AttemptDropQueues(queueManager, queueUriFormat);
@@ -104,14 +109,18 @@ namespace Shuttle.Esb.Tests
             }
         }
 
-        private void ConfigureQueues(IServiceProvider serviceProvider, IServiceBusConfiguration configuration, string queueUriFormat)
+        private void ConfigureQueues(IServiceProvider serviceProvider, ServiceBusConfiguration configuration,
+            string queueUriFormat)
         {
             var queueManager = serviceProvider.GetRequiredService<IQueueService>();
             var inboxWorkQueue = queueManager.Get(string.Format(queueUriFormat, "test-inbox-work"));
             var errorQueue = queueManager.Get(string.Format(queueUriFormat, "test-error"));
 
-            configuration.Inbox.WorkQueue = inboxWorkQueue;
-            configuration.Inbox.ErrorQueue = errorQueue;
+            configuration.Inbox = new InboxConfiguration
+            {
+                WorkQueue = inboxWorkQueue,
+                ErrorQueue = errorQueue
+            };
 
             inboxWorkQueue.AttemptDrop();
             errorQueue.AttemptDrop();

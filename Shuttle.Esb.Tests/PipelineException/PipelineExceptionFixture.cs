@@ -1,6 +1,8 @@
 using System;
+using System.Collections.Generic;
 using System.Threading;
 using Microsoft.Extensions.DependencyInjection;
+using Moq;
 using NUnit.Framework;
 using Shuttle.Core.Pipelines;
 using Shuttle.Core.Serialization;
@@ -11,14 +13,16 @@ namespace Shuttle.Esb.Tests
     {
         protected void TestExceptionHandling(IServiceCollection services, string queueUriFormat)
         {
-            var configuration = DefaultConfiguration(1);
+            var serviceBusOptions = DefaultServiceBusOptions(1);
+            var serviceBusConfiguration = new ServiceBusConfiguration();
 
             services.AddServiceBus(builder =>
             {
-                builder.Configure(configuration);
+                builder.Options = serviceBusOptions;
+                builder.Configuration = serviceBusConfiguration;
             });
 
-            var module = new ReceivePipelineExceptionModule(configuration);
+            var module = new ReceivePipelineExceptionModule(serviceBusConfiguration);
 
             services.AddSingleton(module.GetType(), module);
 
@@ -31,21 +35,25 @@ namespace Shuttle.Esb.Tests
             var inboxWorkQueue = queueManager.Get(string.Format(queueUriFormat, "test-inbox-work"));
             var inboxErrorQueue = queueManager.Get(string.Format(queueUriFormat, "test-error"));
 
-            configuration.Inbox =
-                new InboxQueueConfiguration
+            serviceBusConfiguration.Inbox =
+                new InboxConfiguration
                 {
                     WorkQueue = inboxWorkQueue,
                     ErrorQueue = inboxErrorQueue,
-                    DurationToSleepWhenIdle = new[] {TimeSpan.FromMilliseconds(5)},
-                    DurationToIgnoreOnFailure = new[] {TimeSpan.FromMilliseconds(5)},
-                    MaximumFailureCount = 100,
-                    ThreadCount = 1
                 };
+
+            serviceBusOptions.Inbox = new InboxOptions
+            {
+                DurationToSleepWhenIdle = new List<TimeSpan> { TimeSpan.FromMilliseconds(5) },
+                DurationToIgnoreOnFailure = new List<TimeSpan> { TimeSpan.FromMilliseconds(5) },
+                MaximumFailureCount = 100,
+                ThreadCount = 1
+            };
 
             inboxWorkQueue.Drop();
             inboxErrorQueue.Drop();
 
-            queueManager.CreatePhysicalQueues(configuration);
+            queueManager.CreatePhysicalQueues(serviceBusConfiguration);
 
             var transportMessageFactory = serviceProvider.GetRequiredService<ITransportMessageFactory>();
             var serializer = serviceProvider.GetRequiredService<ISerializer>();

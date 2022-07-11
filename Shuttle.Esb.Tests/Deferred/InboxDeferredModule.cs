@@ -29,7 +29,7 @@ namespace Shuttle.Esb.Tests
 
         public void Assign(IPipelineFactory pipelineFactory)
         {
-            Guard.AgainstNull(pipelineFactory, "pipelineFactory");
+            Guard.AgainstNull(pipelineFactory, nameof(pipelineFactory));
 
             pipelineFactory.PipelineCreated += PipelineCreated;
         }

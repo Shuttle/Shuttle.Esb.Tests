@@ -60,14 +60,9 @@ namespace Shuttle.Esb.Tests
 			return NumberOfMessagesHandled == _deferredMessageCount;
 		}
 
-		public bool AllDeferredMessageReturned()
-		{
-			return NumberOfDeferredMessagesReturned == _deferredMessageCount;
-		}
-
 		public void Assign(IPipelineFactory pipelineFactory)
 		{
-			Guard.AgainstNull(pipelineFactory, "pipelineFactory");
+			Guard.AgainstNull(pipelineFactory, nameof(pipelineFactory));
 
 			pipelineFactory.PipelineCreated += PipelineCreated;
 		}

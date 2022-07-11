@@ -22,27 +22,28 @@ namespace Shuttle.Esb.Tests
 
             services.AddSingleton(module);
 
-            var configuration = AddServiceBus(services, 1, isTransactional);
+            var serviceBusConfiguration = new ServiceBusConfiguration();
+
+            AddServiceBus(services, 1, isTransactional, serviceBusConfiguration);
 
             var serviceProvider = services.BuildServiceProvider();
 
             var queueManager = CreateQueueService(serviceProvider);
 
-            ConfigureQueues(serviceProvider, configuration, queueUriFormat);
+            ConfigureQueues(serviceProvider, serviceBusConfiguration, queueUriFormat);
 
             try
             {
                 module.Assign(serviceProvider.GetRequiredService<IPipelineFactory>());
 
-                using (var bus = serviceProvider.GetRequiredService<IServiceBus>())
+                using (serviceProvider.GetRequiredService<IServiceBus>().Start())
                 {
-                    bus.Start();
-
                     var ignoreTillDate = DateTime.Now.AddSeconds(5);
 
                     for (var i = 0; i < deferredMessageCount; i++)
                     {
-                        EnqueueDeferredMessage(configuration, serviceProvider.GetRequiredService<ITransportMessageFactory>(),
+                        EnqueueDeferredMessage(serviceBusConfiguration,
+                            serviceProvider.GetRequiredService<ITransportMessageFactory>(),
                             serviceProvider.GetRequiredService<ISerializer>(), ignoreTillDate);
 
                         ignoreTillDate = ignoreTillDate.AddMilliseconds(millisecondsToDefer);
@@ -52,7 +53,7 @@ namespace Shuttle.Esb.Tests
                     var timeout = ignoreTillDate.AddSeconds(15);
                     var timedOut = false;
 
-                    Console.Write($"[start wait] : now = '{DateTime.Now}'");
+                    Console.WriteLine($"[start wait] : now = '{DateTime.Now}'");
 
                     // wait for the message to be returned from the deferred queue
                     while (!module.AllMessagesHandled()
@@ -64,19 +65,19 @@ namespace Shuttle.Esb.Tests
                         timedOut = timeout < DateTime.Now;
                     }
 
-                    Console.Write(
+                    Console.WriteLine(
                         $"[end wait] : now = '{DateTime.Now}' / timeout = '{timeout}' / timed out = '{timedOut}'");
 
-                    Console.Write(
+                    Console.WriteLine(
                         $"{module.NumberOfDeferredMessagesReturned} of {deferredMessageCount} deferred messages returned to the inbox.");
-                    Console.Write(
+                    Console.WriteLine(
                         $"{module.NumberOfMessagesHandled} of {deferredMessageCount} deferred messages handled.");
 
                     Assert.IsTrue(module.AllMessagesHandled(), "All the deferred messages were not handled.");
 
-                    Assert.IsTrue(configuration.Inbox.ErrorQueue.IsEmpty());
-                    Assert.IsNull(configuration.Inbox.DeferredQueue.GetMessage());
-                    Assert.IsNull(configuration.Inbox.WorkQueue.GetMessage());
+                    Assert.IsTrue(serviceBusConfiguration.Inbox.ErrorQueue.IsEmpty());
+                    Assert.IsNull(serviceBusConfiguration.Inbox.DeferredQueue.GetMessage());
+                    Assert.IsNull(serviceBusConfiguration.Inbox.WorkQueue.GetMessage());
                 }
 
                 AttemptDropQueues(queueManager, queueUriFormat);
@@ -105,7 +106,8 @@ namespace Shuttle.Esb.Tests
                 $"[message enqueued] : name = '{command.Name}' / deferred till date = '{message.IgnoreTillDate}'");
         }
 
-        private void ConfigureQueues(IServiceProvider serviceProvider, IServiceBusConfiguration configuration, string queueUriFormat)
+        private void ConfigureQueues(IServiceProvider serviceProvider, ServiceBusConfiguration configuration,
+            string queueUriFormat)
         {
             var queueService = serviceProvider.GetRequiredService<IQueueService>();
 
@@ -113,9 +115,12 @@ namespace Shuttle.Esb.Tests
             var inboxDeferredQueue = queueService.Get(string.Format(queueUriFormat, "test-inbox-deferred"));
             var errorQueue = queueService.Get(string.Format(queueUriFormat, "test-error"));
 
-            configuration.Inbox.WorkQueue = inboxWorkQueue;
-            configuration.Inbox.DeferredQueue = inboxDeferredQueue;
-            configuration.Inbox.ErrorQueue = errorQueue;
+            configuration.Inbox = new InboxConfiguration
+            {
+                WorkQueue = inboxWorkQueue,
+                DeferredQueue = inboxDeferredQueue,
+                ErrorQueue = errorQueue
+            };
 
             inboxWorkQueue.AttemptDrop();
             inboxDeferredQueue.AttemptDrop();

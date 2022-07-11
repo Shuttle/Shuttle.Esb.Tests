@@ -34,18 +34,20 @@ namespace Shuttle.Esb.Tests
                 }
             });
 
-            var configuration = GetConfiguration(threadCount);
+            var serviceBusOptions = GetServiceBusOptions(threadCount);
+            var configuration = new ServiceBusConfiguration();
 
             services.AddServiceBus(builder =>
             {
-                builder.Configure(configuration);
+                builder.Options = serviceBusOptions;
+                builder.Configuration = configuration;
             });
 
             var messageRouteProvider = new Mock<IMessageRouteProvider>();
 
             var receiverWorkQueueUri = string.Format(workQueueUriFormat, "test-receiver-work");
 
-            messageRouteProvider.Setup(m => m.GetRouteUris(It.IsAny<string>())).Returns(new[] {receiverWorkQueueUri});
+            messageRouteProvider.Setup(m => m.GetRouteUris(It.IsAny<string>())).Returns(new[] { receiverWorkQueueUri });
 
             services.AddSingleton(messageRouteProvider.Object);
 
@@ -122,7 +124,8 @@ namespace Shuttle.Esb.Tests
                     timedOut = timeout < DateTime.Now;
                 }
 
-                Assert.IsFalse(timedOut, "Timed out before processing {0} errors.  Waiting for {1} threads to be idle.", count, threadCount);
+                Assert.IsFalse(timedOut, "Timed out before processing {0} errors.  Waiting for {1} threads to be idle.",
+                    count, threadCount);
 
                 for (var i = 0; i < count; i++)
                 {
@@ -145,14 +148,18 @@ namespace Shuttle.Esb.Tests
             queueService.Get(string.Format(errorQueueUriFormat, "test-error")).AttemptDrop();
         }
 
-        private void ConfigureQueues(IServiceProvider serviceProvider, IServiceBusConfiguration configuration, string workQueueUriFormat, string errorQueueUriFormat)
+        private void ConfigureQueues(IServiceProvider serviceProvider, ServiceBusConfiguration configuration,
+            string workQueueUriFormat, string errorQueueUriFormat)
         {
             var queueService = serviceProvider.GetRequiredService<IQueueService>();
             var outboxWorkQueue = queueService.Get(string.Format(workQueueUriFormat, "test-outbox-work"));
             var errorQueue = queueService.Get(string.Format(errorQueueUriFormat, "test-error"));
 
-            configuration.Outbox.WorkQueue = outboxWorkQueue;
-            configuration.Outbox.ErrorQueue = errorQueue;
+            configuration.Outbox = new OutboxConfiguration
+            {
+                WorkQueue = outboxWorkQueue,
+                ErrorQueue = errorQueue
+            };
 
             var receiverWorkQueue =
                 queueService.Get(string.Format(workQueueUriFormat, "test-receiver-work"));
@@ -170,19 +177,17 @@ namespace Shuttle.Esb.Tests
             errorQueue.AttemptPurge();
         }
 
-        private ServiceBusConfiguration GetConfiguration(int threadCount)
+        private ServiceBusOptions GetServiceBusOptions(int threadCount)
         {
-            var configuration = new ServiceBusConfiguration
+            return new ServiceBusOptions
             {
                 Outbox =
-                    new OutboxQueueConfiguration
+                    new OutboxOptions
                     {
-                        DurationToSleepWhenIdle = new[] {TimeSpan.FromMilliseconds(5)},
+                        DurationToSleepWhenIdle = new List<TimeSpan> { TimeSpan.FromMilliseconds(5) },
                         ThreadCount = threadCount
                     }
             };
-
-            return configuration;
         }
     }
 }

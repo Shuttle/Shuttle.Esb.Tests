@@ -9,14 +9,14 @@ namespace Shuttle.Esb.Tests
 
         public IQueue Create(Uri uri)
         {
-            Guard.AgainstNull(uri, "uri");
+            Guard.AgainstNull(uri, nameof(uri));
 
             return new MemoryQueue(uri);
         }
 
         public bool CanCreate(Uri uri)
         {
-            Guard.AgainstNull(uri, "uri");
+            Guard.AgainstNull(uri, nameof(uri));
 
             return Scheme.Equals(uri.Scheme, StringComparison.InvariantCultureIgnoreCase);
         }

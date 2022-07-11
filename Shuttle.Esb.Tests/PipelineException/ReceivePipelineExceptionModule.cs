@@ -23,7 +23,7 @@ namespace Shuttle.Esb.Tests
 
 		public ReceivePipelineExceptionModule(IServiceBusConfiguration configuration)
 		{
-		    Guard.AgainstNull(configuration, "configuration");
+		    Guard.AgainstNull(configuration, nameof(configuration));
 
             _configuration = configuration;
 
@@ -155,7 +155,7 @@ namespace Shuttle.Esb.Tests
 
 	    public void Assign(IPipelineFactory pipelineFactory)
 	    {
-            Guard.AgainstNull(pipelineFactory, "pipelineFactory");
+            Guard.AgainstNull(pipelineFactory, nameof(pipelineFactory));
 
             pipelineFactory.PipelineCreated += PipelineCreated;
             pipelineFactory.PipelineReleased += PipelineReleased;
