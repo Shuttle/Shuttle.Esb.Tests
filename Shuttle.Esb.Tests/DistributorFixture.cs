@@ -23,12 +23,9 @@ namespace Shuttle.Esb.Tests
             var distributorServiceBusOptions = DefaultServiceBusOptions(1);
             var distributorServiceBusConfiguration = new ServiceBusConfiguration();
 
-            distributorServices.AddTransactionScope(options =>
+            distributorServices.AddTransactionScope(builder =>
             {
-                if (!isTransactional)
-                {
-                    options.Disable();
-                }
+                builder.Options.Enabled = isTransactional;
             });
 
             distributorServices.AddServiceBus(builder =>
@@ -56,12 +53,9 @@ namespace Shuttle.Esb.Tests
                 var workerServiceBusOptions = DefaultServiceBusOptions(1);
                 var workerServiceBusConfiguration = new ServiceBusConfiguration();
 
-                workerServices.AddTransactionScope(options =>
+                workerServices.AddTransactionScope(builder =>
                 {
-                    if (!isTransactional)
-                    {
-                        options.Disable();
-                    }
+                    builder.Options.Enabled = isTransactional;
                 });
 
                 workerServices.AddServiceBus(builder =>

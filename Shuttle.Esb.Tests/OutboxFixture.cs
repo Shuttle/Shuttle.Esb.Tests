@@ -26,12 +26,9 @@ namespace Shuttle.Esb.Tests
 
             var padlock = new object();
 
-            services.AddTransactionScope(options =>
+            services.AddTransactionScope(builder =>
             {
-                if (!isTransactional)
-                {
-                    options.Disable();
-                }
+                builder.Options.Enabled = isTransactional;
             });
 
             var serviceBusOptions = GetServiceBusOptions(threadCount);

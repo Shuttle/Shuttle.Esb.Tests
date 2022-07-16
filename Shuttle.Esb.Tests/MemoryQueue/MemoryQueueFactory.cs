@@ -13,12 +13,5 @@ namespace Shuttle.Esb.Tests
 
             return new MemoryQueue(uri);
         }
-
-        public bool CanCreate(Uri uri)
-        {
-            Guard.AgainstNull(uri, nameof(uri));
-
-            return Scheme.Equals(uri.Scheme, StringComparison.InvariantCultureIgnoreCase);
-        }
     }
 }

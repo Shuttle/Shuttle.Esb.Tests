@@ -37,12 +37,9 @@ namespace Shuttle.Esb.Tests
             Guard.AgainstNull(services, nameof(services));
             Guard.AgainstNull(serviceBusConfiguration, nameof(serviceBusConfiguration));
             
-            services.AddTransactionScope(options =>
+            services.AddTransactionScope(builder =>
             {
-                if (!isTransactional)
-                {
-                    options.Disable();
-                }
+                builder.Options.Enabled = isTransactional;
             });
 
             var serviceBusOptions = DefaultServiceBusOptions(threadCount);
