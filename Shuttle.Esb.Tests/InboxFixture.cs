@@ -38,11 +38,15 @@ namespace Shuttle.Esb.Tests
     public abstract class InboxFixture : IntegrationFixture
     {
         protected void TestInboxThroughput(IServiceCollection services, string queueUriFormat, int timeoutMilliseconds,
-            int count, bool isTransactional)
+            int messageCount, int threadCount, bool isTransactional)
         {
             Guard.AgainstNull(services, nameof(services));
 
-            const int threadCount = 15;
+            if (threadCount < 1)
+            {
+                threadCount = 1;
+            }
+
             var padlock = new object();
 
             var serviceBusConfiguration = new ServiceBusConfiguration();
@@ -86,7 +90,7 @@ namespace Shuttle.Esb.Tests
                 {
                     ConfigureQueues(serviceProvider, serviceBusConfiguration, queueUriFormat, true);
 
-                    Console.WriteLine("Sending {0} messages to input queue '{1}'.", count,
+                    Console.WriteLine("Sending {0} messages to input queue '{1}'.", messageCount,
                         serviceBusConfiguration.Inbox.WorkQueue.Uri);
 
                     for (var i = 0; i < 5; i++)
@@ -125,7 +129,7 @@ namespace Shuttle.Esb.Tests
 
                     sw.Start();
 
-                    for (var i = 0; i < count; i++)
+                    for (var i = 0; i < messageCount; i++)
                     {
                         var message = transportMessageFactory.Create(new SimpleCommand("command " + i),
                             c => c.WithRecipient(serviceBusConfiguration.Inbox.WorkQueue));
@@ -136,7 +140,7 @@ namespace Shuttle.Esb.Tests
                     sw.Stop();
 
                     Console.WriteLine("Took {0} ms to send {1} messages.  Starting processing.", sw.ElapsedMilliseconds,
-                        count);
+                        messageCount);
 
                     idleThreads.Clear();
                     bus.Start();
@@ -163,11 +167,11 @@ namespace Shuttle.Esb.Tests
 
             var ms = sw.ElapsedMilliseconds;
 
-            Console.WriteLine("Processed {0} messages in {1} ms", count, ms);
+            Console.WriteLine("Processed {0} messages in {1} ms", messageCount, ms);
 
             Assert.IsTrue(ms < timeoutMilliseconds,
                 "Should be able to process at least {0} messages in {1} ms but it ook {2} ms.",
-                count, timeoutMilliseconds, ms);
+                messageCount, timeoutMilliseconds, ms);
         }
 
         protected void TestInboxError(IServiceCollection services, string queueUriFormat, bool hasErrorQueue,
