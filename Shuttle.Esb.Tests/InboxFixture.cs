@@ -8,9 +8,33 @@ using Shuttle.Core.Contract;
 using Shuttle.Core.Pipelines;
 using Shuttle.Core.Reflection;
 using Shuttle.Core.Serialization;
+using Shuttle.Core.Threading;
 
 namespace Shuttle.Esb.Tests
 {
+    internal class ProcessorThreadObserver : IPipelineObserver<OnStarted>
+    {
+        public void Execute(OnStarted pipelineEvent)
+        {
+            var executedThreads = new List<int>();
+
+            foreach (var processorThread in pipelineEvent.Pipeline.State.Get<IProcessorThreadPool>("InboxThreadPool").ProcessorThreads)
+            {
+                processorThread.ProcessorExecuting += (sender, args) =>
+                {
+                    if (executedThreads.Contains(args.ManagedThreadId))
+                    {
+                        return;
+                    }
+
+                    Console.WriteLine($"[executing] : thread id = {args.ManagedThreadId} / name = '{args.Name}'");
+
+                    executedThreads.Add(args.ManagedThreadId);
+                };
+            }
+        }
+    }
+
     public abstract class InboxFixture : IntegrationFixture
     {
         protected void TestInboxThroughput(IServiceCollection services, string queueUriFormat, int timeoutMilliseconds,
@@ -25,22 +49,27 @@ namespace Shuttle.Esb.Tests
 
             AddServiceBus(services, threadCount, isTransactional, serviceBusConfiguration);
 
+            services.AddSingleton<ProcessorThreadObserver, ProcessorThreadObserver>();
+
             var serviceProvider = services.BuildServiceProvider();
 
             var pipelineFactory = serviceProvider.GetRequiredService<IPipelineFactory>();
 
             pipelineFactory.PipelineCreated += delegate(object sender, PipelineEventArgs args)
             {
-                if (!(args.Pipeline.GetType().FullName ?? string.Empty).Equals(typeof(InboxMessagePipeline).FullName,
-                        StringComparison.InvariantCultureIgnoreCase))
+                if (args.Pipeline.GetType() == typeof(InboxMessagePipeline))
                 {
-                    return;
+                    args.Pipeline.GetStage("Read").BeforeEvent<OnGetMessage>().Register<OnStartRead>();
+
+                    // create a new instance since it stores state
+                    args.Pipeline.RegisterObserver(new ThroughputObserver());
                 }
 
-                args.Pipeline.GetStage("Read").BeforeEvent<OnGetMessage>().Register<OnStartRead>();
+                if (args.Pipeline.GetType() == typeof(StartupPipeline))
+                {
+                    args.Pipeline.RegisterObserver(serviceProvider.GetService<ProcessorThreadObserver>());
+                }
 
-                // create a new instance since it stores state
-                args.Pipeline.RegisterObserver(new ThroughputObserver());
             };
 
             var transportMessageFactory = serviceProvider.GetRequiredService<ITransportMessageFactory>();
