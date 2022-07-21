@@ -28,7 +28,7 @@ namespace Shuttle.Esb.Tests
 
             var serviceProvider = services.BuildServiceProvider();
 
-            var queueManager = CreateQueueService(serviceProvider);
+            var queueService = CreateQueueService(serviceProvider);
 
             ConfigureQueues(serviceProvider, serviceBusConfiguration, queueUriFormat);
 
@@ -80,11 +80,11 @@ namespace Shuttle.Esb.Tests
                     Assert.IsNull(serviceBusConfiguration.Inbox.WorkQueue.GetMessage());
                 }
 
-                AttemptDropQueues(queueManager, queueUriFormat);
+                AttemptDropQueues(queueService, queueUriFormat);
             }
             finally
             {
-                queueManager.AttemptDispose();
+                queueService.AttemptDispose();
             }
         }
 

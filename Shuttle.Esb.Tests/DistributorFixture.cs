@@ -133,10 +133,7 @@ namespace Shuttle.Esb.Tests
             configuration.ControlInbox = new ControlInboxConfiguration
             {
                 WorkQueue = queueService.Get(string.Format(queueUriFormat, "test-distributor-control")),
-                ErrorQueue = errorQueue,
-                DurationToSleepWhenIdle = new[] { TimeSpan.FromMilliseconds(5) },
-                DurationToIgnoreOnFailure = new[] { TimeSpan.FromMilliseconds(5) },
-                ThreadCount = 1
+                ErrorQueue = errorQueue
             };
 
             configuration.Inbox.WorkQueue.AttemptDrop();

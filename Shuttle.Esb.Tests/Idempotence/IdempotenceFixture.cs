@@ -30,7 +30,7 @@ namespace Shuttle.Esb.Tests
 
             var serviceProvider = services.BuildServiceProvider();
 
-            var queueManager = CreateQueueService(serviceProvider);
+            var queueService = CreateQueueService(serviceProvider);
             var handleMessageObserver = serviceProvider.GetRequiredService<IHandleMessageObserver>();
 
             ConfigureQueues(serviceProvider, serviceBusConfiguration, queueUriFormat);
@@ -101,20 +101,20 @@ namespace Shuttle.Esb.Tests
                     Assert.AreEqual(enqueueUniqueMessages ? messageCount : 1, messageHandlerInvoker.ProcessedCount);
                 }
 
-                AttemptDropQueues(queueManager, queueUriFormat);
+                AttemptDropQueues(queueService, queueUriFormat);
             }
             finally
             {
-                queueManager.AttemptDispose();
+                queueService.AttemptDispose();
             }
         }
 
         private void ConfigureQueues(IServiceProvider serviceProvider, ServiceBusConfiguration configuration,
             string queueUriFormat)
         {
-            var queueManager = serviceProvider.GetRequiredService<IQueueService>();
-            var inboxWorkQueue = queueManager.Get(string.Format(queueUriFormat, "test-inbox-work"));
-            var errorQueue = queueManager.Get(string.Format(queueUriFormat, "test-error"));
+            var queueService = serviceProvider.GetRequiredService<IQueueService>();
+            var inboxWorkQueue = queueService.Get(string.Format(queueUriFormat, "test-inbox-work"));
+            var errorQueue = queueService.Get(string.Format(queueUriFormat, "test-error"));
 
             configuration.Inbox = new InboxConfiguration
             {
@@ -125,7 +125,7 @@ namespace Shuttle.Esb.Tests
             inboxWorkQueue.AttemptDrop();
             errorQueue.AttemptDrop();
 
-            queueManager.CreatePhysicalQueues(configuration);
+            queueService.CreatePhysicalQueues(configuration);
 
             inboxWorkQueue.AttemptPurge();
             errorQueue.AttemptPurge();

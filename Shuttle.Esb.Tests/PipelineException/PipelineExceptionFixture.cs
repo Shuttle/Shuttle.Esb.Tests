@@ -30,10 +30,10 @@ namespace Shuttle.Esb.Tests
 
             module.Assign(serviceProvider.GetRequiredService<IPipelineFactory>());
 
-            var queueManager = CreateQueueService(serviceProvider);
+            var queueService = CreateQueueService(serviceProvider);
 
-            var inboxWorkQueue = queueManager.Get(string.Format(queueUriFormat, "test-inbox-work"));
-            var inboxErrorQueue = queueManager.Get(string.Format(queueUriFormat, "test-error"));
+            var inboxWorkQueue = queueService.Get(string.Format(queueUriFormat, "test-inbox-work"));
+            var inboxErrorQueue = queueService.Get(string.Format(queueUriFormat, "test-error"));
 
             serviceBusConfiguration.Inbox =
                 new InboxConfiguration
@@ -53,7 +53,7 @@ namespace Shuttle.Esb.Tests
             inboxWorkQueue.Drop();
             inboxErrorQueue.Drop();
 
-            queueManager.CreatePhysicalQueues(serviceBusConfiguration);
+            queueService.CreatePhysicalQueues(serviceBusConfiguration);
 
             var transportMessageFactory = serviceProvider.GetRequiredService<ITransportMessageFactory>();
             var serializer = serviceProvider.GetRequiredService<ISerializer>();

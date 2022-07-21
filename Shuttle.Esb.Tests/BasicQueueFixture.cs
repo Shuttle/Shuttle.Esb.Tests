@@ -17,8 +17,8 @@ namespace Shuttle.Esb.Tests
 
             AddServiceBus(services, 1, false, new ServiceBusConfiguration());
 
-            var queueManager = CreateQueueService(services.BuildServiceProvider());
-            var workQueue = CreateWorkQueue(queueManager, workQueueUriFormat);
+            var queueService = CreateQueueService(services.BuildServiceProvider());
+            var workQueue = CreateWorkQueue(queueService, workQueueUriFormat);
 
             var stream = new MemoryStream();
 
@@ -42,7 +42,7 @@ namespace Shuttle.Esb.Tests
             workQueue.AttemptDrop();
             workQueue.AttemptDispose();
 
-            queueManager.AttemptDispose();
+            queueService.AttemptDispose();
         }
 
         protected void TestReleaseMessage(IServiceCollection services, string workQueueUriFormat)
@@ -51,8 +51,8 @@ namespace Shuttle.Esb.Tests
 
             AddServiceBus(services, 1, false, new ServiceBusConfiguration());
 
-            var queueManager = CreateQueueService(services.BuildServiceProvider());
-            var workQueue = CreateWorkQueue(queueManager, workQueueUriFormat);
+            var queueService = CreateQueueService(services.BuildServiceProvider());
+            var workQueue = CreateWorkQueue(queueService, workQueueUriFormat);
 
             workQueue.Enqueue(new TransportMessage
             {
@@ -78,7 +78,7 @@ namespace Shuttle.Esb.Tests
             workQueue.AttemptDrop();
             workQueue.AttemptDispose();
 
-            queueManager.AttemptDispose();
+            queueService.AttemptDispose();
         }
 
         protected void TestUnacknowledgedMessage(IServiceCollection services, string workQueueUriFormat)
@@ -87,8 +87,8 @@ namespace Shuttle.Esb.Tests
 
             AddServiceBus(services, 1, false, new ServiceBusConfiguration());
 
-            var queueManager = CreateQueueService(services.BuildServiceProvider());
-            var workQueue = CreateWorkQueue(queueManager, workQueueUriFormat);
+            var queueService = CreateQueueService(services.BuildServiceProvider());
+            var workQueue = CreateWorkQueue(queueService, workQueueUriFormat);
 
             workQueue.Enqueue(new TransportMessage
             {
@@ -100,7 +100,7 @@ namespace Shuttle.Esb.Tests
 
             workQueue.AttemptDispose();
 
-            workQueue = CreateWorkQueue(queueManager, workQueueUriFormat, false);
+            workQueue = CreateWorkQueue(queueService, workQueueUriFormat, false);
 
             var receivedMessage = workQueue.GetMessage();
 
@@ -110,14 +110,14 @@ namespace Shuttle.Esb.Tests
             workQueue.Acknowledge(receivedMessage.AcknowledgementToken);
             workQueue.AttemptDispose();
 
-            workQueue = CreateWorkQueue(queueManager, workQueueUriFormat, false);
+            workQueue = CreateWorkQueue(queueService, workQueueUriFormat, false);
 
             Assert.IsNull(workQueue.GetMessage());
 
             workQueue.AttemptDrop();
             workQueue.AttemptDispose();
 
-            queueManager.AttemptDispose();
+            queueService.AttemptDispose();
         }
 
         private IQueue CreateWorkQueue(IQueueService queueService, string workQueueUriFormat, bool refresh = true)
