@@ -1,11 +1,14 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Threading;
 using Microsoft.Extensions.DependencyInjection;
 using NUnit.Framework;
 using Shuttle.Core.Contract;
+using Shuttle.Core.Pipelines;
 using Shuttle.Core.Reflection;
 using Shuttle.Core.Serialization;
+using Shuttle.Core.Transactions;
 
 namespace Shuttle.Esb.Tests
 {
@@ -21,9 +24,7 @@ namespace Shuttle.Esb.Tests
 
             var padlock = new object();
 
-            var serviceBusConfiguration = new ServiceBusConfiguration();
-
-            AddServiceBus(services, threadCount, isTransactional, serviceBusConfiguration);
+            AddServiceBus(services, threadCount, isTransactional, queueUriFormat);
 
             services.AddSingleton<IMessageRouteProvider>(new IdempotenceMessageRouteProvider());
             services.AddSingleton<IMessageHandlerInvoker, IdempotenceMessageHandlerInvoker>();
@@ -33,12 +34,15 @@ namespace Shuttle.Esb.Tests
             var queueService = CreateQueueService(serviceProvider);
             var handleMessageObserver = serviceProvider.GetRequiredService<IHandleMessageObserver>();
 
+            var pipelineFactory = serviceProvider.GetRequiredService<IPipelineFactory>();
+            var transportMessagePipeline = pipelineFactory.GetPipeline<TransportMessagePipeline>();
+            var serviceBusConfiguration = serviceProvider.GetRequiredService<IServiceBusConfiguration>();
+            var serializer = serviceProvider.GetRequiredService<ISerializer>();
+
             ConfigureQueues(serviceProvider, serviceBusConfiguration, queueUriFormat);
 
             try
             {
-                var transportMessageFactory = serviceProvider.GetRequiredService<ITransportMessageFactory>();
-                var serializer = serviceProvider.GetRequiredService<ISerializer>();
                 var threadActivity = serviceProvider.GetRequiredService<IPipelineThreadActivity>();
 
                 var messageHandlerInvoker =
@@ -50,20 +54,29 @@ namespace Shuttle.Esb.Tests
                     {
                         for (var i = 0; i < messageCount; i++)
                         {
-                            var message = transportMessageFactory.Create(new IdempotenceCommand(),
-                                c => c.WithRecipient(serviceBusConfiguration.Inbox.WorkQueue));
+                            transportMessagePipeline.Execute(new IdempotenceCommand(), null, builder =>
+                            {
+                                builder.WithRecipient(serviceBusConfiguration.Inbox.WorkQueue);
+                            });
 
-                            serviceBusConfiguration.Inbox.WorkQueue.Enqueue(message, serializer.Serialize(message));
+                            serviceBusConfiguration.Inbox.WorkQueue.Enqueue(
+                                transportMessagePipeline.State.GetTransportMessage(),
+                                serializer.Serialize(transportMessagePipeline.State.GetTransportMessage()));
                         }
                     }
                     else
                     {
-                        var message = transportMessageFactory.Create(new IdempotenceCommand(),
-                            c => c.WithRecipient(serviceBusConfiguration.Inbox.WorkQueue));
+                        transportMessagePipeline.Execute(new IdempotenceCommand(), null, builder =>
+                        {
+                            builder.WithRecipient(serviceBusConfiguration.Inbox.WorkQueue);
+                        });
 
+                        var transportMessage = transportMessagePipeline.State.GetTransportMessage();
+                        var messageStream = serializer.Serialize(transportMessage);
+                        
                         for (var i = 0; i < messageCount; i++)
                         {
-                            serviceBusConfiguration.Inbox.WorkQueue.Enqueue(message, serializer.Serialize(message));
+                            serviceBusConfiguration.Inbox.WorkQueue.Enqueue(transportMessage, messageStream);
                         }
                     }
 
@@ -109,26 +122,44 @@ namespace Shuttle.Esb.Tests
             }
         }
 
-        private void ConfigureQueues(IServiceProvider serviceProvider, ServiceBusConfiguration configuration,
-            string queueUriFormat)
+        private void ConfigureQueues(IServiceProvider serviceProvider, IServiceBusConfiguration serviceBusConfiguration, string queueUriFormat)
         {
             var queueService = serviceProvider.GetRequiredService<IQueueService>();
             var inboxWorkQueue = queueService.Get(string.Format(queueUriFormat, "test-inbox-work"));
             var errorQueue = queueService.Get(string.Format(queueUriFormat, "test-error"));
 
-            configuration.Inbox = new InboxConfiguration
-            {
-                WorkQueue = inboxWorkQueue,
-                ErrorQueue = errorQueue
-            };
-
             inboxWorkQueue.AttemptDrop();
             errorQueue.AttemptDrop();
 
-            queueService.CreatePhysicalQueues(configuration);
+            serviceBusConfiguration.CreatePhysicalQueues();
 
             inboxWorkQueue.AttemptPurge();
             errorQueue.AttemptPurge();
+        }
+
+        protected void AddServiceBus(IServiceCollection services, int threadCount, bool isTransactional, string queueUriFormat)
+        {
+            Guard.AgainstNull(services, nameof(services));
+
+            services.AddTransactionScope(builder =>
+            {
+                builder.Options.Enabled = isTransactional;
+            });
+
+            services.AddServiceBus(builder =>
+            {
+                builder.Options = new ServiceBusOptions
+                {
+                    Inbox = new InboxOptions
+                    {
+                        WorkQueueUri = string.Format(queueUriFormat, "test-inbox-work"),
+                        ErrorQueueUri = string.Format(queueUriFormat, "test-error"),
+                        DurationToSleepWhenIdle = new List<TimeSpan> { TimeSpan.FromMilliseconds(25) },
+                        DurationToIgnoreOnFailure = new List<TimeSpan> { TimeSpan.FromMilliseconds(25) },
+                        ThreadCount = threadCount
+                    }
+                };
+            });
         }
     }
 }

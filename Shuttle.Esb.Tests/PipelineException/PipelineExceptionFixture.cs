@@ -1,8 +1,8 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Threading;
 using Microsoft.Extensions.DependencyInjection;
-using Moq;
 using NUnit.Framework;
 using Shuttle.Core.Pipelines;
 using Shuttle.Core.Serialization;
@@ -13,34 +13,21 @@ namespace Shuttle.Esb.Tests
     {
         protected void TestExceptionHandling(IServiceCollection services, string queueUriFormat)
         {
-            var serviceBusOptions = DefaultServiceBusOptions(1);
-            var serviceBusConfiguration = new ServiceBusConfiguration();
+            var serviceBusOptions = GetServiceBusOptions(1, queueUriFormat);
 
             services.AddServiceBus(builder =>
             {
                 builder.Options = serviceBusOptions;
-                builder.Configuration = serviceBusConfiguration;
             });
 
-            var module = new ReceivePipelineExceptionModule(serviceBusConfiguration);
-
-            services.AddSingleton(module.GetType(), module);
+            services.AddSingleton<ReceivePipelineExceptionModule>();
 
             var serviceProvider = services.BuildServiceProvider();
-
-            module.Assign(serviceProvider.GetRequiredService<IPipelineFactory>());
 
             var queueService = CreateQueueService(serviceProvider);
 
             var inboxWorkQueue = queueService.Get(string.Format(queueUriFormat, "test-inbox-work"));
             var inboxErrorQueue = queueService.Get(string.Format(queueUriFormat, "test-error"));
-
-            serviceBusConfiguration.Inbox =
-                new InboxConfiguration
-                {
-                    WorkQueue = inboxWorkQueue,
-                    ErrorQueue = inboxErrorQueue,
-                };
 
             serviceBusOptions.Inbox = new InboxOptions
             {
@@ -53,17 +40,25 @@ namespace Shuttle.Esb.Tests
             inboxWorkQueue.Drop();
             inboxErrorQueue.Drop();
 
-            queueService.CreatePhysicalQueues(serviceBusConfiguration);
+            var serviceBusConfiguration = serviceProvider.GetRequiredService<IServiceBusConfiguration>();
 
-            var transportMessageFactory = serviceProvider.GetRequiredService<ITransportMessageFactory>();
+            serviceBusConfiguration.CreatePhysicalQueues();
+
+            var pipelineFactory = serviceProvider.GetRequiredService<IPipelineFactory>();
+            var transportMessagePipeline = pipelineFactory.GetPipeline<TransportMessagePipeline>();
+            var module = serviceProvider.GetRequiredService<ReceivePipelineExceptionModule>();
             var serializer = serviceProvider.GetRequiredService<ISerializer>();
 
             using (var bus = serviceProvider.GetRequiredService<IServiceBus>())
             {
-                var message = transportMessageFactory.Create(new ReceivePipelineCommand(),
-                    c => c.WithRecipient(inboxWorkQueue));
+                transportMessagePipeline.Execute(new ReceivePipelineCommand(), null, builder =>
+                {
+                    builder.WithRecipient(inboxWorkQueue);
+                });
 
-                inboxWorkQueue.Enqueue(message, serializer.Serialize(message));
+                serviceBusConfiguration.Inbox.WorkQueue.Enqueue(
+                    transportMessagePipeline.State.GetTransportMessage(),
+                    serializer.Serialize(transportMessagePipeline.State.GetTransportMessage()));
 
                 Assert.IsFalse(inboxWorkQueue.IsEmpty());
 
@@ -74,6 +69,21 @@ namespace Shuttle.Esb.Tests
                     Thread.Sleep(10);
                 }
             }
+        }
+
+        private ServiceBusOptions GetServiceBusOptions(int threadCount, string queueUriFormat)
+        {
+            return new ServiceBusOptions
+            {
+                Inbox = new InboxOptions
+                {
+                    WorkQueueUri = string.Format(queueUriFormat, "test-inbox-work"),
+                    ErrorQueueUri = string.Format(queueUriFormat, "test-error"),
+                    DurationToSleepWhenIdle = new List<TimeSpan> { TimeSpan.FromMilliseconds(25) },
+                    DurationToIgnoreOnFailure = new List<TimeSpan> { TimeSpan.FromMilliseconds(25) },
+                    ThreadCount = threadCount
+                }
+            };
         }
     }
 }

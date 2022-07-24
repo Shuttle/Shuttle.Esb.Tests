@@ -18,42 +18,6 @@ namespace Shuttle.Esb.Tests
             "test-error"
         };
 
-        protected ServiceBusOptions DefaultServiceBusOptions(int threadCount)
-        {
-            return new ServiceBusOptions
-            {
-                Inbox = new InboxOptions
-                {
-                    DurationToSleepWhenIdle = new List<TimeSpan> { TimeSpan.FromMilliseconds(25) },
-                    DurationToIgnoreOnFailure = new List<TimeSpan> { TimeSpan.FromMilliseconds(25) },
-                    ThreadCount = threadCount
-                }
-            };
-        }
-
-        protected ServiceBusOptions AddServiceBus(IServiceCollection services, int threadCount, bool isTransactional,
-            ServiceBusConfiguration serviceBusConfiguration)
-        {
-            Guard.AgainstNull(services, nameof(services));
-            Guard.AgainstNull(serviceBusConfiguration, nameof(serviceBusConfiguration));
-            
-            services.AddTransactionScope(builder =>
-            {
-                builder.Options.Enabled = isTransactional;
-            });
-
-            var serviceBusOptions = DefaultServiceBusOptions(threadCount);
-
-            services.AddServiceBus(builder =>
-            {
-                builder.Options = serviceBusOptions;
-                builder.Configuration = serviceBusConfiguration;
-            });
-
-            return serviceBusOptions;
-        }
-
-
         protected QueueService CreateQueueService(IServiceProvider serviceProvider)
         {
             return new QueueService(serviceProvider.GetRequiredService<IQueueFactoryService>(),

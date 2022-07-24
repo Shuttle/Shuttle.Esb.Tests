@@ -11,18 +11,22 @@ namespace Shuttle.Esb.Tests
 {
     public abstract class OutboxFixture : IntegrationFixture
     {
-        protected void TestOutboxSending(IServiceCollection services, string workQueueUriFormat, bool isTransactional)
+        protected void TestOutboxSending(IServiceCollection services, string workQueueUriFormat, int threadCount, bool isTransactional)
         {
-            TestOutboxSending(services, workQueueUriFormat, workQueueUriFormat, isTransactional);
+            TestOutboxSending(services, workQueueUriFormat, workQueueUriFormat, threadCount, isTransactional);
         }
 
         protected void TestOutboxSending(IServiceCollection services, string workQueueUriFormat,
-            string errorQueueUriFormat, bool isTransactional)
+            string errorQueueUriFormat, int threadCount, bool isTransactional)
         {
             Guard.AgainstNull(services, nameof(services));
 
             const int count = 100;
-            const int threadCount = 3;
+
+            if (threadCount < 1)
+            {
+                threadCount = 1;
+            }
 
             var padlock = new object();
 
@@ -32,12 +36,10 @@ namespace Shuttle.Esb.Tests
             });
 
             var serviceBusOptions = GetServiceBusOptions(threadCount);
-            var configuration = new ServiceBusConfiguration();
 
             services.AddServiceBus(builder =>
             {
                 builder.Options = serviceBusOptions;
-                builder.Configuration = configuration;
             });
 
             var messageRouteProvider = new Mock<IMessageRouteProvider>();
@@ -52,7 +54,9 @@ namespace Shuttle.Esb.Tests
 
             var queueService = CreateQueueService(serviceProvider);
 
-            ConfigureQueues(serviceProvider, configuration, workQueueUriFormat, errorQueueUriFormat);
+            var serviceBusConfiguration = serviceProvider.GetRequiredService<IServiceBusConfiguration>();
+
+            ConfigureQueues(serviceProvider, workQueueUriFormat, errorQueueUriFormat);
 
             var threadActivity = serviceProvider.GetRequiredService<IPipelineThreadActivity>();
 
@@ -68,7 +72,7 @@ namespace Shuttle.Esb.Tests
                 var receiverWorkQueue = queueService.Get(receiverWorkQueueUri);
                 var timedOut = false;
                 var messageRetrieved = false;
-                var timeout = DateTime.Now.AddSeconds(5);
+                var timeout = DateTime.Now.AddSeconds(30);
 
                 while (!messageRetrieved && !timedOut)
                 {
@@ -93,10 +97,7 @@ namespace Shuttle.Esb.Tests
 
                 threadActivity.ThreadWaiting += (sender, args) =>
                 {
-                    var pipelineName = args.Pipeline.GetType().FullName;
-
-                    if (pipelineName != null &&
-                        !pipelineName.Equals(typeof(OutboxPipeline).FullName))
+                    if (args.Pipeline.GetType() != typeof(OutboxPipeline))
                     {
                         return;
                     }
@@ -145,21 +146,14 @@ namespace Shuttle.Esb.Tests
             queueService.Get(string.Format(errorQueueUriFormat, "test-error")).AttemptDrop();
         }
 
-        private void ConfigureQueues(IServiceProvider serviceProvider, ServiceBusConfiguration configuration,
-            string workQueueUriFormat, string errorQueueUriFormat)
+        private void ConfigureQueues(IServiceProvider serviceProvider, string queueUriFormat, string errorQueueUriFormat)
         {
             var queueService = serviceProvider.GetRequiredService<IQueueService>();
-            var outboxWorkQueue = queueService.Get(string.Format(workQueueUriFormat, "test-outbox-work"));
+            var outboxWorkQueue = queueService.Get(string.Format(queueUriFormat, "test-outbox-work"));
             var errorQueue = queueService.Get(string.Format(errorQueueUriFormat, "test-error"));
 
-            configuration.Outbox = new OutboxConfiguration
-            {
-                WorkQueue = outboxWorkQueue,
-                ErrorQueue = errorQueue
-            };
-
             var receiverWorkQueue =
-                queueService.Get(string.Format(workQueueUriFormat, "test-receiver-work"));
+                queueService.Get(string.Format(queueUriFormat, "test-receiver-work"));
 
             outboxWorkQueue.AttemptDrop();
             receiverWorkQueue.AttemptDrop();
@@ -181,7 +175,7 @@ namespace Shuttle.Esb.Tests
                 Outbox =
                     new OutboxOptions
                     {
-                        DurationToSleepWhenIdle = new List<TimeSpan> { TimeSpan.FromMilliseconds(5) },
+                        DurationToSleepWhenIdle = new List<TimeSpan> { TimeSpan.FromMilliseconds(25) },
                         ThreadCount = threadCount
                     }
             };

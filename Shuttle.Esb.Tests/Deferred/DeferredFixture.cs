@@ -1,4 +1,6 @@
 ﻿using System;
+using System.Collections.Generic;
+using System.IO;
 using System.Threading;
 using Microsoft.Extensions.DependencyInjection;
 using NUnit.Framework;
@@ -6,6 +8,7 @@ using Shuttle.Core.Contract;
 using Shuttle.Core.Pipelines;
 using Shuttle.Core.Reflection;
 using Shuttle.Core.Serialization;
+using Shuttle.Core.Transactions;
 
 namespace Shuttle.Esb.Tests
 {
@@ -22,11 +25,14 @@ namespace Shuttle.Esb.Tests
 
             services.AddSingleton(module);
 
-            var serviceBusConfiguration = new ServiceBusConfiguration();
-
-            AddServiceBus(services, 1, isTransactional, serviceBusConfiguration);
+            AddServiceBus(services, 1, isTransactional, queueUriFormat);
 
             var serviceProvider = services.BuildServiceProvider();
+
+            var pipelineFactory = serviceProvider.GetRequiredService<IPipelineFactory>();
+            var transportMessagePipeline = pipelineFactory.GetPipeline<TransportMessagePipeline>();
+            var serviceBusConfiguration = serviceProvider.GetRequiredService<IServiceBusConfiguration>();
+            var serializer = serviceProvider.GetRequiredService<ISerializer>();
 
             var queueService = CreateQueueService(serviceProvider);
 
@@ -42,9 +48,7 @@ namespace Shuttle.Esb.Tests
 
                     for (var i = 0; i < deferredMessageCount; i++)
                     {
-                        EnqueueDeferredMessage(serviceBusConfiguration,
-                            serviceProvider.GetRequiredService<ITransportMessageFactory>(),
-                            serviceProvider.GetRequiredService<ISerializer>(), ignoreTillDate);
+                        EnqueueDeferredMessage(serviceBusConfiguration, transportMessagePipeline, serializer, ignoreTillDate);
 
                         ignoreTillDate = ignoreTillDate.AddMilliseconds(millisecondsToDefer);
                     }
@@ -88,25 +92,29 @@ namespace Shuttle.Esb.Tests
             }
         }
 
-        private void EnqueueDeferredMessage(IServiceBusConfiguration configuration,
-            ITransportMessageFactory transportMessageFactory, ISerializer serializer, DateTime ignoreTillDate)
+        private void EnqueueDeferredMessage(IServiceBusConfiguration serviceBusConfiguration,
+            TransportMessagePipeline transportMessagePipeline, ISerializer serializer, DateTime ignoreTillDate)
         {
             var command = new SimpleCommand
             {
                 Name = Guid.NewGuid().ToString()
             };
 
-            var message = transportMessageFactory.Create(command, c => c
-                .Defer(ignoreTillDate)
-                .WithRecipient(configuration.Inbox.WorkQueue), null);
+            transportMessagePipeline.Execute(command, null, builder =>
+            {
+                builder.Defer(ignoreTillDate);
+                builder.WithRecipient(serviceBusConfiguration.Inbox.WorkQueue);
+            });
 
-            configuration.Inbox.WorkQueue.Enqueue(message, serializer.Serialize(message));
+            serviceBusConfiguration.Inbox.WorkQueue.Enqueue(
+                transportMessagePipeline.State.GetTransportMessage(),
+                serializer.Serialize(transportMessagePipeline.State.GetTransportMessage()));
 
             Console.WriteLine(
-                $"[message enqueued] : name = '{command.Name}' / deferred till date = '{message.IgnoreTillDate}'");
+                $"[message enqueued] : name = '{command.Name}' / deferred till date = '{ignoreTillDate}'");
         }
 
-        private void ConfigureQueues(IServiceProvider serviceProvider, ServiceBusConfiguration configuration,
+        private void ConfigureQueues(IServiceProvider serviceProvider, IServiceBusConfiguration serviceBusConfiguration,
             string queueUriFormat)
         {
             var queueService = serviceProvider.GetRequiredService<IQueueService>();
@@ -115,22 +123,49 @@ namespace Shuttle.Esb.Tests
             var inboxDeferredQueue = queueService.Get(string.Format(queueUriFormat, "test-inbox-deferred"));
             var errorQueue = queueService.Get(string.Format(queueUriFormat, "test-error"));
 
-            configuration.Inbox = new InboxConfiguration
-            {
-                WorkQueue = inboxWorkQueue,
-                DeferredQueue = inboxDeferredQueue,
-                ErrorQueue = errorQueue
-            };
-
             inboxWorkQueue.AttemptDrop();
             inboxDeferredQueue.AttemptDrop();
             errorQueue.AttemptDrop();
 
-            queueService.CreatePhysicalQueues(configuration);
+            serviceBusConfiguration.CreatePhysicalQueues();
 
             inboxWorkQueue.AttemptPurge();
             inboxDeferredQueue.AttemptPurge();
             errorQueue.AttemptPurge();
         }
+        protected ServiceBusOptions AddServiceBus(IServiceCollection services, int threadCount, bool isTransactional, string queueUriFormat)
+        {
+            Guard.AgainstNull(services, nameof(services));
+
+            services.AddTransactionScope(builder =>
+            {
+                builder.Options.Enabled = isTransactional;
+            });
+
+            var serviceBusOptions = GetServiceBusOptions(threadCount, queueUriFormat);
+
+            services.AddServiceBus(builder =>
+            {
+                builder.Options = serviceBusOptions;
+            });
+
+            return serviceBusOptions;
+        }
+        private ServiceBusOptions GetServiceBusOptions(int threadCount, string queueUriFormat)
+        {
+            return new ServiceBusOptions
+            {
+                Inbox = new InboxOptions
+                {
+                    WorkQueueUri = string.Format(queueUriFormat, "test-inbox-work"),
+                    DeferredQueueUri = string.Format(queueUriFormat, "test-inbox-deferred"),
+                    ErrorQueueUri = string.Format(queueUriFormat, "test-error"),
+                    DurationToSleepWhenIdle = new List<TimeSpan> { TimeSpan.FromMilliseconds(25) },
+                    DurationToIgnoreOnFailure = new List<TimeSpan> { TimeSpan.FromMilliseconds(25) },
+                    ThreadCount = threadCount
+                }
+            };
+        }
+
     }
 }
