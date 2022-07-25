@@ -22,8 +22,6 @@ namespace Shuttle.Esb.Tests
 
             const int messageCount = 12;
 
-            var distributorServiceBusOptions = GetDistributorServiceBusOptions(1, queueUriFormat);
-
             distributorServices.AddTransactionScope(builder =>
             {
                 builder.Options.Enabled = isTransactional;
@@ -31,7 +29,25 @@ namespace Shuttle.Esb.Tests
 
             distributorServices.AddServiceBus(builder =>
             {
-                builder.Options = distributorServiceBusOptions;
+                builder.Options = new ServiceBusOptions
+                {
+                    Inbox = new InboxOptions
+                    {
+                        Distribute = true,
+                        WorkQueueUri = string.Format(queueUriFormat, "test-distributor-work"),
+                        ErrorQueueUri = string.Format(queueUriFormat, "test-error"),
+                        DurationToSleepWhenIdle = new List<TimeSpan> { TimeSpan.FromMilliseconds(25) },
+                        DurationToIgnoreOnFailure = new List<TimeSpan> { TimeSpan.FromMilliseconds(25) },
+                        ThreadCount = 1
+                    },
+                    ControlInbox = new ControlInboxOptions
+                    {
+                        WorkQueueUri = string.Format(queueUriFormat, "test-distributor-control"),
+                        DurationToSleepWhenIdle = new List<TimeSpan> { TimeSpan.FromMilliseconds(25) },
+                        DurationToIgnoreOnFailure = new List<TimeSpan> { TimeSpan.FromMilliseconds(25) },
+                        ThreadCount = 1
+                    }
+                };
             });
 
             var distributorServiceProvider = distributorServices.BuildServiceProvider();
@@ -48,8 +64,6 @@ namespace Shuttle.Esb.Tests
 
             workerServices.AddSingleton(module);
 
-            var workerServiceBusOptions = GetWorkerServiceBusOptions(1, queueUriFormat);
-
             workerServices.AddTransactionScope(builder =>
             {
                 builder.Options.Enabled = isTransactional;
@@ -57,7 +71,21 @@ namespace Shuttle.Esb.Tests
 
             workerServices.AddServiceBus(builder =>
             {
-                builder.Options = workerServiceBusOptions;
+                builder.Options = new ServiceBusOptions
+                {
+                    Inbox = new InboxOptions
+                    {
+                        WorkQueueUri = string.Format(queueUriFormat, "test-worker-work"),
+                        ErrorQueueUri = string.Format(queueUriFormat, "test-error"),
+                        DurationToSleepWhenIdle = new List<TimeSpan> { TimeSpan.FromMilliseconds(25) },
+                        DurationToIgnoreOnFailure = new List<TimeSpan> { TimeSpan.FromMilliseconds(25) },
+                        ThreadCount = 1
+                    },
+                    Worker = new WorkerOptions
+                    {
+                        DistributorControlInboxWorkQueueUri = string.Format(queueUriFormat, "test-distributor-control")
+                    }
+                };
             });
 
             var workerServiceProvider = workerServices.BuildServiceProvider();
@@ -142,47 +170,6 @@ namespace Shuttle.Esb.Tests
             serviceBusConfiguration.CreatePhysicalQueues();
 
             serviceBusConfiguration.Inbox.WorkQueue.AttemptPurge();
-        }
-
-        private ServiceBusOptions GetDistributorServiceBusOptions(int threadCount, string queueUriFormat)
-        {
-            return new ServiceBusOptions
-            {
-                Inbox = new InboxOptions
-                {
-                    WorkQueueUri = string.Format(queueUriFormat, "test-distributor-work"),
-                    ErrorQueueUri = string.Format(queueUriFormat, "test-error"),
-                    DurationToSleepWhenIdle = new List<TimeSpan> { TimeSpan.FromMilliseconds(25) },
-                    DurationToIgnoreOnFailure = new List<TimeSpan> { TimeSpan.FromMilliseconds(25) },
-                    ThreadCount = threadCount
-                },
-                ControlInbox = new ControlInboxOptions
-                {
-                    WorkQueueUri = string.Format(queueUriFormat, "test-distributor-control"),
-                    DurationToSleepWhenIdle = new List<TimeSpan> { TimeSpan.FromMilliseconds(25) },
-                    DurationToIgnoreOnFailure = new List<TimeSpan> { TimeSpan.FromMilliseconds(25) },
-                    ThreadCount = 1
-                }
-            };
-        }
-
-        private ServiceBusOptions GetWorkerServiceBusOptions(int threadCount, string queueUriFormat)
-        {
-            return new ServiceBusOptions
-            {
-                Inbox = new InboxOptions
-                {
-                    WorkQueueUri = string.Format(queueUriFormat, "test-worker-work"),
-                    ErrorQueueUri = string.Format(queueUriFormat, "test-error"),
-                    DurationToSleepWhenIdle = new List<TimeSpan> { TimeSpan.FromMilliseconds(25) },
-                    DurationToIgnoreOnFailure = new List<TimeSpan> { TimeSpan.FromMilliseconds(25) },
-                    ThreadCount = threadCount
-                },
-                Worker = new WorkerOptions
-                {
-                    DistributorControlInboxWorkQueueUri = string.Format(queueUriFormat, "test-distributor-control")
-                }
-            };
         }
 
         public class WorkerModule : IPipelineObserver<OnAfterHandleMessage>
