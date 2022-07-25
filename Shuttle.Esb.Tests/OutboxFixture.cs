@@ -35,11 +35,18 @@ namespace Shuttle.Esb.Tests
                 builder.Options.Enabled = isTransactional;
             });
 
-            var serviceBusOptions = GetServiceBusOptions(threadCount);
-
             services.AddServiceBus(builder =>
             {
-                builder.Options = serviceBusOptions;
+                builder.Options = new ServiceBusOptions
+                {
+                    Outbox =
+                        new OutboxOptions
+                        {
+                            WorkQueueUri = string.Format(workQueueUriFormat, "test-outbox-work"),
+                DurationToSleepWhenIdle = new List<TimeSpan> { TimeSpan.FromMilliseconds(25) },
+                            ThreadCount = threadCount
+                        }
+                };
             });
 
             var messageRouteProvider = new Mock<IMessageRouteProvider>();
@@ -53,8 +60,6 @@ namespace Shuttle.Esb.Tests
             var serviceProvider = services.BuildServiceProvider();
 
             var queueService = CreateQueueService(serviceProvider);
-
-            var serviceBusConfiguration = serviceProvider.GetRequiredService<IServiceBusConfiguration>();
 
             ConfigureQueues(serviceProvider, workQueueUriFormat, errorQueueUriFormat);
 
@@ -122,7 +127,7 @@ namespace Shuttle.Esb.Tests
                     timedOut = timeout < DateTime.Now;
                 }
 
-                Assert.IsFalse(timedOut, "Timed out before processing {0} errors.  Waiting for {1} threads to be idle.",
+                Assert.IsFalse(timedOut, "Timed out before processing {0} errors.  Waiting for {1} threads to become idle.",
                     count, threadCount);
 
                 for (var i = 0; i < count; i++)
@@ -166,19 +171,6 @@ namespace Shuttle.Esb.Tests
             outboxWorkQueue.AttemptPurge();
             receiverWorkQueue.AttemptPurge();
             errorQueue.AttemptPurge();
-        }
-
-        private ServiceBusOptions GetServiceBusOptions(int threadCount)
-        {
-            return new ServiceBusOptions
-            {
-                Outbox =
-                    new OutboxOptions
-                    {
-                        DurationToSleepWhenIdle = new List<TimeSpan> { TimeSpan.FromMilliseconds(25) },
-                        ThreadCount = threadCount
-                    }
-            };
         }
     }
 }

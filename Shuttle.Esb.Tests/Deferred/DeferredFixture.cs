@@ -25,7 +25,7 @@ namespace Shuttle.Esb.Tests
 
             services.AddSingleton(module);
 
-            AddServiceBus(services, 1, isTransactional, queueUriFormat);
+            var serviceBusOptions = AddServiceBus(services, 1, isTransactional, queueUriFormat);
 
             var serviceProvider = services.BuildServiceProvider();
 
@@ -35,6 +35,8 @@ namespace Shuttle.Esb.Tests
             var serializer = serviceProvider.GetRequiredService<ISerializer>();
 
             var queueService = CreateQueueService(serviceProvider);
+
+            serviceBusConfiguration.Configure(serviceBusOptions);
 
             ConfigureQueues(serviceProvider, serviceBusConfiguration, queueUriFormat);
 

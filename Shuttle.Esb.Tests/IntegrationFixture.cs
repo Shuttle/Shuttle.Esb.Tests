@@ -15,6 +15,7 @@ namespace Shuttle.Esb.Tests
             "test-distributor-control",
             "test-inbox-work",
             "test-inbox-deferred",
+            "test-outbox-work",
             "test-error"
         };
 

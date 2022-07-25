@@ -4,6 +4,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Threading;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 using NUnit.Framework;
 using Shuttle.Core.Contract;
 using Shuttle.Core.Pipelines;
@@ -52,7 +53,7 @@ namespace Shuttle.Esb.Tests
 
             var padlock = new object();
 
-            AddServiceBus(services, threadCount, isTransactional, queueUriFormat);
+            var serviceBusOptions = AddServiceBus(services, true, threadCount, isTransactional, queueUriFormat);
 
             services.AddSingleton<ProcessorThreadObserver, ProcessorThreadObserver>();
 
@@ -89,6 +90,8 @@ namespace Shuttle.Esb.Tests
             {
                 using (var bus = serviceProvider.GetRequiredService<IServiceBus>())
                 {
+                    serviceBusConfiguration.Configure(serviceBusOptions);
+
                     ConfigureQueues(serviceProvider, serviceBusConfiguration, queueUriFormat, true);
 
                     Console.WriteLine("Sending {0} messages to input queue '{1}'.", messageCount,
@@ -129,6 +132,8 @@ namespace Shuttle.Esb.Tests
                     }
 
                     bus.Stop();
+
+                    serviceBusConfiguration.Configure(serviceBusOptions);
 
                     ConfigureQueues(serviceProvider, serviceBusConfiguration, queueUriFormat, true);
 
@@ -187,7 +192,7 @@ namespace Shuttle.Esb.Tests
             bool isTransactional)
         {
             var padlock = new object();
-            var serviceBusOptions = AddServiceBus(services, 1, isTransactional, queueUriFormat);
+            var serviceBusOptions = AddServiceBus(services, hasErrorQueue, 1, isTransactional, queueUriFormat);
 
             serviceBusOptions.Inbox.MaximumFailureCount = 0;
 
@@ -203,6 +208,8 @@ namespace Shuttle.Esb.Tests
 
             try
             {
+                serviceBusConfiguration.Configure(serviceBusOptions);
+
                 ConfigureQueues(serviceProvider, serviceBusConfiguration, queueUriFormat, hasErrorQueue);
 
                 using (var bus = serviceProvider.GetRequiredService<IServiceBus>())
@@ -225,7 +232,6 @@ namespace Shuttle.Esb.Tests
                             threadWaitingCount++;
                         }
                     };
-
 
                     bus.Start();
 
@@ -286,7 +292,7 @@ namespace Shuttle.Esb.Tests
 
             var padlock = new object();
 
-            AddServiceBus(services, threadCount, isTransactional, queueUriFormat);
+            var serviceBusOptions = AddServiceBus(services, true, threadCount, isTransactional, queueUriFormat);
 
             var module = new InboxConcurrencyModule();
 
@@ -306,6 +312,8 @@ namespace Shuttle.Esb.Tests
 
             try
             {
+                serviceBusConfiguration.Configure(serviceBusOptions);
+
                 ConfigureQueues(serviceProvider, serviceBusConfiguration, queueUriFormat, true);
 
                 using (var bus = serviceProvider.GetRequiredService<IServiceBus>())
@@ -364,7 +372,7 @@ namespace Shuttle.Esb.Tests
 
         protected void TestInboxDeferred(IServiceCollection services, string queueUriFormat)
         {
-            var serviceBusOptions = GetServiceBusOptions(1, queueUriFormat);
+            var serviceBusOptions = GetServiceBusOptions(true, 1, queueUriFormat);
 
             var module = new InboxDeferredModule();
 
@@ -384,6 +392,8 @@ namespace Shuttle.Esb.Tests
                                   "Could not get the full type name of the ReceivePipelineCommand");
 
             var queueService = CreateQueueService(serviceProvider);
+
+            serviceBusConfiguration.Configure(serviceBusOptions);
 
             ConfigureQueues(serviceProvider, serviceBusConfiguration, queueUriFormat, true);
 
@@ -429,7 +439,7 @@ namespace Shuttle.Esb.Tests
 
         protected void TestInboxExpiry(IServiceCollection services, string queueUriFormat, TimeSpan expiryDuration)
         {
-            GetServiceBusOptions(1, queueUriFormat);
+            GetServiceBusOptions(true, 1, queueUriFormat);
 
             services.AddServiceBus();
 
@@ -476,14 +486,14 @@ namespace Shuttle.Esb.Tests
             }
         }
 
-        private ServiceBusOptions GetServiceBusOptions(int threadCount, string queueUriFormat)
+        private ServiceBusOptions GetServiceBusOptions(bool hasErrorQueue, int threadCount, string queueUriFormat)
         {
             return new ServiceBusOptions
             {
                 Inbox = new InboxOptions
                 {
                     WorkQueueUri = string.Format(queueUriFormat, "test-inbox-work"),
-                    ErrorQueueUri = string.Format(queueUriFormat, "test-error"),
+                    ErrorQueueUri = hasErrorQueue ? string.Format(queueUriFormat, "test-error") : string.Empty,
                     DurationToSleepWhenIdle = new List<TimeSpan> { TimeSpan.FromMilliseconds(25) },
                     DurationToIgnoreOnFailure = new List<TimeSpan> { TimeSpan.FromMilliseconds(25) },
                     ThreadCount = threadCount
@@ -491,7 +501,8 @@ namespace Shuttle.Esb.Tests
             };
         }
 
-        protected ServiceBusOptions AddServiceBus(IServiceCollection services, int threadCount, bool isTransactional, string queueUriFormat)
+        protected ServiceBusOptions AddServiceBus(IServiceCollection services, bool hasErrorQueue, int threadCount,
+            bool isTransactional, string queueUriFormat)
         {
             Guard.AgainstNull(services, nameof(services));
 
@@ -500,7 +511,7 @@ namespace Shuttle.Esb.Tests
                 builder.Options.Enabled = isTransactional;
             });
 
-            var serviceBusOptions = GetServiceBusOptions(threadCount, queueUriFormat);
+            var serviceBusOptions = GetServiceBusOptions(hasErrorQueue, threadCount, queueUriFormat);
 
             services.AddServiceBus(builder =>
             {

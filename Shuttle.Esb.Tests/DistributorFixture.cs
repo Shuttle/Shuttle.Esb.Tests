@@ -27,27 +27,29 @@ namespace Shuttle.Esb.Tests
                 builder.Options.Enabled = isTransactional;
             });
 
+            var distributorServiceBusOptions = new ServiceBusOptions
+            {
+                Inbox = new InboxOptions
+                {
+                    Distribute = true,
+                    WorkQueueUri = string.Format(queueUriFormat, "test-distributor-work"),
+                    ErrorQueueUri = string.Format(queueUriFormat, "test-error"),
+                    DurationToSleepWhenIdle = new List<TimeSpan> { TimeSpan.FromMilliseconds(25) },
+                    DurationToIgnoreOnFailure = new List<TimeSpan> { TimeSpan.FromMilliseconds(25) },
+                    ThreadCount = 1
+                },
+                ControlInbox = new ControlInboxOptions
+                {
+                    WorkQueueUri = string.Format(queueUriFormat, "test-distributor-control"),
+                    DurationToSleepWhenIdle = new List<TimeSpan> { TimeSpan.FromMilliseconds(25) },
+                    DurationToIgnoreOnFailure = new List<TimeSpan> { TimeSpan.FromMilliseconds(25) },
+                    ThreadCount = 1
+                }
+            };
+
             distributorServices.AddServiceBus(builder =>
             {
-                builder.Options = new ServiceBusOptions
-                {
-                    Inbox = new InboxOptions
-                    {
-                        Distribute = true,
-                        WorkQueueUri = string.Format(queueUriFormat, "test-distributor-work"),
-                        ErrorQueueUri = string.Format(queueUriFormat, "test-error"),
-                        DurationToSleepWhenIdle = new List<TimeSpan> { TimeSpan.FromMilliseconds(25) },
-                        DurationToIgnoreOnFailure = new List<TimeSpan> { TimeSpan.FromMilliseconds(25) },
-                        ThreadCount = 1
-                    },
-                    ControlInbox = new ControlInboxOptions
-                    {
-                        WorkQueueUri = string.Format(queueUriFormat, "test-distributor-control"),
-                        DurationToSleepWhenIdle = new List<TimeSpan> { TimeSpan.FromMilliseconds(25) },
-                        DurationToIgnoreOnFailure = new List<TimeSpan> { TimeSpan.FromMilliseconds(25) },
-                        ThreadCount = 1
-                    }
-                };
+                builder.Options = distributorServiceBusOptions;
             });
 
             var distributorServiceProvider = distributorServices.BuildServiceProvider();
@@ -69,23 +71,25 @@ namespace Shuttle.Esb.Tests
                 builder.Options.Enabled = isTransactional;
             });
 
+            var workerServiceBusOptions = new ServiceBusOptions
+            {
+                Inbox = new InboxOptions
+                {
+                    WorkQueueUri = string.Format(queueUriFormat, "test-worker-work"),
+                    ErrorQueueUri = string.Format(queueUriFormat, "test-error"),
+                    DurationToSleepWhenIdle = new List<TimeSpan> { TimeSpan.FromMilliseconds(25) },
+                    DurationToIgnoreOnFailure = new List<TimeSpan> { TimeSpan.FromMilliseconds(25) },
+                    ThreadCount = 1
+                },
+                Worker = new WorkerOptions
+                {
+                    DistributorControlInboxWorkQueueUri = string.Format(queueUriFormat, "test-distributor-control")
+                }
+            };
+
             workerServices.AddServiceBus(builder =>
             {
-                builder.Options = new ServiceBusOptions
-                {
-                    Inbox = new InboxOptions
-                    {
-                        WorkQueueUri = string.Format(queueUriFormat, "test-worker-work"),
-                        ErrorQueueUri = string.Format(queueUriFormat, "test-error"),
-                        DurationToSleepWhenIdle = new List<TimeSpan> { TimeSpan.FromMilliseconds(25) },
-                        DurationToIgnoreOnFailure = new List<TimeSpan> { TimeSpan.FromMilliseconds(25) },
-                        ThreadCount = 1
-                    },
-                    Worker = new WorkerOptions
-                    {
-                        DistributorControlInboxWorkQueueUri = string.Format(queueUriFormat, "test-distributor-control")
-                    }
-                };
+                builder.Options = workerServiceBusOptions;
             });
 
             var workerServiceProvider = workerServices.BuildServiceProvider();
@@ -93,8 +97,10 @@ namespace Shuttle.Esb.Tests
 
             try
             {
-                ConfigureDistributorQueues(distributorServiceBusConfiguration);
+                distributorServiceBusConfiguration.Configure(distributorServiceBusOptions);
+                workerServiceBusConfiguration.Configure(workerServiceBusOptions);
 
+                ConfigureDistributorQueues(distributorServiceBusConfiguration);
                 ConfigureWorkerQueues(workerServiceBusConfiguration);
 
                 module.Assign(workerServiceProvider.GetRequiredService<IPipelineFactory>());

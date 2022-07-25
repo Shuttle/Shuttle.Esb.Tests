@@ -24,23 +24,22 @@ namespace Shuttle.Esb.Tests
 
             var serviceProvider = services.BuildServiceProvider();
 
-            var queueService = CreateQueueService(serviceProvider);
-
-            var inboxWorkQueue = queueService.Get(string.Format(queueUriFormat, "test-inbox-work"));
-            var inboxErrorQueue = queueService.Get(string.Format(queueUriFormat, "test-error"));
-
             serviceBusOptions.Inbox = new InboxOptions
             {
+                WorkQueueUri = string.Format(queueUriFormat, "test-inbox-work"),
+                ErrorQueueUri = string.Format(queueUriFormat, "test-error"),
                 DurationToSleepWhenIdle = new List<TimeSpan> { TimeSpan.FromMilliseconds(5) },
                 DurationToIgnoreOnFailure = new List<TimeSpan> { TimeSpan.FromMilliseconds(5) },
                 MaximumFailureCount = 100,
                 ThreadCount = 1
             };
 
-            inboxWorkQueue.Drop();
-            inboxErrorQueue.Drop();
-
             var serviceBusConfiguration = serviceProvider.GetRequiredService<IServiceBusConfiguration>();
+
+            serviceBusConfiguration.Configure(serviceBusOptions);
+
+            serviceBusConfiguration.Inbox.WorkQueue.Drop();
+            serviceBusConfiguration.Inbox.ErrorQueue.Drop();
 
             serviceBusConfiguration.CreatePhysicalQueues();
 
@@ -53,14 +52,14 @@ namespace Shuttle.Esb.Tests
             {
                 transportMessagePipeline.Execute(new ReceivePipelineCommand(), null, builder =>
                 {
-                    builder.WithRecipient(inboxWorkQueue);
+                    builder.WithRecipient(serviceBusConfiguration.Inbox.WorkQueue);
                 });
 
                 serviceBusConfiguration.Inbox.WorkQueue.Enqueue(
                     transportMessagePipeline.State.GetTransportMessage(),
                     serializer.Serialize(transportMessagePipeline.State.GetTransportMessage()));
 
-                Assert.IsFalse(inboxWorkQueue.IsEmpty());
+                Assert.IsFalse(serviceBusConfiguration.Inbox.WorkQueue.IsEmpty());
 
                 bus.Start();
 
