@@ -99,7 +99,8 @@ namespace Shuttle.Esb.Tests
             Assert.IsNotNull(workQueue.GetMessage());
             Assert.IsNull(workQueue.GetMessage());
 
-            workQueue.AttemptDispose();
+            queueService.AttemptDispose();
+            queueService = CreateQueueService(services.BuildServiceProvider());
 
             workQueue = CreateWorkQueue(queueService, queueUriFormat, false);
 

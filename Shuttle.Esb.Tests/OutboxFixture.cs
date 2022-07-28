@@ -5,13 +5,31 @@ using Microsoft.Extensions.DependencyInjection;
 using Moq;
 using NUnit.Framework;
 using Shuttle.Core.Contract;
+using Shuttle.Core.Pipelines;
+using Shuttle.Core.Reflection;
 using Shuttle.Core.Transactions;
 
 namespace Shuttle.Esb.Tests
 {
+    internal class OutboxObserver : IPipelineObserver<OnAfterAcknowledgeMessage>
+    {
+        private readonly object _lock = new object();
+
+        public int HandledMessageCount { get; private set; }
+
+        public void Execute(OnAfterAcknowledgeMessage pipelineEvent)
+        {
+            lock (_lock)
+            {
+                HandledMessageCount++;
+            }
+        }
+    }
+
     public abstract class OutboxFixture : IntegrationFixture
     {
-        protected void TestOutboxSending(IServiceCollection services, string workQueueUriFormat, int threadCount, bool isTransactional)
+        protected void TestOutboxSending(IServiceCollection services, string workQueueUriFormat, int threadCount,
+            bool isTransactional)
         {
             TestOutboxSending(services, workQueueUriFormat, workQueueUriFormat, threadCount, isTransactional);
         }
@@ -28,8 +46,6 @@ namespace Shuttle.Esb.Tests
                 threadCount = 1;
             }
 
-            var padlock = new object();
-
             services.AddTransactionScope(builder =>
             {
                 builder.Options.Enabled = isTransactional;
@@ -43,7 +59,7 @@ namespace Shuttle.Esb.Tests
                         new OutboxOptions
                         {
                             WorkQueueUri = string.Format(workQueueUriFormat, "test-outbox-work"),
-                DurationToSleepWhenIdle = new List<TimeSpan> { TimeSpan.FromMilliseconds(25) },
+                            DurationToSleepWhenIdle = new List<TimeSpan> { TimeSpan.FromMilliseconds(25) },
                             ThreadCount = threadCount
                         }
                 };
@@ -59,11 +75,21 @@ namespace Shuttle.Esb.Tests
 
             var serviceProvider = services.BuildServiceProvider();
 
+            var pipelineFactory = serviceProvider.GetRequiredService<IPipelineFactory>();
+
+            var outboxObserver = new OutboxObserver();
+
+            pipelineFactory.PipelineCreated += delegate (object sender, PipelineEventArgs args)
+            {
+                if (args.Pipeline.GetType() == typeof(OutboxPipeline))
+                {
+                    args.Pipeline.RegisterObserver(outboxObserver);
+                }
+            };
+
             var queueService = CreateQueueService(serviceProvider);
 
             ConfigureQueues(serviceProvider, workQueueUriFormat, errorQueueUriFormat);
-
-            var threadActivity = serviceProvider.GetRequiredService<IPipelineThreadActivity>();
 
             Console.WriteLine("Sending {0} messages.", count);
 
@@ -98,37 +124,16 @@ namespace Shuttle.Esb.Tests
 
                 Assert.IsFalse(timedOut, "Timed out before any messages appeared in the receiver queue.");
 
-                var idleThreads = new List<int>();
+                timeout = DateTime.Now.AddSeconds(15);
 
-                threadActivity.ThreadWaiting += (sender, args) =>
-                {
-                    if (args.Pipeline.GetType() != typeof(OutboxPipeline))
-                    {
-                        return;
-                    }
-
-                    lock (padlock)
-                    {
-                        if (idleThreads.Contains(Thread.CurrentThread.ManagedThreadId))
-                        {
-                            return;
-                        }
-
-                        idleThreads.Add(Thread.CurrentThread.ManagedThreadId);
-                    }
-                };
-
-                timeout = DateTime.Now.AddSeconds(5);
-
-                while (idleThreads.Count < threadCount && !timedOut)
+                while (outboxObserver.HandledMessageCount < threadCount && !timedOut)
                 {
                     Thread.Sleep(25);
 
                     timedOut = timeout < DateTime.Now;
                 }
 
-                Assert.IsFalse(timedOut, "Timed out before processing {0} errors.  Waiting for {1} threads to become idle.",
-                    count, threadCount);
+                Assert.IsFalse(timedOut, "Timed out before processing {0} errors.", count);
 
                 for (var i = 0; i < count; i++)
                 {
@@ -138,20 +143,23 @@ namespace Shuttle.Esb.Tests
 
                     receiverWorkQueue.Acknowledge(receivedMessage.AcknowledgementToken);
                 }
-            }
 
-            queueService.Get(receiverWorkQueueUri).AttemptDrop();
+                receiverWorkQueue.AttemptDispose();
+                receiverWorkQueue.AttemptDrop();
+            }
 
             var outboxWorkQueue = queueService.Get(string.Format(workQueueUriFormat, "test-outbox-work"));
 
             Assert.IsTrue(outboxWorkQueue.IsEmpty());
 
+            outboxWorkQueue.AttemptDispose();
             outboxWorkQueue.AttemptDrop();
 
             queueService.Get(string.Format(errorQueueUriFormat, "test-error")).AttemptDrop();
         }
 
-        private void ConfigureQueues(IServiceProvider serviceProvider, string queueUriFormat, string errorQueueUriFormat)
+        private void ConfigureQueues(IServiceProvider serviceProvider, string queueUriFormat,
+            string errorQueueUriFormat)
         {
             var queueService = serviceProvider.GetRequiredService<IQueueService>();
             var outboxWorkQueue = queueService.Get(string.Format(queueUriFormat, "test-outbox-work"));

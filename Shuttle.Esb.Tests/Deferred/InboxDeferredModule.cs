@@ -16,10 +16,7 @@ namespace Shuttle.Esb.Tests
 
         private void PipelineCreated(object sender, PipelineEventArgs e)
         {
-            var fullName = e.Pipeline.GetType().FullName;
-
-            if (fullName != null && !fullName.Equals(typeof(InboxMessagePipeline).FullName,
-                    StringComparison.InvariantCultureIgnoreCase))
+            if (e.Pipeline.GetType() != typeof(InboxMessagePipeline))
             {
                 return;
             }
@@ -27,7 +24,7 @@ namespace Shuttle.Esb.Tests
             e.Pipeline.RegisterObserver(this);
         }
 
-        public void Assign(IPipelineFactory pipelineFactory)
+        public InboxDeferredModule(IPipelineFactory pipelineFactory)
         {
             Guard.AgainstNull(pipelineFactory, nameof(pipelineFactory));
 

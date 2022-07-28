@@ -27,7 +27,6 @@ namespace Shuttle.Esb.Tests
             serviceBusOptions.Inbox = new InboxOptions
             {
                 WorkQueueUri = string.Format(queueUriFormat, "test-inbox-work"),
-                ErrorQueueUri = string.Format(queueUriFormat, "test-error"),
                 DurationToSleepWhenIdle = new List<TimeSpan> { TimeSpan.FromMilliseconds(5) },
                 DurationToIgnoreOnFailure = new List<TimeSpan> { TimeSpan.FromMilliseconds(5) },
                 MaximumFailureCount = 100,
@@ -39,7 +38,6 @@ namespace Shuttle.Esb.Tests
             serviceBusConfiguration.Configure(serviceBusOptions);
 
             serviceBusConfiguration.Inbox.WorkQueue.Drop();
-            serviceBusConfiguration.Inbox.ErrorQueue.Drop();
 
             serviceBusConfiguration.CreatePhysicalQueues();
 

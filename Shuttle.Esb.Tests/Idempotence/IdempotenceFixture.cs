@@ -24,7 +24,7 @@ namespace Shuttle.Esb.Tests
 
             var padlock = new object();
 
-            AddServiceBus(services, threadCount, isTransactional, queueUriFormat);
+            var serviceBusOptions = AddServiceBus(services, threadCount, isTransactional, queueUriFormat);
 
             services.AddSingleton<IMessageRouteProvider>(new IdempotenceMessageRouteProvider());
             services.AddSingleton<IMessageHandlerInvoker, IdempotenceMessageHandlerInvoker>();
@@ -38,6 +38,8 @@ namespace Shuttle.Esb.Tests
             var transportMessagePipeline = pipelineFactory.GetPipeline<TransportMessagePipeline>();
             var serviceBusConfiguration = serviceProvider.GetRequiredService<IServiceBusConfiguration>();
             var serializer = serviceProvider.GetRequiredService<ISerializer>();
+
+            serviceBusConfiguration.Configure(serviceBusOptions);
 
             ConfigureQueues(serviceProvider, serviceBusConfiguration, queueUriFormat);
 
@@ -137,7 +139,7 @@ namespace Shuttle.Esb.Tests
             errorQueue.AttemptPurge();
         }
 
-        protected void AddServiceBus(IServiceCollection services, int threadCount, bool isTransactional, string queueUriFormat)
+        protected ServiceBusOptions AddServiceBus(IServiceCollection services, int threadCount, bool isTransactional, string queueUriFormat)
         {
             Guard.AgainstNull(services, nameof(services));
 
@@ -146,20 +148,24 @@ namespace Shuttle.Esb.Tests
                 builder.Options.Enabled = isTransactional;
             });
 
+            var serviceBusOptions = new ServiceBusOptions
+            {
+                Inbox = new InboxOptions
+                {
+                    WorkQueueUri = string.Format(queueUriFormat, "test-inbox-work"),
+                    ErrorQueueUri = string.Format(queueUriFormat, "test-error"),
+                    DurationToSleepWhenIdle = new List<TimeSpan> { TimeSpan.FromMilliseconds(25) },
+                    DurationToIgnoreOnFailure = new List<TimeSpan> { TimeSpan.FromMilliseconds(25) },
+                    ThreadCount = threadCount
+                }
+            };
+
             services.AddServiceBus(builder =>
             {
-                builder.Options = new ServiceBusOptions
-                {
-                    Inbox = new InboxOptions
-                    {
-                        WorkQueueUri = string.Format(queueUriFormat, "test-inbox-work"),
-                        ErrorQueueUri = string.Format(queueUriFormat, "test-error"),
-                        DurationToSleepWhenIdle = new List<TimeSpan> { TimeSpan.FromMilliseconds(25) },
-                        DurationToIgnoreOnFailure = new List<TimeSpan> { TimeSpan.FromMilliseconds(25) },
-                        ThreadCount = threadCount
-                    }
-                };
+                builder.Options = serviceBusOptions;
             });
+
+            return serviceBusOptions;
         }
     }
 }

@@ -1,10 +1,8 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
-using System.IO;
 using System.Threading;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Options;
 using NUnit.Framework;
 using Shuttle.Core.Contract;
 using Shuttle.Core.Pipelines;
@@ -15,6 +13,21 @@ using Shuttle.Core.Transactions;
 
 namespace Shuttle.Esb.Tests
 {
+    internal class ThroughputObserver : IPipelineObserver<OnAfterAcknowledgeMessage>
+    {
+        private readonly object _lock = new object();
+
+        public int HandledMessageCount { get; private set; }
+
+        public void Execute(OnAfterAcknowledgeMessage pipelineEvent)
+        {
+            lock (_lock)
+            {
+                HandledMessageCount++;
+            }
+        }
+    }
+
     internal class ProcessorThreadObserver : IPipelineObserver<OnStarted>
     {
         public void Execute(OnStarted pipelineEvent)
@@ -39,6 +52,16 @@ namespace Shuttle.Esb.Tests
         }
     }
 
+    internal class InboxMessagePipelineObserver : IPipelineObserver<OnPipelineException>
+    {
+        public bool HasReceivedPipelineException { get; private set; }
+
+        public void Execute(OnPipelineException pipelineEvent)
+        {
+            HasReceivedPipelineException = true;
+        }
+    }
+
     public abstract class InboxFixture : IntegrationFixture
     {
         protected void TestInboxThroughput(IServiceCollection services, string queueUriFormat, int timeoutMilliseconds,
@@ -51,8 +74,6 @@ namespace Shuttle.Esb.Tests
                 threadCount = 1;
             }
 
-            var padlock = new object();
-
             var serviceBusOptions = AddServiceBus(services, true, threadCount, isTransactional, queueUriFormat);
 
             services.AddSingleton<ProcessorThreadObserver, ProcessorThreadObserver>();
@@ -61,14 +82,13 @@ namespace Shuttle.Esb.Tests
 
             var pipelineFactory = serviceProvider.GetRequiredService<IPipelineFactory>();
 
+            var throughputObserver = new ThroughputObserver();
+
             pipelineFactory.PipelineCreated += delegate(object sender, PipelineEventArgs args)
             {
                 if (args.Pipeline.GetType() == typeof(InboxMessagePipeline))
                 {
-                    args.Pipeline.GetStage("Read").BeforeEvent<OnGetMessage>().Register<OnStartRead>();
-
-                    // create a new instance since it stores state
-                    args.Pipeline.RegisterObserver(new ThroughputObserver());
+                    args.Pipeline.RegisterObserver(throughputObserver);
                 }
 
                 if (args.Pipeline.GetType() == typeof(StartupPipeline))
@@ -77,7 +97,6 @@ namespace Shuttle.Esb.Tests
                 }
             };
 
-            var threadActivity = serviceProvider.GetRequiredService<IPipelineThreadActivity>();
             var transportMessagePipeline = pipelineFactory.GetPipeline<TransportMessagePipeline>();
             var serviceBusConfiguration = serviceProvider.GetRequiredService<IServiceBusConfiguration>();
             var serializer = serviceProvider.GetRequiredService<ISerializer>();
@@ -88,86 +107,39 @@ namespace Shuttle.Esb.Tests
 
             try
             {
-                using (var bus = serviceProvider.GetRequiredService<IServiceBus>())
+                serviceBusConfiguration.Configure(serviceBusOptions);
+
+                ConfigureQueues(serviceProvider, serviceBusConfiguration, queueUriFormat, true);
+
+                Console.WriteLine(
+                    $"Sending {messageCount} messages to input queue '{serviceBusConfiguration.Inbox.WorkQueue.Uri}'.");
+
+                for (var i = 0; i < messageCount; i++)
                 {
-                    serviceBusConfiguration.Configure(serviceBusOptions);
-
-                    ConfigureQueues(serviceProvider, serviceBusConfiguration, queueUriFormat, true);
-
-                    Console.WriteLine("Sending {0} messages to input queue '{1}'.", messageCount,
-                        serviceBusConfiguration.Inbox.WorkQueue.Uri);
-
-                    for (var i = 0; i < 5; i++)
+                    transportMessagePipeline.Execute(new SimpleCommand("command " + i), null, builder =>
                     {
-                        transportMessagePipeline.Execute(new SimpleCommand("warmup"), null, builder =>
-                        {
-                            builder.WithRecipient(serviceBusConfiguration.Inbox.WorkQueue);
-                        });
+                        builder.WithRecipient(serviceBusConfiguration.Inbox.WorkQueue);
+                    });
 
-                        serviceBusConfiguration.Inbox.WorkQueue.Enqueue(
-                            transportMessagePipeline.State.GetTransportMessage(),
-                            serializer.Serialize(transportMessagePipeline.State.GetTransportMessage()));
-                    }
+                    serviceBusConfiguration.Inbox.WorkQueue.Enqueue(
+                        transportMessagePipeline.State.GetTransportMessage(),
+                        serializer.Serialize(transportMessagePipeline.State.GetTransportMessage()));
+                }
 
-                    var idleThreads = new List<int>();
-
-                    threadActivity.ThreadWaiting += (sender, args) =>
-                    {
-                        lock (padlock)
-                        {
-                            if (idleThreads.Contains(Thread.CurrentThread.ManagedThreadId))
-                            {
-                                return;
-                            }
-
-                            idleThreads.Add(Thread.CurrentThread.ManagedThreadId);
-                        }
-                    };
-
-                    bus.Start();
-
-                    while (idleThreads.Count < threadCount)
-                    {
-                        Thread.Sleep(25);
-                    }
-
-                    bus.Stop();
-
-                    serviceBusConfiguration.Configure(serviceBusOptions);
-
-                    ConfigureQueues(serviceProvider, serviceBusConfiguration, queueUriFormat, true);
+                using (serviceProvider.GetRequiredService<IServiceBus>().Start())
+                {
+                    Console.WriteLine($"[starting] : {DateTime.Now:HH:mm:ss.fff}");
 
                     sw.Start();
 
-                    for (var i = 0; i < messageCount; i++)
-                    {
-                        transportMessagePipeline.Execute(new SimpleCommand("command " + i), null, builder =>
-                        {
-                            builder.WithRecipient(serviceBusConfiguration.Inbox.WorkQueue);
-                        });
-
-                        serviceBusConfiguration.Inbox.WorkQueue.Enqueue(
-                            transportMessagePipeline.State.GetTransportMessage(),
-                            serializer.Serialize(transportMessagePipeline.State.GetTransportMessage()));
-                    }
-
-                    sw.Stop();
-
-                    Console.WriteLine("Took {0} ms to send {1} messages.  Starting processing.", sw.ElapsedMilliseconds,
-                        messageCount);
-
-                    idleThreads.Clear();
-                    bus.Start();
-
-                    sw.Reset();
-                    sw.Start();
-
-                    while (idleThreads.Count < threadCount)
+                    while (throughputObserver.HandledMessageCount < messageCount)
                     {
                         Thread.Sleep(25);
                     }
 
                     sw.Stop();
+
+                    Console.WriteLine($"[stopped] : {DateTime.Now:HH:mm:ss.fff}");
                 }
 
                 AttemptDropQueues(queueService, queueUriFormat);
@@ -181,28 +153,36 @@ namespace Shuttle.Esb.Tests
 
             var ms = sw.ElapsedMilliseconds;
 
-            Console.WriteLine("Processed {0} messages in {1} ms", messageCount, ms);
+            Console.WriteLine($"Processed {messageCount} messages in {ms} ms");
 
             Assert.IsTrue(ms < timeoutMilliseconds,
-                "Should be able to process at least {0} messages in {1} ms but it ook {2} ms.",
-                messageCount, timeoutMilliseconds, ms);
+                $"Should be able to process at least {messageCount} messages in {timeoutMilliseconds} ms but it took {ms} ms.");
         }
 
         protected void TestInboxError(IServiceCollection services, string queueUriFormat, bool hasErrorQueue,
             bool isTransactional)
         {
-            var padlock = new object();
             var serviceBusOptions = AddServiceBus(services, hasErrorQueue, 1, isTransactional, queueUriFormat);
 
             serviceBusOptions.Inbox.MaximumFailureCount = 0;
 
             var serviceProvider = services.BuildServiceProvider();
 
-            var threadActivity = serviceProvider.GetRequiredService<IPipelineThreadActivity>();
             var pipelineFactory = serviceProvider.GetRequiredService<IPipelineFactory>();
             var transportMessagePipeline = pipelineFactory.GetPipeline<TransportMessagePipeline>();
             var serviceBusConfiguration = serviceProvider.GetRequiredService<IServiceBusConfiguration>();
             var serializer = serviceProvider.GetRequiredService<ISerializer>();
+            var inboxMessagePipelineObserver = new InboxMessagePipelineObserver();
+
+            pipelineFactory.PipelineCreated += (sender, args) =>
+            {
+                if (args.Pipeline.GetType() != typeof(InboxMessagePipeline))
+                {
+                    return;
+                }
+
+                args.Pipeline.RegisterObserver(inboxMessagePipelineObserver);
+            };
 
             var queueService = CreateQueueService(serviceProvider);
 
@@ -223,39 +203,35 @@ namespace Shuttle.Esb.Tests
                         transportMessagePipeline.State.GetTransportMessage(),
                         serializer.Serialize(transportMessagePipeline.State.GetTransportMessage()));
 
-                    var threadWaitingCount = 0;
-
-                    threadActivity.ThreadWaiting += (sender, args) =>
-                    {
-                        lock (padlock)
-                        {
-                            threadWaitingCount++;
-                        }
-                    };
-
                     bus.Start();
+
+                    var timeout = DateTime.Now.AddSeconds(15);
+                    var timedOut = false;
+
+                    while (!inboxMessagePipelineObserver.HasReceivedPipelineException &&
+                           !timedOut)
+                    {
+                        Thread.Sleep(25);
+
+                        timedOut = DateTime.Now > timeout;
+                    }
+
+                    try
+                    {
+                        Assert.That(!timedOut, "Timed out before message was received.");
+                    }
+                    finally
+                    {
+                        bus.Stop();
+                    }
 
                     if (hasErrorQueue)
                     {
-                        while (threadWaitingCount < 1)
-                        {
-                            Thread.Sleep(5);
-                        }
-
-                        bus.Stop();
-
                         Assert.Null(queueService.Get(string.Format(queueUriFormat, "test-inbox-work")).GetMessage());
                         Assert.NotNull(queueService.Get(string.Format(queueUriFormat, "test-error")).GetMessage());
                     }
                     else
                     {
-                        while (threadWaitingCount < 1)
-                        {
-                            Thread.Sleep(5);
-                        }
-
-                        bus.Stop();
-
                         Assert.NotNull(queueService.Get(string.Format(queueUriFormat, "test-inbox-work")).GetMessage());
                     }
                 }
@@ -374,9 +350,7 @@ namespace Shuttle.Esb.Tests
         {
             var serviceBusOptions = GetServiceBusOptions(true, 1, queueUriFormat);
 
-            var module = new InboxDeferredModule();
-
-            services.AddSingleton(module);
+            services.AddSingleton<InboxDeferredModule>();
 
             services.AddServiceBus(builder =>
             {
@@ -386,7 +360,7 @@ namespace Shuttle.Esb.Tests
             var serviceProvider = services.BuildServiceProvider();
 
             var serviceBusConfiguration = serviceProvider.GetRequiredService<IServiceBusConfiguration>();
-            
+
             var messageType = typeof(ReceivePipelineCommand).FullName ??
                               throw new InvalidOperationException(
                                   "Could not get the full type name of the ReceivePipelineCommand");
@@ -399,13 +373,17 @@ namespace Shuttle.Esb.Tests
 
             try
             {
-                module.Assign(serviceProvider.GetRequiredService<IPipelineFactory>());
+                var module = serviceProvider.GetRequiredService<InboxDeferredModule>();
 
                 using (var bus = serviceProvider.GetRequiredService<IServiceBus>().Start())
                 {
                     var transportMessage = bus.Send(new ReceivePipelineCommand(),
-                        c => c.Defer(DateTime.Now.AddMilliseconds(500))
-                            .WithRecipient(serviceBusConfiguration.Inbox.WorkQueue));
+                        builder =>
+                        {
+                            builder
+                                .Defer(DateTime.Now.AddMilliseconds(500))
+                                .WithRecipient(serviceBusConfiguration.Inbox.WorkQueue);
+                        });
 
                     var timeout = DateTime.Now.AddMilliseconds(1000);
 
@@ -466,7 +444,8 @@ namespace Shuttle.Esb.Tests
 
                 var transportMessage = transportMessagePipeline.State.GetTransportMessage();
 
-                queue.Enqueue(transportMessage, serializer.Serialize(transportMessagePipeline.State.GetTransportMessage()));
+                queue.Enqueue(transportMessage,
+                    serializer.Serialize(transportMessagePipeline.State.GetTransportMessage()));
 
                 Assert.IsNotNull(transportMessage, "TransportMessage is null.");
                 Assert.IsFalse(transportMessage.HasExpired(),
