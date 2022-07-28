@@ -40,9 +40,9 @@ namespace Shuttle.Esb.Tests
 				builder.Path = "/default";
 			}
 
-			Uri = builder.Uri;
+			Uri = new QueueUri(builder.Uri);
 
-			if (Uri.Host != Environment.MachineName.ToLower())
+			if (Uri.Uri.Host != Environment.MachineName.ToLower())
 			{
 				throw new UriFormatException(string.Format(Resources.UriFormatException,
 				    $"memory://{{.|{Environment.MachineName.ToLower()}}}/{{name}}", uri));
@@ -51,7 +51,7 @@ namespace Shuttle.Esb.Tests
 			Create();
 		}
 
-		public Uri Uri { get; }
+		public QueueUri Uri { get; }
 		public bool IsStream => false;
 
 		public bool IsEmpty()
