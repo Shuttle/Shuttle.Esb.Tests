@@ -13,7 +13,7 @@ using Shuttle.Core.Transactions;
 
 namespace Shuttle.Esb.Tests
 {
-    internal class ThroughputObserver : IPipelineObserver<OnAfterAcknowledgeMessage>
+    public class ThroughputObserver : IPipelineObserver<OnAfterAcknowledgeMessage>
     {
         private readonly object _lock = new object();
 
@@ -28,7 +28,7 @@ namespace Shuttle.Esb.Tests
         }
     }
 
-    internal class ProcessorThreadObserver : IPipelineObserver<OnStarted>
+    public class ProcessorThreadObserver : IPipelineObserver<OnStarted>
     {
         public void Execute(OnStarted pipelineEvent)
         {
@@ -52,7 +52,7 @@ namespace Shuttle.Esb.Tests
         }
     }
 
-    internal class InboxMessagePipelineObserver : IPipelineObserver<OnPipelineException>
+    public class InboxMessagePipelineObserver : IPipelineObserver<OnPipelineException>
     {
         public bool HasReceivedPipelineException { get; private set; }
 
@@ -74,7 +74,7 @@ namespace Shuttle.Esb.Tests
                 threadCount = 1;
             }
 
-            var serviceBusOptions = AddServiceBus(services, true, threadCount, isTransactional, queueUriFormat);
+            var serviceBusOptions = AddServiceBus(services, true, threadCount, isTransactional, queueUriFormat, TimeSpan.FromMilliseconds(25));
 
             services.AddSingleton<ProcessorThreadObserver, ProcessorThreadObserver>();
 
@@ -100,10 +100,10 @@ namespace Shuttle.Esb.Tests
             var transportMessagePipeline = pipelineFactory.GetPipeline<TransportMessagePipeline>();
             var serviceBusConfiguration = serviceProvider.GetRequiredService<IServiceBusConfiguration>();
             var serializer = serviceProvider.GetRequiredService<ISerializer>();
+            var queueService = CreateQueueService(serviceProvider);
 
             var sw = new Stopwatch();
-
-            var queueService = CreateQueueService(serviceProvider);
+            var timedOut = false;
 
             try
             {
@@ -113,6 +113,8 @@ namespace Shuttle.Esb.Tests
 
                 Console.WriteLine(
                     $"Sending {messageCount} messages to input queue '{serviceBusConfiguration.Inbox.WorkQueue.Uri}'.");
+
+                sw.Start();
 
                 for (var i = 0; i < messageCount; i++)
                 {
@@ -126,15 +128,25 @@ namespace Shuttle.Esb.Tests
                         serializer.Serialize(transportMessagePipeline.State.GetTransportMessage()));
                 }
 
+                sw.Stop();
+                
+                Console.WriteLine("Took {0} ms to send {1} messages.  Starting processing.", sw.ElapsedMilliseconds, messageCount);
+
+                sw.Reset();
+
                 using (serviceProvider.GetRequiredService<IServiceBus>().Start())
                 {
                     Console.WriteLine($"[starting] : {DateTime.Now:HH:mm:ss.fff}");
 
+                    var timeout = DateTime.Now.AddSeconds(500);
+
                     sw.Start();
 
-                    while (throughputObserver.HandledMessageCount < messageCount)
+                    while (throughputObserver.HandledMessageCount < messageCount && !timedOut)
                     {
                         Thread.Sleep(25);
+
+                        timedOut = DateTime.Now > timeout;
                     }
 
                     sw.Stop();
@@ -153,16 +165,23 @@ namespace Shuttle.Esb.Tests
 
             var ms = sw.ElapsedMilliseconds;
 
-            Console.WriteLine($"Processed {messageCount} messages in {ms} ms");
+            if (!timedOut)
+            {
+                Console.WriteLine($"Processed {messageCount} messages in {ms} ms");
 
-            Assert.IsTrue(ms < timeoutMilliseconds,
-                $"Should be able to process at least {messageCount} messages in {timeoutMilliseconds} ms but it took {ms} ms.");
+                Assert.IsTrue(ms < timeoutMilliseconds,
+                    $"Should be able to process at least {messageCount} messages in {timeoutMilliseconds} ms but it took {ms} ms.");
+            }
+            else
+            {
+                Assert.Fail($"Timed out before processing {messageCount} messages.  Only processed {throughputObserver.HandledMessageCount} messages in {ms}.");
+            }
         }
 
         protected void TestInboxError(IServiceCollection services, string queueUriFormat, bool hasErrorQueue,
             bool isTransactional)
         {
-            var serviceBusOptions = AddServiceBus(services, hasErrorQueue, 1, isTransactional, queueUriFormat);
+            var serviceBusOptions = AddServiceBus(services, hasErrorQueue, 1, isTransactional, queueUriFormat, TimeSpan.FromMilliseconds(25));
 
             serviceBusOptions.Inbox.MaximumFailureCount = 0;
 
@@ -268,7 +287,7 @@ namespace Shuttle.Esb.Tests
 
             var padlock = new object();
 
-            var serviceBusOptions = AddServiceBus(services, true, threadCount, isTransactional, queueUriFormat);
+            var serviceBusOptions = AddServiceBus(services, true, threadCount, isTransactional, queueUriFormat, TimeSpan.FromMilliseconds(25));
 
             var module = new InboxConcurrencyModule();
 
@@ -348,7 +367,17 @@ namespace Shuttle.Esb.Tests
 
         protected void TestInboxDeferred(IServiceCollection services, string queueUriFormat)
         {
-            var serviceBusOptions = GetServiceBusOptions(true, 1, queueUriFormat);
+            var serviceBusOptions = new ServiceBusOptions
+            {
+                Inbox = new InboxOptions
+                {
+                    WorkQueueUri = string.Format(queueUriFormat, "test-inbox-work"),
+                    ErrorQueueUri = string.Format(queueUriFormat, "test-error"),
+                    DurationToSleepWhenIdle = new List<TimeSpan> { TimeSpan.FromMilliseconds(25) },
+                    DurationToIgnoreOnFailure = new List<TimeSpan> { TimeSpan.FromMilliseconds(25) },
+                    ThreadCount = 1
+                }
+            };
 
             services.AddSingleton<InboxDeferredModule>();
 
@@ -417,8 +446,6 @@ namespace Shuttle.Esb.Tests
 
         protected void TestInboxExpiry(IServiceCollection services, string queueUriFormat, TimeSpan expiryDuration)
         {
-            GetServiceBusOptions(true, 1, queueUriFormat);
-
             services.AddServiceBus();
 
             var serviceProvider = services.BuildServiceProvider();
@@ -465,23 +492,8 @@ namespace Shuttle.Esb.Tests
             }
         }
 
-        private ServiceBusOptions GetServiceBusOptions(bool hasErrorQueue, int threadCount, string queueUriFormat)
-        {
-            return new ServiceBusOptions
-            {
-                Inbox = new InboxOptions
-                {
-                    WorkQueueUri = string.Format(queueUriFormat, "test-inbox-work"),
-                    ErrorQueueUri = hasErrorQueue ? string.Format(queueUriFormat, "test-error") : string.Empty,
-                    DurationToSleepWhenIdle = new List<TimeSpan> { TimeSpan.FromMilliseconds(25) },
-                    DurationToIgnoreOnFailure = new List<TimeSpan> { TimeSpan.FromMilliseconds(25) },
-                    ThreadCount = threadCount
-                }
-            };
-        }
-
         protected ServiceBusOptions AddServiceBus(IServiceCollection services, bool hasErrorQueue, int threadCount,
-            bool isTransactional, string queueUriFormat)
+            bool isTransactional, string queueUriFormat, TimeSpan durationToSleepWhenIdle)
         {
             Guard.AgainstNull(services, nameof(services));
 
@@ -490,7 +502,17 @@ namespace Shuttle.Esb.Tests
                 builder.Options.Enabled = isTransactional;
             });
 
-            var serviceBusOptions = GetServiceBusOptions(hasErrorQueue, threadCount, queueUriFormat);
+            var serviceBusOptions = new ServiceBusOptions
+            {
+                Inbox = new InboxOptions
+                {
+                    WorkQueueUri = string.Format(queueUriFormat, "test-inbox-work"),
+                    ErrorQueueUri = hasErrorQueue ? string.Format(queueUriFormat, "test-error") : string.Empty,
+                    DurationToSleepWhenIdle = new List<TimeSpan> { durationToSleepWhenIdle },
+                    DurationToIgnoreOnFailure = new List<TimeSpan> { TimeSpan.FromMilliseconds(25) },
+                    ThreadCount = threadCount
+                }
+            };
 
             services.AddServiceBus(builder =>
             {

@@ -21,9 +21,7 @@ namespace Shuttle.Esb.Tests
 
 		private void PipelineCreated(object sender, PipelineEventArgs e)
 		{
-		    var fullName = e.Pipeline.GetType().FullName;
-
-		    if (fullName != null && !fullName.Equals(typeof (InboxMessagePipeline).FullName, StringComparison.InvariantCultureIgnoreCase) && !fullName.Equals(typeof (DeferredMessagePipeline).FullName, StringComparison.InvariantCultureIgnoreCase))
+		    if (e.Pipeline.GetType() != typeof (InboxMessagePipeline) && e.Pipeline.GetType() != typeof (DeferredMessagePipeline))
 			{
 				return;
 			}

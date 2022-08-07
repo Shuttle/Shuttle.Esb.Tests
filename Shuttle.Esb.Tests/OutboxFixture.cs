@@ -11,7 +11,7 @@ using Shuttle.Core.Transactions;
 
 namespace Shuttle.Esb.Tests
 {
-    internal class OutboxObserver : IPipelineObserver<OnAfterAcknowledgeMessage>
+    public class OutboxObserver : IPipelineObserver<OnAfterAcknowledgeMessage>
     {
         private readonly object _lock = new object();
 
@@ -126,7 +126,7 @@ namespace Shuttle.Esb.Tests
 
                 timeout = DateTime.Now.AddSeconds(15);
 
-                while (outboxObserver.HandledMessageCount < threadCount && !timedOut)
+                while (outboxObserver.HandledMessageCount < count && !timedOut)
                 {
                     Thread.Sleep(25);
 

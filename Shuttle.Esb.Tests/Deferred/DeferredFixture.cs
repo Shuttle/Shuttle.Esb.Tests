@@ -135,6 +135,7 @@ namespace Shuttle.Esb.Tests
             inboxDeferredQueue.AttemptPurge();
             errorQueue.AttemptPurge();
         }
+
         protected ServiceBusOptions AddServiceBus(IServiceCollection services, int threadCount, bool isTransactional, string queueUriFormat)
         {
             Guard.AgainstNull(services, nameof(services));
@@ -153,6 +154,7 @@ namespace Shuttle.Esb.Tests
 
             return serviceBusOptions;
         }
+
         private ServiceBusOptions GetServiceBusOptions(int threadCount, string queueUriFormat)
         {
             return new ServiceBusOptions
@@ -168,6 +170,5 @@ namespace Shuttle.Esb.Tests
                 }
             };
         }
-
     }
 }
