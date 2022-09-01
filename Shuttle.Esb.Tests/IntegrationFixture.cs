@@ -1,10 +1,7 @@
 using System;
 using System.Collections.Generic;
-using log4net;
-using NUnit.Framework;
-using Shuttle.Core.Container;
-using Shuttle.Core.Log4Net;
-using Shuttle.Core.Logging;
+using Microsoft.Extensions.DependencyInjection;
+using Shuttle.Core.Contract;
 using Shuttle.Core.Transactions;
 
 namespace Shuttle.Esb.Tests
@@ -18,48 +15,26 @@ namespace Shuttle.Esb.Tests
             "test-distributor-control",
             "test-inbox-work",
             "test-inbox-deferred",
+            "test-outbox-work",
             "test-error"
         };
 
-        [OneTimeSetUp]
-        protected void FixtureSetUp()
+        protected QueueService CreateQueueService(IServiceProvider serviceProvider)
         {
-            Log.Assign(new Log4NetLog(LogManager.GetLogger(typeof(IntegrationFixture))));
+            return new QueueService(serviceProvider.GetRequiredService<IQueueFactoryService>(),
+                serviceProvider.GetRequiredService<IUriResolver>());
         }
 
-        protected ServiceBusConfiguration DefaultConfiguration(bool isTransactional, int threadCount)
-        {
-            return new ServiceBusConfiguration
-            {
-                ScanForQueueFactories = true,
-                TransactionScope = new TransactionScopeConfiguration
-                {
-                    Enabled = isTransactional
-                },
-                Inbox = new InboxQueueConfiguration
-                {
-                    DurationToSleepWhenIdle = new[] { TimeSpan.FromMilliseconds(5) },
-                    DurationToIgnoreOnFailure = new[] { TimeSpan.FromMilliseconds(5) },
-                    ThreadCount = threadCount
-                }
-            };
-        }
-
-        protected QueueManager CreateQueueManager(IComponentResolver resolver)
-        {
-            return (QueueManager)new QueueManager(resolver.Resolve<IUriResolver>()).Configure(resolver);
-        }
-
-        protected void AttemptDropQueues(QueueManager queueManager, string queueUriFormat)
+        protected void AttemptDropQueues(QueueService queueService, string queueUriFormat)
         {
             foreach (var queueUri in _queueUris)
             {
-                if (!queueManager.ContainsQueue(queueUri))
+                if (!queueService.Contains(queueUri))
                 {
                     continue;
                 }
 
-                queueManager.GetQueue(string.Format(queueUriFormat, queueUri)).AttemptDrop();
+                queueService.Get(string.Format(queueUriFormat, queueUri)).AttemptDrop();
             }
         }
     }

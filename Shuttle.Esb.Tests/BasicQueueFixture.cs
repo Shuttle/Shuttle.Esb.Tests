@@ -1,22 +1,25 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Text;
+using Microsoft.Extensions.DependencyInjection;
 using NUnit.Framework;
 using Shuttle.Core.Contract;
 using Shuttle.Core.Reflection;
+using Shuttle.Core.Transactions;
 
 namespace Shuttle.Esb.Tests
 {
     public class BasicQueueFixture : IntegrationFixture
     {
-        protected void TestSimpleEnqueueAndGetMessage(ComponentContainer container, string workQueueUriFormat)
+        protected void TestSimpleEnqueueAndGetMessage(IServiceCollection services, string queueUriFormat)
         {
-            Guard.AgainstNull(container, "container");
+            Guard.AgainstNull(services, nameof(services));
 
-            Configure(container);
+            AddServiceBus(services, 1, false, queueUriFormat);
 
-            var queueManager = CreateQueueManager(container.Resolver);
-            var workQueue = CreateWorkQueue(queueManager, workQueueUriFormat);
+            var queueService = CreateQueueService(services.BuildServiceProvider());
+            var workQueue = CreateWorkQueue(queueService, queueUriFormat);
 
             var stream = new MemoryStream();
 
@@ -40,22 +43,17 @@ namespace Shuttle.Esb.Tests
             workQueue.AttemptDrop();
             workQueue.AttemptDispose();
 
-            queueManager.AttemptDispose();
+            queueService.AttemptDispose();
         }
 
-        private void Configure(ComponentContainer container)
+        protected void TestReleaseMessage(IServiceCollection services, string queueUriFormat)
         {
-            container.Registry.RegisterServiceBus(DefaultConfiguration(true, 1));
-        }
+            Guard.AgainstNull(services, nameof(services));
 
-        protected void TestReleaseMessage(ComponentContainer container, string workQueueUriFormat)
-        {
-            Guard.AgainstNull(container, "container");
+            AddServiceBus(services, 1, false, queueUriFormat);
 
-            Configure(container);
-
-            var queueManager = CreateQueueManager(container.Resolver);
-            var workQueue = CreateWorkQueue(queueManager, workQueueUriFormat);
+            var queueService = CreateQueueService(services.BuildServiceProvider());
+            var workQueue = CreateWorkQueue(queueService, queueUriFormat);
 
             workQueue.Enqueue(new TransportMessage
             {
@@ -81,17 +79,17 @@ namespace Shuttle.Esb.Tests
             workQueue.AttemptDrop();
             workQueue.AttemptDispose();
 
-            queueManager.AttemptDispose();
+            queueService.AttemptDispose();
         }
 
-        protected void TestUnacknowledgedMessage(ComponentContainer container, string workQueueUriFormat)
+        protected void TestUnacknowledgedMessage(IServiceCollection services, string queueUriFormat)
         {
-            Guard.AgainstNull(container, "container");
+            Guard.AgainstNull(services, nameof(services));
 
-            Configure(container);
+            AddServiceBus(services, 1, false, queueUriFormat);
 
-            var queueManager = CreateQueueManager(container.Resolver);
-            var workQueue = CreateWorkQueue(queueManager, workQueueUriFormat);
+            var queueService = CreateQueueService(services.BuildServiceProvider());
+            var workQueue = CreateWorkQueue(queueService, queueUriFormat);
 
             workQueue.Enqueue(new TransportMessage
             {
@@ -101,9 +99,10 @@ namespace Shuttle.Esb.Tests
             Assert.IsNotNull(workQueue.GetMessage());
             Assert.IsNull(workQueue.GetMessage());
 
-            workQueue.AttemptDispose();
+            queueService.AttemptDispose();
+            queueService = CreateQueueService(services.BuildServiceProvider());
 
-            workQueue = CreateWorkQueue(queueManager, workQueueUriFormat, false);
+            workQueue = CreateWorkQueue(queueService, queueUriFormat, false);
 
             var receivedMessage = workQueue.GetMessage();
 
@@ -113,26 +112,21 @@ namespace Shuttle.Esb.Tests
             workQueue.Acknowledge(receivedMessage.AcknowledgementToken);
             workQueue.AttemptDispose();
 
-            workQueue = CreateWorkQueue(queueManager, workQueueUriFormat, false);
+            workQueue = CreateWorkQueue(queueService, queueUriFormat, false);
 
             Assert.IsNull(workQueue.GetMessage());
 
             workQueue.AttemptDrop();
             workQueue.AttemptDispose();
 
-            queueManager.AttemptDispose();
+            queueService.AttemptDispose();
         }
 
-        private IQueue CreateWorkQueue(IQueueManager queueManager, string workQueueUriFormat)
+        private IQueue CreateWorkQueue(IQueueService queueService, string workQueueUriFormat, bool refresh = true)
         {
-            return CreateWorkQueue(queueManager, workQueueUriFormat, true);
-        }
+            Guard.AgainstNull(queueService, nameof(queueService));
 
-        private IQueue CreateWorkQueue(IQueueManager queueManager, string workQueueUriFormat, bool refresh)
-        {
-            Guard.AgainstNull(queueManager, nameof(queueManager));
-
-            var workQueue = queueManager.CreateQueue(string.Format(workQueueUriFormat, "test-work"));
+            var workQueue = queueService.Get(string.Format(workQueueUriFormat, "test-work"));
 
             if (refresh)
             {
@@ -142,6 +136,31 @@ namespace Shuttle.Esb.Tests
             }
 
             return workQueue;
+        }
+
+        protected void AddServiceBus(IServiceCollection services, int threadCount, bool isTransactional, string queueUriFormat)
+        {
+            Guard.AgainstNull(services, nameof(services));
+
+            services.AddTransactionScope(builder =>
+            {
+                builder.Options.Enabled = isTransactional;
+            });
+
+            services.AddServiceBus(builder =>
+            {
+                builder.Options = new ServiceBusOptions
+                {
+                    Inbox = new InboxOptions
+                    {
+                        WorkQueueUri = string.Format(queueUriFormat, "test-inbox-work"),
+                        ErrorQueueUri = string.Format(queueUriFormat, "test-error"),
+                        DurationToSleepWhenIdle = new List<TimeSpan> { TimeSpan.FromMilliseconds(25) },
+                        DurationToIgnoreOnFailure = new List<TimeSpan> { TimeSpan.FromMilliseconds(25) },
+                        ThreadCount = threadCount
+                    }
+                };
+            });
         }
     }
 }

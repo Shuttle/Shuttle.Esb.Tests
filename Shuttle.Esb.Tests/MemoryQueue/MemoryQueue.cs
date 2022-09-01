@@ -11,7 +11,7 @@ namespace Shuttle.Esb.Tests
 	{
 		internal const string Scheme = "memory";
 
-		private static readonly object Padlock = new object();
+		private static readonly object Lock = new object();
 
 		private static Dictionary<string, Dictionary<int, MemoryQueueItem>> _queues =
 			new Dictionary<string, Dictionary<int, MemoryQueueItem>>();
@@ -21,7 +21,7 @@ namespace Shuttle.Esb.Tests
 
 		public MemoryQueue(Uri uri)
 		{
-			Guard.AgainstNull(uri, "uri");
+			Guard.AgainstNull(uri, nameof(uri));
 
 			if (!uri.Scheme.Equals(Scheme, StringComparison.InvariantCultureIgnoreCase))
 			{
@@ -40,9 +40,9 @@ namespace Shuttle.Esb.Tests
 				builder.Path = "/default";
 			}
 
-			Uri = builder.Uri;
+			Uri = new QueueUri(builder.Uri);
 
-			if (Uri.Host != Environment.MachineName.ToLower())
+			if (Uri.Uri.Host != Environment.MachineName.ToLower())
 			{
 				throw new UriFormatException(string.Format(Resources.UriFormatException,
 				    $"memory://{{.|{Environment.MachineName.ToLower()}}}/{{name}}", uri));
@@ -51,11 +51,12 @@ namespace Shuttle.Esb.Tests
 			Create();
 		}
 
-		public Uri Uri { get; }
+		public QueueUri Uri { get; }
+		public bool IsStream => false;
 
 		public bool IsEmpty()
 		{
-			lock (Padlock)
+			lock (Lock)
 			{
 				return _queues[Uri.ToString()].Count == 0;
 			}
@@ -63,7 +64,7 @@ namespace Shuttle.Esb.Tests
 
 		public void Enqueue(TransportMessage transportMessage, Stream stream)
 		{
-			lock (Padlock)
+			lock (Lock)
 			{
 				_itemId++;
 
@@ -73,7 +74,7 @@ namespace Shuttle.Esb.Tests
 
 		public ReceivedMessage GetMessage()
 		{
-			lock (Padlock)
+			lock (Lock)
 			{
 				var queue = _queues[Uri.ToString()];
 
@@ -101,7 +102,7 @@ namespace Shuttle.Esb.Tests
 		{
 			var itemId = (int) acknowledgementToken;
 
-			lock (Padlock)
+			lock (Lock)
 			{
 				var queue = _queues[Uri.ToString()];
 
@@ -123,7 +124,7 @@ namespace Shuttle.Esb.Tests
 		{
 			var itemId = (int) acknowledgementToken;
 
-			lock (Padlock)
+			lock (Lock)
 			{
 				var queue = _queues[Uri.ToString()];
 
@@ -167,7 +168,7 @@ namespace Shuttle.Esb.Tests
 
 		public void Purge()
 		{
-			lock (Padlock)
+			lock (Lock)
 			{
 				_queues[Uri.ToString()].Clear();
 			}

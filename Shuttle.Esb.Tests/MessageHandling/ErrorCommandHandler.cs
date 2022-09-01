@@ -8,10 +8,5 @@ namespace Shuttle.Esb.Tests
 		{
 			throw new ApplicationException("[testing expection handling]");
 		}
-
-		public bool IsReusable
-		{
-			get { return true; }
-		}
 	}
 }

@@ -13,7 +13,7 @@ namespace Shuttle.Esb.Tests
 
         public MessageHandlerInvokeResult Invoke(IPipelineEvent pipelineEvent)
         {
-            Guard.AgainstNull(pipelineEvent, "pipelineEvent");
+            Guard.AgainstNull(pipelineEvent, nameof(pipelineEvent));
 
             var state = pipelineEvent.Pipeline.State;
             var message = state.GetMessage();

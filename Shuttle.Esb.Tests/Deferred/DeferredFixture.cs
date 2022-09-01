@@ -1,57 +1,56 @@
 ﻿using System;
+using System.Collections.Generic;
+using System.IO;
 using System.Threading;
+using Microsoft.Extensions.DependencyInjection;
 using NUnit.Framework;
-using Shuttle.Core.Container;
 using Shuttle.Core.Contract;
-using Shuttle.Core.Logging;
 using Shuttle.Core.Pipelines;
 using Shuttle.Core.Reflection;
 using Shuttle.Core.Serialization;
+using Shuttle.Core.Transactions;
 
 namespace Shuttle.Esb.Tests
 {
     public class DeferredFixture : IntegrationFixture
     {
-        private readonly ILog _log;
-
-        public DeferredFixture()
+        protected void TestDeferredProcessing(IServiceCollection services, string queueUriFormat, bool isTransactional)
         {
-            _log = Log.For(this);
-        }
-
-        protected void TestDeferredProcessing(ComponentContainer container, string queueUriFormat, bool isTransactional)
-        {
-            Guard.AgainstNull(container, "container");
+            Guard.AgainstNull(services, nameof(services));
 
             const int deferredMessageCount = 10;
             const int millisecondsToDefer = 500;
 
             var module = new DeferredMessageModule(deferredMessageCount);
 
-            container.Registry.RegisterInstance(module);
+            services.AddSingleton(module);
 
-            var configuration = DefaultConfiguration(isTransactional, 1);
+            var serviceBusOptions = AddServiceBus(services, 1, isTransactional, queueUriFormat);
 
-            container.Registry.RegisterServiceBus(configuration);
+            var serviceProvider = services.BuildServiceProvider();
 
-            var queueManager = CreateQueueManager(container.Resolver);
+            var pipelineFactory = serviceProvider.GetRequiredService<IPipelineFactory>();
+            var transportMessagePipeline = pipelineFactory.GetPipeline<TransportMessagePipeline>();
+            var serviceBusConfiguration = serviceProvider.GetRequiredService<IServiceBusConfiguration>();
+            var serializer = serviceProvider.GetRequiredService<ISerializer>();
 
-            ConfigureQueues(container.Resolver, configuration, queueUriFormat);
+            var queueService = CreateQueueService(serviceProvider);
+
+            serviceBusConfiguration.Configure(serviceBusOptions);
+
+            ConfigureQueues(serviceProvider, serviceBusConfiguration, queueUriFormat);
 
             try
             {
-                module.Assign(container.Resolver.Resolve<IPipelineFactory>());
+                module.Assign(serviceProvider.GetRequiredService<IPipelineFactory>());
 
-                using (var bus = container.Resolver.Resolve<IServiceBus>())
+                using (serviceProvider.GetRequiredService<IServiceBus>().Start())
                 {
-                    bus.Start();
-
                     var ignoreTillDate = DateTime.Now.AddSeconds(5);
 
                     for (var i = 0; i < deferredMessageCount; i++)
                     {
-                        EnqueueDeferredMessage(configuration, container.Resolver.Resolve<ITransportMessageFactory>(),
-                            container.Resolver.Resolve<ISerializer>(), ignoreTillDate);
+                        EnqueueDeferredMessage(serviceBusConfiguration, transportMessagePipeline, serializer, ignoreTillDate);
 
                         ignoreTillDate = ignoreTillDate.AddMilliseconds(millisecondsToDefer);
                     }
@@ -60,7 +59,7 @@ namespace Shuttle.Esb.Tests
                     var timeout = ignoreTillDate.AddSeconds(15);
                     var timedOut = false;
 
-                    _log.Information($"[start wait] : now = '{DateTime.Now}'");
+                    Console.WriteLine($"[start wait] : now = '{DateTime.Now}'");
 
                     // wait for the message to be returned from the deferred queue
                     while (!module.AllMessagesHandled()
@@ -72,68 +71,104 @@ namespace Shuttle.Esb.Tests
                         timedOut = timeout < DateTime.Now;
                     }
 
-                    _log.Information(
+                    Console.WriteLine(
                         $"[end wait] : now = '{DateTime.Now}' / timeout = '{timeout}' / timed out = '{timedOut}'");
 
-                    _log.Information(
+                    Console.WriteLine(
                         $"{module.NumberOfDeferredMessagesReturned} of {deferredMessageCount} deferred messages returned to the inbox.");
-                    _log.Information(
+                    Console.WriteLine(
                         $"{module.NumberOfMessagesHandled} of {deferredMessageCount} deferred messages handled.");
 
                     Assert.IsTrue(module.AllMessagesHandled(), "All the deferred messages were not handled.");
 
-                    Assert.IsTrue(configuration.Inbox.ErrorQueue.IsEmpty());
-                    Assert.IsNull(configuration.Inbox.DeferredQueue.GetMessage());
-                    Assert.IsNull(configuration.Inbox.WorkQueue.GetMessage());
+                    Assert.IsTrue(serviceBusConfiguration.Inbox.ErrorQueue.IsEmpty());
+                    Assert.IsNull(serviceBusConfiguration.Inbox.DeferredQueue.GetMessage());
+                    Assert.IsNull(serviceBusConfiguration.Inbox.WorkQueue.GetMessage());
                 }
 
-                AttemptDropQueues(queueManager, queueUriFormat);
+                AttemptDropQueues(queueService, queueUriFormat);
             }
             finally
             {
-                queueManager.AttemptDispose();
+                queueService.AttemptDispose();
             }
         }
 
-        private void EnqueueDeferredMessage(IServiceBusConfiguration configuration,
-            ITransportMessageFactory transportMessageFactory, ISerializer serializer, DateTime ignoreTillDate)
+        private void EnqueueDeferredMessage(IServiceBusConfiguration serviceBusConfiguration,
+            TransportMessagePipeline transportMessagePipeline, ISerializer serializer, DateTime ignoreTillDate)
         {
             var command = new SimpleCommand
             {
                 Name = Guid.NewGuid().ToString()
             };
 
-            var message = transportMessageFactory.Create(command, c => c
-                .Defer(ignoreTillDate)
-                .WithRecipient(configuration.Inbox.WorkQueue), null);
+            transportMessagePipeline.Execute(command, null, builder =>
+            {
+                builder.Defer(ignoreTillDate);
+                builder.WithRecipient(serviceBusConfiguration.Inbox.WorkQueue);
+            });
 
-            configuration.Inbox.WorkQueue.Enqueue(message, serializer.Serialize(message));
+            serviceBusConfiguration.Inbox.WorkQueue.Enqueue(
+                transportMessagePipeline.State.GetTransportMessage(),
+                serializer.Serialize(transportMessagePipeline.State.GetTransportMessage()));
 
-            _log.Information(
-                $"[message enqueued] : name = '{command.Name}' / deferred till date = '{message.IgnoreTillDate}'");
+            Console.WriteLine(
+                $"[message enqueued] : name = '{command.Name}' / deferred till date = '{ignoreTillDate}'");
         }
 
-        private void ConfigureQueues(IComponentResolver resolver, IServiceBusConfiguration configuration, string queueUriFormat)
+        private void ConfigureQueues(IServiceProvider serviceProvider, IServiceBusConfiguration serviceBusConfiguration,
+            string queueUriFormat)
         {
-            var queueManager = resolver.Resolve<IQueueManager>().Configure(resolver);
+            var queueService = serviceProvider.GetRequiredService<IQueueService>();
 
-            var inboxWorkQueue = queueManager.GetQueue(string.Format(queueUriFormat, "test-inbox-work"));
-            var inboxDeferredQueue = queueManager.GetQueue(string.Format(queueUriFormat, "test-inbox-deferred"));
-            var errorQueue = queueManager.GetQueue(string.Format(queueUriFormat, "test-error"));
-
-            configuration.Inbox.WorkQueue = inboxWorkQueue;
-            configuration.Inbox.DeferredQueue = inboxDeferredQueue;
-            configuration.Inbox.ErrorQueue = errorQueue;
+            var inboxWorkQueue = queueService.Get(string.Format(queueUriFormat, "test-inbox-work"));
+            var inboxDeferredQueue = queueService.Get(string.Format(queueUriFormat, "test-inbox-deferred"));
+            var errorQueue = queueService.Get(string.Format(queueUriFormat, "test-error"));
 
             inboxWorkQueue.AttemptDrop();
             inboxDeferredQueue.AttemptDrop();
             errorQueue.AttemptDrop();
 
-            queueManager.CreatePhysicalQueues(configuration);
+            serviceBusConfiguration.CreatePhysicalQueues();
 
             inboxWorkQueue.AttemptPurge();
             inboxDeferredQueue.AttemptPurge();
             errorQueue.AttemptPurge();
+        }
+
+        protected ServiceBusOptions AddServiceBus(IServiceCollection services, int threadCount, bool isTransactional, string queueUriFormat)
+        {
+            Guard.AgainstNull(services, nameof(services));
+
+            services.AddTransactionScope(builder =>
+            {
+                builder.Options.Enabled = isTransactional;
+            });
+
+            var serviceBusOptions = GetServiceBusOptions(threadCount, queueUriFormat);
+
+            services.AddServiceBus(builder =>
+            {
+                builder.Options = serviceBusOptions;
+            });
+
+            return serviceBusOptions;
+        }
+
+        private ServiceBusOptions GetServiceBusOptions(int threadCount, string queueUriFormat)
+        {
+            return new ServiceBusOptions
+            {
+                Inbox = new InboxOptions
+                {
+                    WorkQueueUri = string.Format(queueUriFormat, "test-inbox-work"),
+                    DeferredQueueUri = string.Format(queueUriFormat, "test-inbox-deferred"),
+                    ErrorQueueUri = string.Format(queueUriFormat, "test-error"),
+                    DurationToSleepWhenIdle = new List<TimeSpan> { TimeSpan.FromMilliseconds(25) },
+                    DurationToIgnoreOnFailure = new List<TimeSpan> { TimeSpan.FromMilliseconds(25) },
+                    ThreadCount = threadCount
+                }
+            };
         }
     }
 }

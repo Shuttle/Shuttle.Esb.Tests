@@ -1,61 +1,109 @@
 using System;
 using System.Collections.Generic;
 using System.Threading;
+using Microsoft.Extensions.DependencyInjection;
 using Moq;
 using NUnit.Framework;
-using Shuttle.Core.Container;
 using Shuttle.Core.Contract;
+using Shuttle.Core.Pipelines;
+using Shuttle.Core.Reflection;
 using Shuttle.Core.Transactions;
 
 namespace Shuttle.Esb.Tests
 {
+    public class OutboxObserver : IPipelineObserver<OnAfterAcknowledgeMessage>
+    {
+        private readonly object _lock = new object();
+
+        public int HandledMessageCount { get; private set; }
+
+        public void Execute(OnAfterAcknowledgeMessage pipelineEvent)
+        {
+            lock (_lock)
+            {
+                HandledMessageCount++;
+            }
+        }
+    }
+
     public abstract class OutboxFixture : IntegrationFixture
     {
-        protected void TestOutboxSending(ComponentContainer container, string workQueueUriFormat, bool isTransactional)
+        protected void TestOutboxSending(IServiceCollection services, string workQueueUriFormat, int threadCount,
+            bool isTransactional)
         {
-            TestOutboxSending(container, workQueueUriFormat, workQueueUriFormat, isTransactional);
+            TestOutboxSending(services, workQueueUriFormat, workQueueUriFormat, threadCount, isTransactional);
         }
 
-        protected void TestOutboxSending(ComponentContainer container, string workQueueUriFormat,
-            string errorQueueUriFormat, bool isTransactional)
+        protected void TestOutboxSending(IServiceCollection services, string workQueueUriFormat,
+            string errorQueueUriFormat, int threadCount, bool isTransactional)
         {
-            Guard.AgainstNull(container, "container");
+            Guard.AgainstNull(services, nameof(services));
 
             const int count = 100;
-            const int threadCount = 3;
 
-            var padlock = new object();
-            var configuration = GetConfiguration(isTransactional, threadCount);
+            if (threadCount < 1)
+            {
+                threadCount = 1;
+            }
+
+            services.AddTransactionScope(builder =>
+            {
+                builder.Options.Enabled = isTransactional;
+            });
+
+            services.AddServiceBus(builder =>
+            {
+                builder.Options = new ServiceBusOptions
+                {
+                    Outbox =
+                        new OutboxOptions
+                        {
+                            WorkQueueUri = string.Format(workQueueUriFormat, "test-outbox-work"),
+                            DurationToSleepWhenIdle = new List<TimeSpan> { TimeSpan.FromMilliseconds(25) },
+                            ThreadCount = threadCount
+                        }
+                };
+            });
 
             var messageRouteProvider = new Mock<IMessageRouteProvider>();
 
             var receiverWorkQueueUri = string.Format(workQueueUriFormat, "test-receiver-work");
 
-            messageRouteProvider.Setup(m => m.GetRouteUris(It.IsAny<string>())).Returns(new[] {receiverWorkQueueUri});
+            messageRouteProvider.Setup(m => m.GetRouteUris(It.IsAny<string>())).Returns(new[] { receiverWorkQueueUri });
 
-            container.Registry.RegisterInstance(messageRouteProvider.Object);
+            services.AddSingleton(messageRouteProvider.Object);
 
-            container.Registry.RegisterServiceBus(configuration);
+            var serviceProvider = services.BuildServiceProvider();
 
-            var queueManager = CreateQueueManager(container.Resolver);
+            var pipelineFactory = serviceProvider.GetRequiredService<IPipelineFactory>();
 
-            ConfigureQueues(container.Resolver, configuration, workQueueUriFormat, errorQueueUriFormat);
+            var outboxObserver = new OutboxObserver();
 
-            var events = container.Resolver.Resolve<IServiceBusEvents>();
+            pipelineFactory.PipelineCreated += delegate (object sender, PipelineEventArgs args)
+            {
+                if (args.Pipeline.GetType() == typeof(OutboxPipeline))
+                {
+                    args.Pipeline.RegisterObserver(outboxObserver);
+                }
+            };
+
+            var queueService = CreateQueueService(serviceProvider);
+
+            ConfigureQueues(serviceProvider, workQueueUriFormat, errorQueueUriFormat);
 
             Console.WriteLine("Sending {0} messages.", count);
 
-            using (var bus = container.Resolver.Resolve<IServiceBus>().Start())
+            using (var bus = serviceProvider.GetRequiredService<IServiceBus>().Start())
             {
                 for (var i = 0; i < count; i++)
                 {
                     bus.Send(new SimpleCommand());
                 }
 
-                var receiverWorkQueue = queueManager.GetQueue(receiverWorkQueueUri);
+                var receiverWorkQueue = queueService.Get(receiverWorkQueueUri);
                 var timedOut = false;
                 var messageRetrieved = false;
-                var timeout = DateTime.Now.AddSeconds(5);
+                var timeout = DateTime.Now.AddSeconds(30);
 
                 while (!messageRetrieved && !timedOut)
                 {
@@ -76,37 +124,16 @@ namespace Shuttle.Esb.Tests
 
                 Assert.IsFalse(timedOut, "Timed out before any messages appeared in the receiver queue.");
 
-                var idleThreads = new List<int>();
+                timeout = DateTime.Now.AddSeconds(15);
 
-                events.ThreadWaiting += (sender, args) =>
-                {
-                    if (args.PipelineType.FullName != null &&
-                        !args.PipelineType.FullName.Equals(typeof(OutboxPipeline).FullName))
-                    {
-                        return;
-                    }
-
-                    lock (padlock)
-                    {
-                        if (idleThreads.Contains(Thread.CurrentThread.ManagedThreadId))
-                        {
-                            return;
-                        }
-
-                        idleThreads.Add(Thread.CurrentThread.ManagedThreadId);
-                    }
-                };
-
-                timeout = DateTime.Now.AddSeconds(5);
-
-                while (idleThreads.Count < threadCount && !timedOut)
+                while (outboxObserver.HandledMessageCount < count && !timedOut)
                 {
                     Thread.Sleep(25);
 
                     timedOut = timeout < DateTime.Now;
                 }
 
-                Assert.IsFalse(timedOut, "Timed out before processing {0} errors.  Waiting for {1} threads to be idle.", count, threadCount);
+                Assert.IsFalse(timedOut, "Timed out before processing {0} errors.", count);
 
                 for (var i = 0; i < count; i++)
                 {
@@ -116,30 +143,30 @@ namespace Shuttle.Esb.Tests
 
                     receiverWorkQueue.Acknowledge(receivedMessage.AcknowledgementToken);
                 }
+
+                receiverWorkQueue.AttemptDispose();
+                receiverWorkQueue.AttemptDrop();
             }
 
-            queueManager.GetQueue(receiverWorkQueueUri).AttemptDrop();
-
-            var outboxWorkQueue = queueManager.GetQueue(string.Format(workQueueUriFormat, "test-outbox-work"));
+            var outboxWorkQueue = queueService.Get(string.Format(workQueueUriFormat, "test-outbox-work"));
 
             Assert.IsTrue(outboxWorkQueue.IsEmpty());
 
+            outboxWorkQueue.AttemptDispose();
             outboxWorkQueue.AttemptDrop();
 
-            queueManager.GetQueue(string.Format(errorQueueUriFormat, "test-error")).AttemptDrop();
+            queueService.Get(string.Format(errorQueueUriFormat, "test-error")).AttemptDrop();
         }
 
-        private void ConfigureQueues(IComponentResolver resolver, IServiceBusConfiguration configuration, string workQueueUriFormat, string errorQueueUriFormat)
+        private void ConfigureQueues(IServiceProvider serviceProvider, string queueUriFormat,
+            string errorQueueUriFormat)
         {
-            var queueManager = resolver.Resolve<IQueueManager>().Configure(resolver);
-            var outboxWorkQueue = queueManager.GetQueue(string.Format(workQueueUriFormat, "test-outbox-work"));
-            var errorQueue = queueManager.GetQueue(string.Format(errorQueueUriFormat, "test-error"));
-
-            configuration.Outbox.WorkQueue = outboxWorkQueue;
-            configuration.Outbox.ErrorQueue = errorQueue;
+            var queueService = serviceProvider.GetRequiredService<IQueueService>();
+            var outboxWorkQueue = queueService.Get(string.Format(queueUriFormat, "test-outbox-work"));
+            var errorQueue = queueService.Get(string.Format(errorQueueUriFormat, "test-error"));
 
             var receiverWorkQueue =
-                queueManager.GetQueue(string.Format(workQueueUriFormat, "test-receiver-work"));
+                queueService.Get(string.Format(queueUriFormat, "test-receiver-work"));
 
             outboxWorkQueue.AttemptDrop();
             receiverWorkQueue.AttemptDrop();
@@ -152,26 +179,6 @@ namespace Shuttle.Esb.Tests
             outboxWorkQueue.AttemptPurge();
             receiverWorkQueue.AttemptPurge();
             errorQueue.AttemptPurge();
-        }
-
-        private ServiceBusConfiguration GetConfiguration(bool isTransactional, int threadCount)
-        {
-            var configuration = new ServiceBusConfiguration
-            {
-                ScanForQueueFactories = true,
-                TransactionScope = new TransactionScopeConfiguration
-                {
-                    Enabled = isTransactional
-                },
-                Outbox =
-                    new OutboxQueueConfiguration
-                    {
-                        DurationToSleepWhenIdle = new[] {TimeSpan.FromMilliseconds(5)},
-                        ThreadCount = threadCount
-                    }
-            };
-
-            return configuration;
         }
     }
 }

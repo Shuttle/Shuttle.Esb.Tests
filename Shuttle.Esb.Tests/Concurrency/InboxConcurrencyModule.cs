@@ -10,14 +10,14 @@ namespace Shuttle.Esb.Tests
         IPipelineObserver<OnAfterGetMessage>
     {
         private readonly List<DateTime> _datesAfterGetMessage = new List<DateTime>();
-        private readonly object _padlock = new object();
+        private readonly object _lock = new object();
         private DateTime _firstDateAfterGetMessage = DateTime.MinValue;
 
         public int OnAfterGetMessageCount => _datesAfterGetMessage.Count;
 
         public void Execute(OnAfterGetMessage pipelineEvent)
         {
-            lock (_padlock)
+            lock (_lock)
             {
                 var dateTime = DateTime.Now;
 
@@ -56,7 +56,7 @@ namespace Shuttle.Esb.Tests
 
         public void Assign(IPipelineFactory pipelineFactory)
         {
-            Guard.AgainstNull(pipelineFactory, "pipelineFactory");
+            Guard.AgainstNull(pipelineFactory, nameof(pipelineFactory));
 
             pipelineFactory.PipelineCreated += PipelineCreated;
         }

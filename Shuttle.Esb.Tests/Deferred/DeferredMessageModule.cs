@@ -1,6 +1,5 @@
 ﻿using System;
 using Shuttle.Core.Contract;
-using Shuttle.Core.Logging;
 using Shuttle.Core.Pipelines;
 
 namespace Shuttle.Esb.Tests
@@ -9,15 +8,12 @@ namespace Shuttle.Esb.Tests
 		IPipelineObserver<OnAfterHandleMessage>,
 		IPipelineObserver<OnAfterProcessDeferredMessage>
 	{
-		private readonly object _padlock = new object();
-		private readonly ILog _log;
+		private readonly object _lock = new object();
 	    private readonly int _deferredMessageCount;
 
 	    public DeferredMessageModule(int deferredMessageCount)
 		{
             _deferredMessageCount = deferredMessageCount;
-
-			_log = Log.For(this);
 		}
 
 		public int NumberOfDeferredMessagesReturned { get; private set; }
@@ -25,9 +21,7 @@ namespace Shuttle.Esb.Tests
 
 		private void PipelineCreated(object sender, PipelineEventArgs e)
 		{
-		    var fullName = e.Pipeline.GetType().FullName;
-
-		    if (fullName != null && !fullName.Equals(typeof (InboxMessagePipeline).FullName, StringComparison.InvariantCultureIgnoreCase) && !fullName.Equals(typeof (DeferredMessagePipeline).FullName, StringComparison.InvariantCultureIgnoreCase))
+		    if (e.Pipeline.GetType() != typeof (InboxMessagePipeline) && e.Pipeline.GetType() != typeof (DeferredMessagePipeline))
 			{
 				return;
 			}
@@ -37,9 +31,9 @@ namespace Shuttle.Esb.Tests
 
 		public void Execute(OnAfterHandleMessage pipelineEvent)
 		{
-			_log.Information("[OnAfterHandleMessage]");
+			Console.WriteLine("[OnAfterHandleMessage]");
 
-			lock (_padlock)
+			lock (_lock)
 			{
 				NumberOfMessagesHandled++;
 			}
@@ -47,12 +41,12 @@ namespace Shuttle.Esb.Tests
 
 		public void Execute(OnAfterProcessDeferredMessage pipelineEvent)
 		{
-			_log.Information(
-			    $"[OnAfterProcessDeferredMessage] : deferred message returned = '{pipelineEvent.Pipeline.State.GetDeferredMessageReturned()}'");
+			Console.WriteLine(
+				$"[OnAfterProcessDeferredMessage] : deferred message returned = '{pipelineEvent.Pipeline.State.GetDeferredMessageReturned()}'");
 
 			if (pipelineEvent.Pipeline.State.GetDeferredMessageReturned())
 			{
-				lock (_padlock)
+				lock (_lock)
 				{
 					NumberOfDeferredMessagesReturned++;
 				}
@@ -64,14 +58,9 @@ namespace Shuttle.Esb.Tests
 			return NumberOfMessagesHandled == _deferredMessageCount;
 		}
 
-		public bool AllDeferredMessageReturned()
-		{
-			return NumberOfDeferredMessagesReturned == _deferredMessageCount;
-		}
-
 		public void Assign(IPipelineFactory pipelineFactory)
 		{
-			Guard.AgainstNull(pipelineFactory, "pipelineFactory");
+			Guard.AgainstNull(pipelineFactory, nameof(pipelineFactory));
 
 			pipelineFactory.PipelineCreated += PipelineCreated;
 		}

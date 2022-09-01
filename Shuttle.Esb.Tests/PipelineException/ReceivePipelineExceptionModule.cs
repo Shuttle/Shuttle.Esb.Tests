@@ -2,7 +2,6 @@
 using System.Collections.Generic;
 using NUnit.Framework;
 using Shuttle.Core.Contract;
-using Shuttle.Core.Logging;
 using Shuttle.Core.Pipelines;
 using Shuttle.Core.Reflection;
 
@@ -14,22 +13,24 @@ namespace Shuttle.Esb.Tests
 		IPipelineObserver<OnDeserializeTransportMessage>,
 		IPipelineObserver<OnAfterDeserializeTransportMessage>
 	{
-	    private readonly IServiceBusConfiguration _configuration;
-	    private static readonly object Padlock = new object();
+	    private readonly IServiceBusConfiguration _serviceBusConfiguration;
+	    private static readonly object Lock = new object();
 
 		private readonly List<ExceptionAssertion> _assertions = new List<ExceptionAssertion>();
 		private string _assertionName;
 		private volatile bool _failed;
 		private int _pipelineCount;
 
-		private readonly ILog _log;
-
-		public ReceivePipelineExceptionModule(IServiceBusConfiguration configuration)
+		public ReceivePipelineExceptionModule(IServiceBusConfiguration serviceBusConfiguration, IPipelineFactory pipelineFactory)
 		{
-		    Guard.AgainstNull(configuration, "configuration");
+		    Guard.AgainstNull(serviceBusConfiguration, nameof(serviceBusConfiguration));
+		    Guard.AgainstNull(pipelineFactory, nameof(pipelineFactory));
 
-            _configuration = configuration;
-            _log = Log.For(this);
+		    pipelineFactory.PipelineCreated += PipelineCreated;
+		    pipelineFactory.PipelineReleased += PipelineReleased;
+		    pipelineFactory.PipelineObtained += PipelineObtained;
+
+			_serviceBusConfiguration = serviceBusConfiguration;
 
             AddAssertion("OnGetMessage");
             AddAssertion("OnAfterGetMessage");
@@ -42,7 +43,7 @@ namespace Shuttle.Esb.Tests
 			_pipelineCount += 1;
 			_assertionName = string.Empty;
 
-			_log.Information($"[pipeline obtained] : count = {_pipelineCount}");
+			Console.WriteLine($"[pipeline obtained] : count = {_pipelineCount}");
 		}
 
 		private void PipelineCreated(object sender, PipelineEventArgs e)
@@ -59,7 +60,7 @@ namespace Shuttle.Esb.Tests
 
 		private void ThrowException(string name)
 		{
-			lock (Padlock)
+			lock (Lock)
 			{
 				_assertionName = name;
 
@@ -76,11 +77,11 @@ namespace Shuttle.Esb.Tests
 
 		private void AddAssertion(string name)
 		{
-			lock (Padlock)
+			lock (Lock)
 			{
 				_assertions.Add(new ExceptionAssertion(name));
 
-				_log.Information($"[added] : assertion = '{name}'.");
+				Console.WriteLine($"[added] : assertion = '{name}'.");
 			}
 		}
 
@@ -91,7 +92,7 @@ namespace Shuttle.Esb.Tests
 				return;
 			}
 
-			lock (Padlock)
+			lock (Lock)
 			{
 				var assertion = GetAssertion(_assertionName);
 
@@ -100,27 +101,27 @@ namespace Shuttle.Esb.Tests
 					return;
 				}
 
-				_log.Information($"[invoking] : assertion = '{assertion.Name}'.");
+				Console.WriteLine($"[invoking] : assertion = '{assertion.Name}'.");
 
 				try
 				{
 					// IsEmpty does not work for prefetch queues
-					var receivedMessage = _configuration.Inbox.WorkQueue.GetMessage();
+					var receivedMessage = _serviceBusConfiguration.Inbox.WorkQueue.GetMessage();
 
 					Assert.IsNotNull(receivedMessage);
 
-                    _configuration.Inbox.WorkQueue.Release(receivedMessage.AcknowledgementToken);
+                    _serviceBusConfiguration.Inbox.WorkQueue.Release(receivedMessage.AcknowledgementToken);
 				}
 				catch (Exception ex)
 				{
-					_log.Error(ex.AllMessages());
+					Console.WriteLine(ex.AllMessages());
 
 					_failed = true;
 				}
 
 				assertion.MarkAsRun();
 
-				_log.Information($"[invoke complete] : assertion = '{assertion.Name}'.");
+				Console.WriteLine($"[invoke complete] : assertion = '{assertion.Name}'.");
 			}
 		}
 
@@ -131,7 +132,7 @@ namespace Shuttle.Esb.Tests
 
 		public bool ShouldWait()
 		{
-			lock (Padlock)
+			lock (Lock)
 			{
 				return !_failed && _assertions.Find(item => !item.HasRun) != null;
 			}
@@ -156,14 +157,5 @@ namespace Shuttle.Esb.Tests
 		{
 			ThrowException("OnAfterDeserializeTransportMessage");
 		}
-
-	    public void Assign(IPipelineFactory pipelineFactory)
-	    {
-            Guard.AgainstNull(pipelineFactory, "pipelineFactory");
-
-            pipelineFactory.PipelineCreated += PipelineCreated;
-            pipelineFactory.PipelineReleased += PipelineReleased;
-            pipelineFactory.PipelineObtained += PipelineObtained;
-        }
     }
 }

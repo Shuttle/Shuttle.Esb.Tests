@@ -1,7 +1,9 @@
 using System;
+using System.Collections.Generic;
+using System.IO;
 using System.Threading;
+using Microsoft.Extensions.DependencyInjection;
 using NUnit.Framework;
-using Shuttle.Core.Container;
 using Shuttle.Core.Pipelines;
 using Shuttle.Core.Serialization;
 
@@ -9,50 +11,53 @@ namespace Shuttle.Esb.Tests
 {
     public class PipelineExceptionFixture : IntegrationFixture
     {
-        protected void TestExceptionHandling(ComponentContainer container, string queueUriFormat)
+        protected void TestExceptionHandling(IServiceCollection services, string queueUriFormat)
         {
-            var configuration = DefaultConfiguration(true, 1);
+            var serviceBusOptions = GetServiceBusOptions(1, queueUriFormat);
 
-            container.Registry.RegisterServiceBus(configuration);
-
-            var module = new ReceivePipelineExceptionModule(configuration);
-
-            container.Registry.RegisterInstance(module.GetType(), module);
-
-            module.Assign(container.Resolver.Resolve<IPipelineFactory>());
-
-            var queueManager = CreateQueueManager(container.Resolver);
-
-            var inboxWorkQueue = queueManager.GetQueue(string.Format(queueUriFormat, "test-inbox-work"));
-            var inboxErrorQueue = queueManager.GetQueue(string.Format(queueUriFormat, "test-error"));
-
-            configuration.Inbox =
-                new InboxQueueConfiguration
-                {
-                    WorkQueue = inboxWorkQueue,
-                    ErrorQueue = inboxErrorQueue,
-                    DurationToSleepWhenIdle = new[] {TimeSpan.FromMilliseconds(5)},
-                    DurationToIgnoreOnFailure = new[] {TimeSpan.FromMilliseconds(5)},
-                    MaximumFailureCount = 100,
-                    ThreadCount = 1
-                };
-
-            inboxWorkQueue.Drop();
-            inboxErrorQueue.Drop();
-
-            queueManager.CreatePhysicalQueues(configuration);
-
-            var transportMessageFactory = container.Resolver.Resolve<ITransportMessageFactory>();
-            var serializer = container.Resolver.Resolve<ISerializer>();
-
-            using (var bus = container.Resolver.Resolve<IServiceBus>())
+            services.AddServiceBus(builder =>
             {
-                var message = transportMessageFactory.Create(new ReceivePipelineCommand(),
-                    c => c.WithRecipient(inboxWorkQueue));
+                builder.Options = serviceBusOptions;
+            });
 
-                inboxWorkQueue.Enqueue(message, serializer.Serialize(message));
+            services.AddSingleton<ReceivePipelineExceptionModule>();
 
-                Assert.IsFalse(inboxWorkQueue.IsEmpty());
+            var serviceProvider = services.BuildServiceProvider();
+
+            serviceBusOptions.Inbox = new InboxOptions
+            {
+                WorkQueueUri = string.Format(queueUriFormat, "test-inbox-work"),
+                DurationToSleepWhenIdle = new List<TimeSpan> { TimeSpan.FromMilliseconds(5) },
+                DurationToIgnoreOnFailure = new List<TimeSpan> { TimeSpan.FromMilliseconds(5) },
+                MaximumFailureCount = 100,
+                ThreadCount = 1
+            };
+
+            var serviceBusConfiguration = serviceProvider.GetRequiredService<IServiceBusConfiguration>();
+
+            serviceBusConfiguration.Configure(serviceBusOptions);
+
+            serviceBusConfiguration.Inbox.WorkQueue.Drop();
+
+            serviceBusConfiguration.CreatePhysicalQueues();
+
+            var pipelineFactory = serviceProvider.GetRequiredService<IPipelineFactory>();
+            var transportMessagePipeline = pipelineFactory.GetPipeline<TransportMessagePipeline>();
+            var module = serviceProvider.GetRequiredService<ReceivePipelineExceptionModule>();
+            var serializer = serviceProvider.GetRequiredService<ISerializer>();
+
+            using (var bus = serviceProvider.GetRequiredService<IServiceBus>())
+            {
+                transportMessagePipeline.Execute(new ReceivePipelineCommand(), null, builder =>
+                {
+                    builder.WithRecipient(serviceBusConfiguration.Inbox.WorkQueue);
+                });
+
+                serviceBusConfiguration.Inbox.WorkQueue.Enqueue(
+                    transportMessagePipeline.State.GetTransportMessage(),
+                    serializer.Serialize(transportMessagePipeline.State.GetTransportMessage()));
+
+                Assert.IsFalse(serviceBusConfiguration.Inbox.WorkQueue.IsEmpty());
 
                 bus.Start();
 
@@ -61,6 +66,21 @@ namespace Shuttle.Esb.Tests
                     Thread.Sleep(10);
                 }
             }
+        }
+
+        private ServiceBusOptions GetServiceBusOptions(int threadCount, string queueUriFormat)
+        {
+            return new ServiceBusOptions
+            {
+                Inbox = new InboxOptions
+                {
+                    WorkQueueUri = string.Format(queueUriFormat, "test-inbox-work"),
+                    ErrorQueueUri = string.Format(queueUriFormat, "test-error"),
+                    DurationToSleepWhenIdle = new List<TimeSpan> { TimeSpan.FromMilliseconds(25) },
+                    DurationToIgnoreOnFailure = new List<TimeSpan> { TimeSpan.FromMilliseconds(25) },
+                    ThreadCount = threadCount
+                }
+            };
         }
     }
 }
