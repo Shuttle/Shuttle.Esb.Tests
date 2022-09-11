@@ -1,6 +1,5 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.IO;
 using System.Threading;
 using Microsoft.Extensions.DependencyInjection;
 using NUnit.Framework;
@@ -19,7 +18,7 @@ namespace Shuttle.Esb.Tests
             Guard.AgainstNull(services, nameof(services));
 
             const int deferredMessageCount = 10;
-            const int millisecondsToDefer = 500;
+            const int millisecondsToDefer = 250;
 
             var module = new DeferredMessageModule(deferredMessageCount);
 
@@ -46,17 +45,20 @@ namespace Shuttle.Esb.Tests
 
                 using (serviceProvider.GetRequiredService<IServiceBus>().Start())
                 {
-                    var ignoreTillDate = DateTime.Now.AddSeconds(5);
+                    var ignoreTillDate = DateTime.Now.AddSeconds(2);
 
                     for (var i = 0; i < deferredMessageCount; i++)
                     {
-                        EnqueueDeferredMessage(serviceBusConfiguration, transportMessagePipeline, serializer, ignoreTillDate);
+                        EnqueueDeferredMessage(serviceBusConfiguration, transportMessagePipeline, serializer,
+                            ignoreTillDate);
 
                         ignoreTillDate = ignoreTillDate.AddMilliseconds(millisecondsToDefer);
                     }
 
                     // add the extra time else there is no time to process message being returned
-                    var timeout = ignoreTillDate.AddSeconds(15);
+                    var timeout =
+                        ignoreTillDate.AddMilliseconds(deferredMessageCount * millisecondsToDefer +
+                                                       millisecondsToDefer * 2);
                     var timedOut = false;
 
                     Console.WriteLine($"[start wait] : now = '{DateTime.Now}'");
@@ -136,7 +138,8 @@ namespace Shuttle.Esb.Tests
             errorQueue.AttemptPurge();
         }
 
-        protected ServiceBusOptions AddServiceBus(IServiceCollection services, int threadCount, bool isTransactional, string queueUriFormat)
+        protected ServiceBusOptions AddServiceBus(IServiceCollection services, int threadCount, bool isTransactional,
+            string queueUriFormat)
         {
             Guard.AgainstNull(services, nameof(services));
 
