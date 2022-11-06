@@ -37,7 +37,16 @@ namespace Shuttle.Esb.Tests
 
             serviceBusConfiguration.Configure(serviceBusOptions);
 
-            serviceBusConfiguration.Inbox.WorkQueue.Drop();
+            try
+            {
+                serviceBusConfiguration.Inbox.WorkQueue.AttemptDrop();
+                // if drop not supported, then purge
+                serviceBusConfiguration.Inbox.WorkQueue.AttemptPurge();
+            }
+            catch 
+            {
+                // if dropped, purge will cause exception, ignore
+            }
 
             serviceBusConfiguration.CreatePhysicalQueues();
 
