@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Threading.Tasks;
 using Microsoft.Extensions.DependencyInjection;
 using Shuttle.Core.Contract;
 using Shuttle.Core.Transactions;
@@ -25,7 +26,7 @@ namespace Shuttle.Esb.Tests
                 serviceProvider.GetRequiredService<IUriResolver>());
         }
 
-        protected void AttemptDropQueues(QueueService queueService, string queueUriFormat)
+        protected async Task TryDropQueues(QueueService queueService, string queueUriFormat)
         {
             foreach (var queueUri in _queueUris)
             {
@@ -34,7 +35,7 @@ namespace Shuttle.Esb.Tests
                     continue;
                 }
 
-                queueService.Get(string.Format(queueUriFormat, queueUri)).AttemptDrop();
+                await queueService.Get(string.Format(queueUriFormat, queueUri)).TryDrop().ConfigureAwait(false);
             }
         }
     }

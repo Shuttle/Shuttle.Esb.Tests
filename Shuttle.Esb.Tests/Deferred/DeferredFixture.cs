@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Threading;
+using System.Threading.Tasks;
 using Microsoft.Extensions.DependencyInjection;
 using NUnit.Framework;
 using Shuttle.Core.Contract;
@@ -13,7 +14,7 @@ namespace Shuttle.Esb.Tests
 {
     public class DeferredFixture : IntegrationFixture
     {
-        protected void TestDeferredProcessing(IServiceCollection services, string queueUriFormat, bool isTransactional)
+        protected async Task TestDeferredProcessing(IServiceCollection services, string queueUriFormat, bool isTransactional)
         {
             Guard.AgainstNull(services, nameof(services));
 
@@ -37,7 +38,7 @@ namespace Shuttle.Esb.Tests
 
             serviceBusConfiguration.Configure(serviceBusOptions);
 
-            ConfigureQueues(serviceProvider, serviceBusConfiguration, queueUriFormat);
+            await ConfigureQueues(serviceProvider, serviceBusConfiguration, queueUriFormat).ConfigureAwait(false);
 
             try
             {
@@ -49,8 +50,8 @@ namespace Shuttle.Esb.Tests
 
                     for (var i = 0; i < deferredMessageCount; i++)
                     {
-                        EnqueueDeferredMessage(serviceBusConfiguration, transportMessagePipeline, serializer,
-                            ignoreTillDate);
+                        await EnqueueDeferredMessage(serviceBusConfiguration, transportMessagePipeline, serializer,
+                            ignoreTillDate).ConfigureAwait(false);
 
                         ignoreTillDate = ignoreTillDate.AddMilliseconds(millisecondsToDefer);
                     }
@@ -83,20 +84,20 @@ namespace Shuttle.Esb.Tests
 
                     Assert.IsTrue(module.AllMessagesHandled(), "All the deferred messages were not handled.");
 
-                    Assert.IsTrue(serviceBusConfiguration.Inbox.ErrorQueue.IsEmpty());
-                    Assert.IsNull(serviceBusConfiguration.Inbox.DeferredQueue.GetMessage());
-                    Assert.IsNull(serviceBusConfiguration.Inbox.WorkQueue.GetMessage());
+                    Assert.IsTrue(await serviceBusConfiguration.Inbox.ErrorQueue.IsEmpty().ConfigureAwait(false));
+                    Assert.IsNull(await serviceBusConfiguration.Inbox.DeferredQueue.GetMessage().ConfigureAwait(false));
+                    Assert.IsNull(await serviceBusConfiguration.Inbox.WorkQueue.GetMessage().ConfigureAwait(false));
                 }
 
-                AttemptDropQueues(queueService, queueUriFormat);
+                await TryDropQueues(queueService, queueUriFormat).ConfigureAwait(false);
             }
             finally
             {
-                queueService.AttemptDispose();
+                queueService.TryDispose();
             }
         }
 
-        private void EnqueueDeferredMessage(IServiceBusConfiguration serviceBusConfiguration,
+        private async Task EnqueueDeferredMessage(IServiceBusConfiguration serviceBusConfiguration,
             TransportMessagePipeline transportMessagePipeline, ISerializer serializer, DateTime ignoreTillDate)
         {
             var command = new SimpleCommand
@@ -104,21 +105,21 @@ namespace Shuttle.Esb.Tests
                 Name = Guid.NewGuid().ToString()
             };
 
-            transportMessagePipeline.Execute(command, null, builder =>
+            await transportMessagePipeline.Execute(command, null, builder =>
             {
                 builder.Defer(ignoreTillDate);
                 builder.WithRecipient(serviceBusConfiguration.Inbox.WorkQueue);
-            });
+            }).ConfigureAwait(false);
 
-            serviceBusConfiguration.Inbox.WorkQueue.Enqueue(
+            await serviceBusConfiguration.Inbox.WorkQueue.Enqueue(
                 transportMessagePipeline.State.GetTransportMessage(),
-                serializer.Serialize(transportMessagePipeline.State.GetTransportMessage()));
+                await serializer.Serialize(transportMessagePipeline.State.GetTransportMessage()).ConfigureAwait(false)).ConfigureAwait(false);
 
             Console.WriteLine(
                 $"[message enqueued] : name = '{command.Name}' / deferred till date = '{ignoreTillDate}'");
         }
 
-        private void ConfigureQueues(IServiceProvider serviceProvider, IServiceBusConfiguration serviceBusConfiguration,
+        private async Task ConfigureQueues(IServiceProvider serviceProvider, IServiceBusConfiguration serviceBusConfiguration,
             string queueUriFormat)
         {
             var queueService = serviceProvider.GetRequiredService<IQueueService>();
@@ -127,15 +128,15 @@ namespace Shuttle.Esb.Tests
             var inboxDeferredQueue = queueService.Get(string.Format(queueUriFormat, "test-inbox-deferred"));
             var errorQueue = queueService.Get(string.Format(queueUriFormat, "test-error"));
 
-            inboxWorkQueue.AttemptDrop();
-            inboxDeferredQueue.AttemptDrop();
-            errorQueue.AttemptDrop();
+            await inboxWorkQueue.TryDrop().ConfigureAwait(false);
+            await inboxDeferredQueue.TryDrop().ConfigureAwait(false);
+            await errorQueue.TryDrop().ConfigureAwait(false);
 
-            serviceBusConfiguration.CreatePhysicalQueues();
+            await serviceBusConfiguration.CreatePhysicalQueues().ConfigureAwait(false);
 
-            inboxWorkQueue.AttemptPurge();
-            inboxDeferredQueue.AttemptPurge();
-            errorQueue.AttemptPurge();
+            await inboxWorkQueue.TryPurge().ConfigureAwait(false);
+            await inboxDeferredQueue.TryPurge().ConfigureAwait(false);
+            await errorQueue.TryPurge().ConfigureAwait(false);
         }
 
         protected ServiceBusOptions AddServiceBus(IServiceCollection services, int threadCount, bool isTransactional,

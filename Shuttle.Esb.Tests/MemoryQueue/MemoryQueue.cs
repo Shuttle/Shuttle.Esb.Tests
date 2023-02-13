@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Threading.Tasks;
 using Shuttle.Core.Contract;
 using Shuttle.Core.Streams;
 
@@ -48,21 +49,25 @@ namespace Shuttle.Esb.Tests
 				    $"memory://{{.|{Environment.MachineName.ToLower()}}}/{{name}}", uri));
 			}
 
-			Create();
+			Create().GetAwaiter().GetResult();
 		}
 
 		public QueueUri Uri { get; }
 		public bool IsStream => false;
 
-		public bool IsEmpty()
+		public async ValueTask<bool> IsEmpty()
 		{
+			bool result;
+
 			lock (Lock)
 			{
-				return _queues[Uri.ToString()].Count == 0;
+				result = _queues[Uri.ToString()].Count == 0;
 			}
+
+			return await new ValueTask<bool>(result).ConfigureAwait(false);
 		}
 
-		public void Enqueue(TransportMessage transportMessage, Stream stream)
+        public async Task Enqueue(TransportMessage transportMessage, Stream stream)
 		{
 			lock (Lock)
 			{
@@ -70,10 +75,14 @@ namespace Shuttle.Esb.Tests
 
 				_queues[Uri.ToString()].Add(_itemId, new MemoryQueueItem(_itemId, transportMessage.MessageId, stream.Copy()));
 			}
+
+			await Task.CompletedTask.ConfigureAwait(false);
 		}
 
-		public ReceivedMessage GetMessage()
+		public async Task<ReceivedMessage> GetMessage()
 		{
+			ReceivedMessage result = null; 
+
 			lock (Lock)
 			{
 				var queue = _queues[Uri.ToString()];
@@ -88,17 +97,19 @@ namespace Shuttle.Esb.Tests
 					{
 						_unacknowledgedMessageIds.Add(pair.Value.ItemId);
 
-						return new ReceivedMessage(pair.Value.Stream, pair.Value.ItemId);
+						result = new ReceivedMessage(pair.Value.Stream, pair.Value.ItemId);
+
+						break;
 					}
 
 					index++;
 				}
-
-				return null;
 			}
+
+			return await Task.FromResult(result).ConfigureAwait(false);
 		}
 
-		public void Acknowledge(object acknowledgementToken)
+		public async Task Acknowledge(object acknowledgementToken)
 		{
 			var itemId = (int) acknowledgementToken;
 
@@ -118,9 +129,11 @@ namespace Shuttle.Esb.Tests
 
 				_unacknowledgedMessageIds.Remove(itemId);
 			}
+
+			await Task.CompletedTask.ConfigureAwait(false);
 		}
 
-		public void Release(object acknowledgementToken)
+		public async Task Release(object acknowledgementToken)
 		{
 			var itemId = (int) acknowledgementToken;
 
@@ -144,34 +157,40 @@ namespace Shuttle.Esb.Tests
 
 				_unacknowledgedMessageIds.Remove(itemId);
 			}
+
+			await Task.CompletedTask.ConfigureAwait(false);
 		}
 
-		public bool IsLocal => true;
+		//public bool IsLocal => true;
 
-	    public static IQueue From(string uri)
-		{
-			return new MemoryQueue(new Uri(uri));
-		}
+	 //   public static IQueue From(string uri)
+		//{
+		//	return new MemoryQueue(new Uri(uri));
+		//}
 
-		public static void Clear()
-		{
-			_queues = new Dictionary<string, Dictionary<int, MemoryQueueItem>>();
-		}
+		//public static void Clear()
+		//{
+		//	_queues = new Dictionary<string, Dictionary<int, MemoryQueueItem>>();
+		//}
 
-		public void Create()
+		public async Task Create()
 		{
 			if (!_queues.ContainsKey(Uri.ToString()))
 			{
 				_queues.Add(Uri.ToString(), new Dictionary<int, MemoryQueueItem>());
 			}
+
+			await Task.CompletedTask.ConfigureAwait(false);
 		}
 
-		public void Purge()
+		public async Task Purge()
 		{
 			lock (Lock)
 			{
 				_queues[Uri.ToString()].Clear();
 			}
+
+			await Task.CompletedTask.ConfigureAwait(false);
 		}
 	}
 

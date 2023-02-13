@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Threading;
+using System.Threading.Tasks;
 using Microsoft.Extensions.DependencyInjection;
 using NUnit.Framework;
 using Shuttle.Core.Pipelines;
@@ -11,7 +12,7 @@ namespace Shuttle.Esb.Tests
 {
     public class PipelineExceptionFixture : IntegrationFixture
     {
-        protected void TestExceptionHandling(IServiceCollection services, string queueUriFormat)
+        protected async Task TestExceptionHandling(IServiceCollection services, string queueUriFormat)
         {
             var serviceBusOptions = GetServiceBusOptions(1, queueUriFormat);
 
@@ -39,40 +40,42 @@ namespace Shuttle.Esb.Tests
 
             try
             {
-                serviceBusConfiguration.Inbox.WorkQueue.AttemptDrop();
+                await serviceBusConfiguration.Inbox.WorkQueue.TryDrop().ConfigureAwait(false);
                 // if drop not supported, then purge
-                serviceBusConfiguration.Inbox.WorkQueue.AttemptPurge();
+                await serviceBusConfiguration.Inbox.WorkQueue.TryPurge().ConfigureAwait(false);
             }
             catch 
             {
                 // if dropped, purge will cause exception, ignore
             }
 
-            serviceBusConfiguration.CreatePhysicalQueues();
+            await serviceBusConfiguration.CreatePhysicalQueues().ConfigureAwait(false);
 
             var pipelineFactory = serviceProvider.GetRequiredService<IPipelineFactory>();
             var transportMessagePipeline = pipelineFactory.GetPipeline<TransportMessagePipeline>();
             var module = serviceProvider.GetRequiredService<ReceivePipelineExceptionModule>();
             var serializer = serviceProvider.GetRequiredService<ISerializer>();
 
-            using (var bus = serviceProvider.GetRequiredService<IServiceBus>())
+            var serviceBus = serviceProvider.GetRequiredService<IServiceBus>();
+            
+            await using (serviceBus.ConfigureAwait(false))
             {
-                transportMessagePipeline.Execute(new ReceivePipelineCommand(), null, builder =>
+                await transportMessagePipeline.Execute(new ReceivePipelineCommand(), null, builder =>
                 {
                     builder.WithRecipient(serviceBusConfiguration.Inbox.WorkQueue);
-                });
+                }).ConfigureAwait(false);
 
-                serviceBusConfiguration.Inbox.WorkQueue.Enqueue(
+                await serviceBusConfiguration.Inbox.WorkQueue.Enqueue(
                     transportMessagePipeline.State.GetTransportMessage(),
-                    serializer.Serialize(transportMessagePipeline.State.GetTransportMessage()));
+                    await serializer.Serialize(transportMessagePipeline.State.GetTransportMessage()).ConfigureAwait(false)).ConfigureAwait(false);
 
-                Assert.IsFalse(serviceBusConfiguration.Inbox.WorkQueue.IsEmpty());
+                Assert.IsFalse(await serviceBusConfiguration.Inbox.WorkQueue.IsEmpty().ConfigureAwait(false));
 
-                bus.Start();
+                await serviceBus.Start().ConfigureAwait(false);
 
                 while (module.ShouldWait())
                 {
-                    Thread.Sleep(10);
+                    await Task.Delay(10).ConfigureAwait(false);
                 }
             }
         }

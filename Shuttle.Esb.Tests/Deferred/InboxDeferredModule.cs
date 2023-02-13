@@ -1,4 +1,5 @@
 using System;
+using System.Threading.Tasks;
 using Shuttle.Core.Contract;
 using Shuttle.Core.Pipelines;
 
@@ -9,9 +10,11 @@ namespace Shuttle.Esb.Tests
     {
         public TransportMessage TransportMessage { get; private set; }
 
-        public void Execute(OnAfterDeserializeTransportMessage pipelineEvent)
+        public async Task Execute(OnAfterDeserializeTransportMessage pipelineEvent)
         {
             TransportMessage = pipelineEvent.Pipeline.State.GetTransportMessage();
+
+            await Task.CompletedTask.ConfigureAwait(false);
         }
 
         private void PipelineCreated(object sender, PipelineEventArgs e)

@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Threading.Tasks;
 using Shuttle.Core.Contract;
 using Shuttle.Core.Pipelines;
 
@@ -11,7 +12,7 @@ namespace Shuttle.Esb.Tests
 
         public int ProcessedCount => _counter.ProcessedCount;
 
-        public MessageHandlerInvokeResult Invoke(IPipelineEvent pipelineEvent)
+        public async Task<MessageHandlerInvokeResult> Invoke(IPipelineEvent pipelineEvent)
         {
             Guard.AgainstNull(pipelineEvent, nameof(pipelineEvent));
 
@@ -25,7 +26,7 @@ namespace Shuttle.Esb.Tests
 
             _counter.Processed();
 
-            return MessageHandlerInvokeResult.InvokedHandler(null);
+            return await Task.FromResult(MessageHandlerInvokeResult.InvokedHandler(null)).ConfigureAwait(false);
         }
     }
 }

@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Threading;
+using System.Threading.Tasks;
 using Microsoft.Extensions.DependencyInjection;
 using NUnit.Framework;
 using Shuttle.Core.Contract;
@@ -19,18 +20,20 @@ namespace Shuttle.Esb.Tests
 
         public int HandledMessageCount { get; private set; }
 
-        public void Execute(OnAfterAcknowledgeMessage pipelineEvent)
+        public async Task Execute(OnAfterAcknowledgeMessage pipelineEvent)
         {
             lock (_lock)
             {
                 HandledMessageCount++;
             }
+
+            await Task.CompletedTask.ConfigureAwait(false);
         }
     }
 
     public class ProcessorThreadObserver : IPipelineObserver<OnStarted>
     {
-        public void Execute(OnStarted pipelineEvent)
+        public async Task Execute(OnStarted pipelineEvent)
         {
             var executedThreads = new List<int>();
 
@@ -49,6 +52,8 @@ namespace Shuttle.Esb.Tests
                     executedThreads.Add(args.ManagedThreadId);
                 };
             }
+
+            await Task.CompletedTask.ConfigureAwait(false);
         }
     }
 
@@ -56,15 +61,17 @@ namespace Shuttle.Esb.Tests
     {
         public bool HasReceivedPipelineException { get; private set; }
 
-        public void Execute(OnPipelineException pipelineEvent)
+        public async Task Execute(OnPipelineException pipelineEvent)
         {
             HasReceivedPipelineException = true;
+
+            await Task.CompletedTask.ConfigureAwait(false);
         }
     }
 
     public abstract class InboxFixture : IntegrationFixture
     {
-        protected void TestInboxThroughput(IServiceCollection services, string queueUriFormat, int timeoutMilliseconds,
+        protected async Task TestInboxThroughput(IServiceCollection services, string queueUriFormat, int timeoutMilliseconds,
             int messageCount, int threadCount, bool isTransactional)
         {
             Guard.AgainstNull(services, nameof(services));
@@ -109,7 +116,7 @@ namespace Shuttle.Esb.Tests
             {
                 serviceBusConfiguration.Configure(serviceBusOptions);
 
-                ConfigureQueues(serviceProvider, serviceBusConfiguration, queueUriFormat, true);
+                await ConfigureQueues(serviceProvider, serviceBusConfiguration, queueUriFormat, true).ConfigureAwait(false);
 
                 Console.WriteLine(
                     $"Sending {messageCount} messages to input queue '{serviceBusConfiguration.Inbox.WorkQueue.Uri}'.");
@@ -118,14 +125,14 @@ namespace Shuttle.Esb.Tests
 
                 for (var i = 0; i < messageCount; i++)
                 {
-                    transportMessagePipeline.Execute(new SimpleCommand("command " + i), null, builder =>
+                    await transportMessagePipeline.Execute(new SimpleCommand("command " + i), null, builder =>
                     {
                         builder.WithRecipient(serviceBusConfiguration.Inbox.WorkQueue);
-                    });
+                    }).ConfigureAwait(false);
 
-                    serviceBusConfiguration.Inbox.WorkQueue.Enqueue(
+                    await serviceBusConfiguration.Inbox.WorkQueue.Enqueue(
                         transportMessagePipeline.State.GetTransportMessage(),
-                        serializer.Serialize(transportMessagePipeline.State.GetTransportMessage()));
+                        await serializer.Serialize(transportMessagePipeline.State.GetTransportMessage()).ConfigureAwait(false)).ConfigureAwait(false);
                 }
 
                 sw.Stop();
@@ -154,13 +161,13 @@ namespace Shuttle.Esb.Tests
                     Console.WriteLine($"[stopped] : {DateTime.Now:HH:mm:ss.fff}");
                 }
 
-                AttemptDropQueues(queueService, queueUriFormat);
+                await TryDropQueues(queueService, queueUriFormat).ConfigureAwait(false);
             }
             finally
             {
-                queueService.Get(serviceBusConfiguration.Inbox.WorkQueue.Uri.ToString()).AttemptDispose();
-                queueService.Get(serviceBusConfiguration.Inbox.ErrorQueue.Uri.ToString()).AttemptDispose();
-                queueService.AttemptDispose();
+                queueService.Get(serviceBusConfiguration.Inbox.WorkQueue.Uri.ToString()).TryDispose();
+                queueService.Get(serviceBusConfiguration.Inbox.ErrorQueue.Uri.ToString()).TryDispose();
+                queueService.TryDispose();
             }
 
             var ms = sw.ElapsedMilliseconds;
@@ -178,7 +185,7 @@ namespace Shuttle.Esb.Tests
             }
         }
 
-        protected void TestInboxError(IServiceCollection services, string queueUriFormat, bool hasErrorQueue,
+        protected async Task TestInboxError(IServiceCollection services, string queueUriFormat, bool hasErrorQueue,
             bool isTransactional)
         {
             var serviceBusOptions = AddServiceBus(services, hasErrorQueue, 1, isTransactional, queueUriFormat, TimeSpan.FromMilliseconds(25));
@@ -209,20 +216,22 @@ namespace Shuttle.Esb.Tests
             {
                 serviceBusConfiguration.Configure(serviceBusOptions);
 
-                ConfigureQueues(serviceProvider, serviceBusConfiguration, queueUriFormat, hasErrorQueue);
+                await ConfigureQueues(serviceProvider, serviceBusConfiguration, queueUriFormat, hasErrorQueue).ConfigureAwait(false);
 
-                using (var bus = serviceProvider.GetRequiredService<IServiceBus>())
+                var serviceBus = serviceProvider.GetRequiredService<IServiceBus>();
+                
+                await using (serviceBus.ConfigureAwait(false))
                 {
-                    transportMessagePipeline.Execute(new ErrorCommand(), null, builder =>
+                    await transportMessagePipeline.Execute(new ErrorCommand(), null, builder =>
                     {
                         builder.WithRecipient(serviceBusConfiguration.Inbox.WorkQueue);
-                    });
+                    }).ConfigureAwait(false);
 
-                    serviceBusConfiguration.Inbox.WorkQueue.Enqueue(
+                    await serviceBusConfiguration.Inbox.WorkQueue.Enqueue(
                         transportMessagePipeline.State.GetTransportMessage(),
-                        serializer.Serialize(transportMessagePipeline.State.GetTransportMessage()));
+                        await serializer.Serialize(transportMessagePipeline.State.GetTransportMessage()).ConfigureAwait(false)).ConfigureAwait(false);
 
-                    bus.Start();
+                    await serviceBus.Start().ConfigureAwait(false);   
 
                     var timeout = DateTime.Now.AddSeconds(15);
                     var timedOut = false;
@@ -241,7 +250,7 @@ namespace Shuttle.Esb.Tests
                     }
                     finally
                     {
-                        bus.Stop();
+                        await serviceBus.Stop();
                     }
 
                     if (hasErrorQueue)
@@ -255,15 +264,15 @@ namespace Shuttle.Esb.Tests
                     }
                 }
 
-                AttemptDropQueues(queueService, queueUriFormat);
+                await TryDropQueues(queueService, queueUriFormat).ConfigureAwait(false);
             }
             finally
             {
-                queueService.AttemptDispose();
+                queueService.TryDispose();
             }
         }
 
-        private void ConfigureQueues(IServiceProvider serviceProvider, IServiceBusConfiguration serviceBusConfiguration,
+        private async Task ConfigureQueues(IServiceProvider serviceProvider, IServiceBusConfiguration serviceBusConfiguration,
             string queueUriFormat, bool hasErrorQueue)
         {
             var queueService = serviceProvider.GetRequiredService<IQueueService>();
@@ -271,16 +280,16 @@ namespace Shuttle.Esb.Tests
             var inboxWorkQueue = queueService.Get(string.Format(queueUriFormat, "test-inbox-work"));
             var errorQueue = hasErrorQueue ? queueService.Get(string.Format(queueUriFormat, "test-error")) : null;
 
-            inboxWorkQueue.AttemptDrop();
-            errorQueue.AttemptDrop();
+            await inboxWorkQueue.TryDrop().ConfigureAwait(false);
+            await errorQueue.TryDrop().ConfigureAwait(false);
 
-            serviceBusConfiguration.CreatePhysicalQueues();
+            await serviceBusConfiguration.CreatePhysicalQueues().ConfigureAwait(false);
 
-            inboxWorkQueue.AttemptPurge();
-            errorQueue.AttemptPurge();
+            await inboxWorkQueue.TryPurge().ConfigureAwait(false);
+            await errorQueue.TryPurge().ConfigureAwait(false);
         }
 
-        protected void TestInboxConcurrency(IServiceCollection services, string queueUriFormat, int msToComplete,
+        protected async Task TestInboxConcurrency(IServiceCollection services, string queueUriFormat, int msToComplete,
             bool isTransactional)
         {
             const int threadCount = 1;
@@ -309,23 +318,19 @@ namespace Shuttle.Esb.Tests
             {
                 serviceBusConfiguration.Configure(serviceBusOptions);
 
-                ConfigureQueues(serviceProvider, serviceBusConfiguration, queueUriFormat, true);
+                await ConfigureQueues(serviceProvider, serviceBusConfiguration, queueUriFormat, true).ConfigureAwait(false);
 
-                using (var bus = serviceProvider.GetRequiredService<IServiceBus>())
+                var serviceBus = serviceProvider.GetRequiredService<IServiceBus>();
+                
+                await using (serviceBus.ConfigureAwait(false))
                 {
                     for (var i = 0; i < threadCount; i++)
                     {
-                        transportMessagePipeline.Execute(new ConcurrentCommand
-                        {
-                            MessageIndex = i
-                        }, null, builder =>
-                        {
-                            builder.WithRecipient(serviceBusConfiguration.Inbox.WorkQueue);
-                        });
+                        await transportMessagePipeline.Execute(new ConcurrentCommand { MessageIndex = i }, null, builder => { builder.WithRecipient(serviceBusConfiguration.Inbox.WorkQueue); }).ConfigureAwait(false);
 
-                        serviceBusConfiguration.Inbox.WorkQueue.Enqueue(
+                        await serviceBusConfiguration.Inbox.WorkQueue.Enqueue(
                             transportMessagePipeline.State.GetTransportMessage(),
-                            serializer.Serialize(transportMessagePipeline.State.GetTransportMessage()));
+                            await serializer.Serialize(transportMessagePipeline.State.GetTransportMessage()).ConfigureAwait(false)).ConfigureAwait(false);
                     }
 
                     var idleThreads = new List<int>();
@@ -343,7 +348,7 @@ namespace Shuttle.Esb.Tests
                         }
                     };
 
-                    bus.Start();
+                    await serviceBus.Start().ConfigureAwait(false);
 
                     while (idleThreads.Count < threadCount)
                     {
@@ -351,11 +356,11 @@ namespace Shuttle.Esb.Tests
                     }
                 }
 
-                AttemptDropQueues(queueService, queueUriFormat);
+                await TryDropQueues(queueService, queueUriFormat).ConfigureAwait(false);
             }
             finally
             {
-                queueService.AttemptDispose();
+                queueService.TryDispose();
             }
 
             Assert.AreEqual(threadCount, module.OnAfterGetMessageCount,
@@ -365,7 +370,7 @@ namespace Shuttle.Esb.Tests
                 "All dequeued messages have to be within {0} ms of first get message.", msToComplete);
         }
 
-        protected void TestInboxDeferred(IServiceCollection services, string queueUriFormat)
+        protected async Task TestInboxDeferred(IServiceCollection services, string queueUriFormat)
         {
             var serviceBusOptions = new ServiceBusOptions
             {
@@ -398,21 +403,23 @@ namespace Shuttle.Esb.Tests
 
             serviceBusConfiguration.Configure(serviceBusOptions);
 
-            ConfigureQueues(serviceProvider, serviceBusConfiguration, queueUriFormat, true);
+            await ConfigureQueues(serviceProvider, serviceBusConfiguration, queueUriFormat, true);
 
             try
             {
                 var module = serviceProvider.GetRequiredService<InboxDeferredModule>();
 
-                using (var bus = serviceProvider.GetRequiredService<IServiceBus>().Start())
+                var serviceBus = await serviceProvider.GetRequiredService<IServiceBus>().Start();
+                
+                await using (serviceBus.ConfigureAwait(false))
                 {
-                    var transportMessage = bus.Send(new ReceivePipelineCommand(),
+                    var transportMessage = await serviceBus.Send(new ReceivePipelineCommand(),
                         builder =>
                         {
                             builder
                                 .Defer(DateTime.Now.AddMilliseconds(500))
                                 .WithRecipient(serviceBusConfiguration.Inbox.WorkQueue);
-                        });
+                        }).ConfigureAwait(false);
 
                     var timeout = DateTime.Now.AddMilliseconds(1000);
 
@@ -422,7 +429,7 @@ namespace Shuttle.Esb.Tests
 
                     while (module.TransportMessage == null && DateTime.Now < timeout)
                     {
-                        Thread.Sleep(5);
+                        await Task.Delay(5);
                     }
 
                     Assert.IsNotNull(module.TransportMessage);
@@ -431,20 +438,20 @@ namespace Shuttle.Esb.Tests
                         StringComparison.OrdinalIgnoreCase));
                 }
 
-                AttemptDropQueues(queueService, queueUriFormat);
+                await TryDropQueues(queueService, queueUriFormat).ConfigureAwait(false);
             }
             finally
             {
-                queueService.AttemptDispose();
+                queueService.TryDispose();
             }
         }
 
-        protected void TestInboxExpiry(IServiceCollection services, string queueUriFormat)
+        protected async Task TestInboxExpiry(IServiceCollection services, string queueUriFormat)
         {
-            TestInboxExpiry(services, queueUriFormat, TimeSpan.FromMilliseconds(500));
+            await TestInboxExpiry(services, queueUriFormat, TimeSpan.FromMilliseconds(500));
         }
 
-        protected void TestInboxExpiry(IServiceCollection services, string queueUriFormat, TimeSpan expiryDuration)
+        protected async Task TestInboxExpiry(IServiceCollection services, string queueUriFormat, TimeSpan expiryDuration)
         {
             services.AddServiceBus();
 
@@ -460,35 +467,31 @@ namespace Shuttle.Esb.Tests
             {
                 var queue = queueService.Get(string.Format(queueUriFormat, "test-inbox-work"));
 
-                queue.AttemptDrop();
-                queue.AttemptCreate();
+                await queue.TryDrop().ConfigureAwait(false);
+                await queue.TryCreate().ConfigureAwait(false);
 
-                transportMessagePipeline.Execute(new ReceivePipelineCommand(), null, builder =>
-                {
-                    builder.WillExpire(DateTime.Now.AddMilliseconds(expiryDuration.TotalMilliseconds));
-                    builder.WithRecipient(queue);
-                });
+                await transportMessagePipeline.Execute(new ReceivePipelineCommand(), null, builder => { builder.WillExpire(DateTime.Now.AddMilliseconds(expiryDuration.TotalMilliseconds)); builder.WithRecipient(queue); }).ConfigureAwait(false);
 
                 var transportMessage = transportMessagePipeline.State.GetTransportMessage();
 
-                queue.Enqueue(transportMessage,
-                    serializer.Serialize(transportMessagePipeline.State.GetTransportMessage()));
+                await queue.Enqueue(transportMessage,
+                    await serializer.Serialize(transportMessagePipeline.State.GetTransportMessage()).ConfigureAwait(false)).ConfigureAwait(false);
 
                 Assert.IsNotNull(transportMessage, "TransportMessage is null.");
                 Assert.IsFalse(transportMessage.HasExpired(),
                     "The message has already expired before being processed.");
 
                 // wait until the message expires
-                Thread.Sleep(expiryDuration.Add(TimeSpan.FromMilliseconds(100)));
+                await Task.Delay(500).ConfigureAwait(false);
 
                 Assert.IsNull(queue.GetMessage(),
                     "The message did not expire.  Call this test only if your queue actually supports message expiry internally.");
 
-                queue.AttemptDrop();
+                await queue.TryDrop().ConfigureAwait(false);
             }
             finally
             {
-                queueService.AttemptDispose();
+                queueService.TryDispose();
             }
         }
 

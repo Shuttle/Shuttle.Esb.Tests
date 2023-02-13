@@ -1,5 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Threading;
+using System.Threading.Tasks;
 using NUnit.Framework;
 using Shuttle.Core.Contract;
 using Shuttle.Core.Pipelines;
@@ -14,7 +16,7 @@ namespace Shuttle.Esb.Tests
 		IPipelineObserver<OnAfterDeserializeTransportMessage>
 	{
 	    private readonly IServiceBusConfiguration _serviceBusConfiguration;
-	    private static readonly object Lock = new object();
+	    private static readonly SemaphoreSlim Lock = new SemaphoreSlim(1,1);
 
 		private readonly List<ExceptionAssertion> _assertions = new List<ExceptionAssertion>();
 		private string _assertionName;
@@ -85,14 +87,16 @@ namespace Shuttle.Esb.Tests
 			}
 		}
 
-		private void PipelineReleased(object sender, PipelineEventArgs e)
+		private async void PipelineReleased(object sender, PipelineEventArgs e)
 		{
 			if (string.IsNullOrEmpty(_assertionName))
 			{
 				return;
 			}
 
-			lock (Lock)
+			await Lock.WaitAsync().ConfigureAwait(false);
+
+			try
 			{
 				var assertion = GetAssertion(_assertionName);
 
@@ -106,11 +110,11 @@ namespace Shuttle.Esb.Tests
 				try
 				{
 					// IsEmpty does not work for prefetch queues
-					var receivedMessage = _serviceBusConfiguration.Inbox.WorkQueue.GetMessage();
+					var receivedMessage = await _serviceBusConfiguration.Inbox.WorkQueue.GetMessage().ConfigureAwait(false);
 
 					Assert.IsNotNull(receivedMessage);
 
-                    _serviceBusConfiguration.Inbox.WorkQueue.Release(receivedMessage.AcknowledgementToken);
+					await _serviceBusConfiguration.Inbox.WorkQueue.Release(receivedMessage.AcknowledgementToken).ConfigureAwait(false);
 				}
 				catch (Exception ex)
 				{
@@ -122,6 +126,10 @@ namespace Shuttle.Esb.Tests
 				assertion.MarkAsRun();
 
 				Console.WriteLine($"[invoke complete] : assertion = '{assertion.Name}'.");
+			}
+            finally
+			{
+				Lock.Release();
 			}
 		}
 
@@ -138,24 +146,32 @@ namespace Shuttle.Esb.Tests
 			}
 		}
 
-		public void Execute(OnGetMessage pipelineEvent1)
+		public async Task Execute(OnGetMessage pipelineEvent1)
 		{
 			ThrowException("OnGetMessage");
+
+			await Task.CompletedTask.ConfigureAwait(false);
 		}
 
-		public void Execute(OnAfterGetMessage pipelineEvent)
+		public async Task Execute(OnAfterGetMessage pipelineEvent)
 		{
 			ThrowException("OnAfterGetMessage");
+
+			await Task.CompletedTask.ConfigureAwait(false);
 		}
 
-		public void Execute(OnDeserializeTransportMessage pipelineEvent1)
+        public async Task Execute(OnDeserializeTransportMessage pipelineEvent1)
 		{
 			ThrowException("OnDeserializeTransportMessage");
+
+			await Task.CompletedTask.ConfigureAwait(false);
 		}
 
-		public void Execute(OnAfterDeserializeTransportMessage pipelineEvent1)
+        public async Task Execute(OnAfterDeserializeTransportMessage pipelineEvent1)
 		{
 			ThrowException("OnAfterDeserializeTransportMessage");
+
+			await Task.CompletedTask.ConfigureAwait(false);
 		}
     }
 }

@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Threading.Tasks;
 using Shuttle.Core.Contract;
 using Shuttle.Core.Pipelines;
 
@@ -29,7 +30,7 @@ namespace Shuttle.Esb.Tests
 			e.Pipeline.RegisterObserver(this);
 		}
 
-		public void Execute(OnAfterHandleMessage pipelineEvent)
+		public async Task Execute(OnAfterHandleMessage pipelineEvent)
 		{
 			Console.WriteLine("[OnAfterHandleMessage]");
 
@@ -37,9 +38,11 @@ namespace Shuttle.Esb.Tests
 			{
 				NumberOfMessagesHandled++;
 			}
+
+			await Task.CompletedTask.ConfigureAwait(false);
 		}
 
-		public void Execute(OnAfterProcessDeferredMessage pipelineEvent)
+		public async Task Execute(OnAfterProcessDeferredMessage pipelineEvent)
 		{
 			Console.WriteLine(
 				$"[OnAfterProcessDeferredMessage] : deferred message returned = '{pipelineEvent.Pipeline.State.GetDeferredMessageReturned()}'");
@@ -51,6 +54,8 @@ namespace Shuttle.Esb.Tests
 					NumberOfDeferredMessagesReturned++;
 				}
 			}
+
+			await Task.CompletedTask.ConfigureAwait(false);
 		}
 
 		public bool AllMessagesHandled()

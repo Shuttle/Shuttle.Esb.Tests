@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
 using Shuttle.Core.Contract;
 using Shuttle.Core.Pipelines;
 
@@ -15,7 +16,7 @@ namespace Shuttle.Esb.Tests
 
         public int OnAfterGetMessageCount => _datesAfterGetMessage.Count;
 
-        public void Execute(OnAfterGetMessage pipelineEvent)
+        public async Task Execute(OnAfterGetMessage pipelineEvent)
         {
             lock (_lock)
             {
@@ -32,6 +33,8 @@ namespace Shuttle.Esb.Tests
 
                 Console.WriteLine("Dequeued date: {0:yyyy-MM-dd HH:mm:ss.fff}", dateTime);
             }
+
+            await Task.CompletedTask.ConfigureAwait(false);
         }
 
         private void PipelineCreated(object sender, PipelineEventArgs e)

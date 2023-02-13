@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Threading;
+using System.Threading.Tasks;
 using Microsoft.Extensions.DependencyInjection;
 using Moq;
 using NUnit.Framework;
@@ -17,24 +18,26 @@ namespace Shuttle.Esb.Tests
 
         public int HandledMessageCount { get; private set; }
 
-        public void Execute(OnAfterAcknowledgeMessage pipelineEvent)
+        public async Task Execute(OnAfterAcknowledgeMessage pipelineEvent)
         {
             lock (_lock)
             {
                 HandledMessageCount++;
             }
+
+            await Task.CompletedTask.ConfigureAwait(false);
         }
     }
 
     public abstract class OutboxFixture : IntegrationFixture
     {
-        protected void TestOutboxSending(IServiceCollection services, string workQueueUriFormat, int threadCount,
+        protected async Task TestOutboxSending(IServiceCollection services, string workQueueUriFormat, int threadCount,
             bool isTransactional)
         {
-            TestOutboxSending(services, workQueueUriFormat, workQueueUriFormat, threadCount, isTransactional);
+            await TestOutboxSending(services, workQueueUriFormat, workQueueUriFormat, threadCount, isTransactional).ConfigureAwait(false);
         }
 
-        protected void TestOutboxSending(IServiceCollection services, string workQueueUriFormat,
+        protected async Task TestOutboxSending(IServiceCollection services, string workQueueUriFormat,
             string errorQueueUriFormat, int threadCount, bool isTransactional)
         {
             Guard.AgainstNull(services, nameof(services));
@@ -89,15 +92,17 @@ namespace Shuttle.Esb.Tests
 
             var queueService = CreateQueueService(serviceProvider);
 
-            ConfigureQueues(serviceProvider, workQueueUriFormat, errorQueueUriFormat);
+            await ConfigureQueues(serviceProvider, workQueueUriFormat, errorQueueUriFormat).ConfigureAwait(false);
 
             Console.WriteLine("Sending {0} messages.", count);
 
-            using (var bus = serviceProvider.GetRequiredService<IServiceBus>().Start())
+            var serviceBus = await serviceProvider.GetRequiredService<IServiceBus>().Start().ConfigureAwait(false);
+            
+            await using (serviceBus.ConfigureAwait(false))
             {
                 for (var i = 0; i < count; i++)
                 {
-                    bus.Send(new SimpleCommand());
+                    await serviceBus.Send(new SimpleCommand()).ConfigureAwait(false);
                 }
 
                 var receiverWorkQueue = queueService.Get(receiverWorkQueueUri);
@@ -107,16 +112,16 @@ namespace Shuttle.Esb.Tests
 
                 while (!messageRetrieved && !timedOut)
                 {
-                    var receivedMessage = receiverWorkQueue.GetMessage();
+                    var receivedMessage = await receiverWorkQueue.GetMessage().ConfigureAwait(false);
 
                     if (receivedMessage != null)
                     {
                         messageRetrieved = true;
-                        receiverWorkQueue.Release(receivedMessage.AcknowledgementToken);
+                        await receiverWorkQueue.Release(receivedMessage.AcknowledgementToken).ConfigureAwait(false);
                     }
                     else
                     {
-                        Thread.Sleep(25);
+                        await Task.Delay(25).ConfigureAwait(false);
 
                         timedOut = timeout < DateTime.Now;
                     }
@@ -137,28 +142,28 @@ namespace Shuttle.Esb.Tests
 
                 for (var i = 0; i < count; i++)
                 {
-                    var receivedMessage = receiverWorkQueue.GetMessage();
+                    var receivedMessage = await receiverWorkQueue.GetMessage().ConfigureAwait(false);
 
                     Assert.IsNotNull(receivedMessage);
 
-                    receiverWorkQueue.Acknowledge(receivedMessage.AcknowledgementToken);
+                    await receiverWorkQueue.Acknowledge(receivedMessage.AcknowledgementToken).ConfigureAwait(false);
                 }
 
-                receiverWorkQueue.AttemptDispose();
-                receiverWorkQueue.AttemptDrop();
+                receiverWorkQueue.TryDispose();
+                await receiverWorkQueue.TryDrop().ConfigureAwait(false);
             }
 
             var outboxWorkQueue = queueService.Get(string.Format(workQueueUriFormat, "test-outbox-work"));
 
-            Assert.IsTrue(outboxWorkQueue.IsEmpty());
+            Assert.IsTrue(await outboxWorkQueue.IsEmpty().ConfigureAwait(false));
 
-            outboxWorkQueue.AttemptDispose();
-            outboxWorkQueue.AttemptDrop();
+            outboxWorkQueue.TryDispose();
+            await outboxWorkQueue.TryDrop().ConfigureAwait(false);
 
-            queueService.Get(string.Format(errorQueueUriFormat, "test-error")).AttemptDrop();
+            await queueService.Get(string.Format(errorQueueUriFormat, "test-error")).TryDrop().ConfigureAwait(false);
         }
 
-        private void ConfigureQueues(IServiceProvider serviceProvider, string queueUriFormat,
+        private async Task ConfigureQueues(IServiceProvider serviceProvider, string queueUriFormat,
             string errorQueueUriFormat)
         {
             var queueService = serviceProvider.GetRequiredService<IQueueService>();
@@ -168,17 +173,17 @@ namespace Shuttle.Esb.Tests
             var receiverWorkQueue =
                 queueService.Get(string.Format(queueUriFormat, "test-receiver-work"));
 
-            outboxWorkQueue.AttemptDrop();
-            receiverWorkQueue.AttemptDrop();
-            errorQueue.AttemptDrop();
+            await outboxWorkQueue.TryDrop().ConfigureAwait(false);
+            await receiverWorkQueue.TryDrop().ConfigureAwait(false);
+            await errorQueue.TryDrop().ConfigureAwait(false);
 
-            outboxWorkQueue.AttemptCreate();
-            receiverWorkQueue.AttemptCreate();
-            errorQueue.AttemptCreate();
+            await outboxWorkQueue.TryCreate().ConfigureAwait(false);
+            await receiverWorkQueue.TryCreate().ConfigureAwait(false);
+            await errorQueue.TryCreate().ConfigureAwait(false);
 
-            outboxWorkQueue.AttemptPurge();
-            receiverWorkQueue.AttemptPurge();
-            errorQueue.AttemptPurge();
+            await outboxWorkQueue.TryPurge().ConfigureAwait(false);
+            await receiverWorkQueue.TryPurge().ConfigureAwait(false);
+            await errorQueue.TryPurge().ConfigureAwait(false);
         }
     }
 }

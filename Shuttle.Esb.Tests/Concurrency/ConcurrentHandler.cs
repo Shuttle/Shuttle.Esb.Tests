@@ -1,15 +1,15 @@
 using System;
-using System.Threading;
+using System.Threading.Tasks;
 
 namespace Shuttle.Esb.Tests
 {
 	public class ConcurrentHandler : IMessageHandler<ConcurrentCommand>
 	{
-		public void ProcessMessage(IHandlerContext<ConcurrentCommand> context)
+		public async Task ProcessMessage(IHandlerContext<ConcurrentCommand> context)
 		{
 			Console.WriteLine($"[processing message] : index = {context.Message.MessageIndex}");
 
-			Thread.Sleep(500);
+			await Task.Delay(500).ConfigureAwait(false);
 		}
 	}
 }

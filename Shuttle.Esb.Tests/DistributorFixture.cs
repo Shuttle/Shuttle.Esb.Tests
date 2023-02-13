@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Threading;
+using System.Threading.Tasks;
 using Microsoft.Extensions.DependencyInjection;
 using NUnit.Framework;
 using Shuttle.Core.Contract;
@@ -13,7 +14,7 @@ namespace Shuttle.Esb.Tests
 {
     public class DistributorFixture : IntegrationFixture
     {
-        protected void TestDistributor(IServiceCollection distributorServices, IServiceCollection workerServices,
+        protected async Task TestDistributor(IServiceCollection distributorServices, IServiceCollection workerServices,
             string queueUriFormat, bool isTransactional, int timeoutSeconds = 5)
         {
             Guard.AgainstNull(distributorServices, nameof(distributorServices));
@@ -99,13 +100,16 @@ namespace Shuttle.Esb.Tests
                 distributorServiceBusConfiguration.Configure(distributorServiceBusOptions);
                 workerServiceBusConfiguration.Configure(workerServiceBusOptions);
 
-                ConfigureDistributorQueues(distributorServiceBusConfiguration);
+                await ConfigureDistributorQueues(distributorServiceBusConfiguration).ConfigureAwait(false);
                 ConfigureWorkerQueues(workerServiceBusConfiguration);
 
                 module.Assign(workerServiceProvider.GetRequiredService<IPipelineFactory>());
 
-                using (var distributorBus = distributorServiceProvider.GetRequiredService<IServiceBus>())
-                using (var workerBus = workerServiceProvider.GetRequiredService<IServiceBus>())
+                var distributorBus = distributorServiceProvider.GetRequiredService<IServiceBus>();
+                var workerBus = workerServiceProvider.GetRequiredService<IServiceBus>();
+
+                await using (distributorBus.ConfigureAwait(false))
+                await using (workerBus.ConfigureAwait(false))
                 {
                     for (var i = 0; i < messageCount; i++)
                     {
@@ -116,18 +120,16 @@ namespace Shuttle.Esb.Tests
 
                         var workQueue = distributorServiceBusConfiguration.Inbox.WorkQueue;
 
-                        transportMessagePipeline.Execute(command, null, builder =>
+                        await transportMessagePipeline.Execute(command, null, builder =>
                         {
                             builder.WithRecipient(workQueue);
-                        });
+                        }).ConfigureAwait(false);
 
-                        workQueue.Enqueue(
-                            transportMessagePipeline.State.GetTransportMessage(),
-                            serializer.Serialize(transportMessagePipeline.State.GetTransportMessage()));
+                        await workQueue.Enqueue(transportMessagePipeline.State.GetTransportMessage(), await serializer.Serialize(transportMessagePipeline.State.GetTransportMessage()).ConfigureAwait(false)).ConfigureAwait(false);
                     }
 
-                    distributorBus.Start();
-                    workerBus.Start();
+                    await distributorBus.Start();
+                    await workerBus.Start();
 
                     var timeout = DateTime.Now.AddSeconds(timeoutSeconds < 5 ? 5 : timeoutSeconds);
                     var timedOut = false;
@@ -147,34 +149,34 @@ namespace Shuttle.Esb.Tests
                     Assert.IsTrue(module.AllMessagesHandled(), "Not all messages were handled.");
                 }
 
-                AttemptDropQueues(distributorQueueService, queueUriFormat);
+                await TryDropQueues(distributorQueueService, queueUriFormat).ConfigureAwait(false);
             }
             finally
             {
-                distributorQueueService.AttemptDispose();
+                distributorQueueService.TryDispose();
             }
         }
 
-        private void ConfigureDistributorQueues(IServiceBusConfiguration serviceBusConfiguration)
+        private async Task ConfigureDistributorQueues(IServiceBusConfiguration serviceBusConfiguration)
         {
-            serviceBusConfiguration.Inbox.WorkQueue.AttemptDrop();
-            serviceBusConfiguration.Inbox.ErrorQueue.AttemptDrop();
-            serviceBusConfiguration.ControlInbox.WorkQueue.AttemptDrop();
+            await serviceBusConfiguration.Inbox.WorkQueue.TryDrop();
+            await serviceBusConfiguration.Inbox.ErrorQueue.TryDrop();
+            await serviceBusConfiguration.ControlInbox.WorkQueue.TryDrop();
 
-            serviceBusConfiguration.CreatePhysicalQueues();
+            await serviceBusConfiguration.CreatePhysicalQueues();
 
-            serviceBusConfiguration.Inbox.WorkQueue.AttemptPurge();
-            serviceBusConfiguration.ControlInbox.WorkQueue.AttemptPurge();
-            serviceBusConfiguration.Inbox.ErrorQueue.AttemptPurge();
+            await serviceBusConfiguration.Inbox.WorkQueue.TryPurge();
+            await serviceBusConfiguration.ControlInbox.WorkQueue.TryPurge();
+            await serviceBusConfiguration.Inbox.ErrorQueue.TryPurge();
         }
 
         private void ConfigureWorkerQueues(IServiceBusConfiguration serviceBusConfiguration)
         {
-            serviceBusConfiguration.Inbox.WorkQueue.AttemptDrop();
+            serviceBusConfiguration.Inbox.WorkQueue.TryDrop();
 
             serviceBusConfiguration.CreatePhysicalQueues();
 
-            serviceBusConfiguration.Inbox.WorkQueue.AttemptPurge();
+            serviceBusConfiguration.Inbox.WorkQueue.TryPurge();
         }
 
         public class WorkerModule : IPipelineObserver<OnAfterHandleMessage>
@@ -188,7 +190,7 @@ namespace Shuttle.Esb.Tests
                 _messageCount = messageCount;
             }
 
-            public void Execute(OnAfterHandleMessage pipelineEvent1)
+            public async Task Execute(OnAfterHandleMessage pipelineEvent1)
             {
                 Console.WriteLine("[OnAfterHandleMessage]");
 
@@ -196,6 +198,8 @@ namespace Shuttle.Esb.Tests
                 {
                     _messagesHandled++;
                 }
+
+                await Task.CompletedTask.ConfigureAwait(false);
             }
 
             private void PipelineCreated(object sender, PipelineEventArgs e)
