@@ -62,7 +62,9 @@ namespace Shuttle.Esb.Tests
 
 		private void ThrowException(string name)
 		{
-			lock (Lock)
+			Lock.Wait();
+
+			try
 			{
 				_assertionName = name;
 
@@ -75,15 +77,25 @@ namespace Shuttle.Esb.Tests
 
 				throw new AssertionException($"Testing assertion for '{name}'.");
 			}
+			finally
+			{
+				Lock.Release();
+			}
 		}
 
 		private void AddAssertion(string name)
 		{
-			lock (Lock)
+			Lock.Wait();
+
+			try
 			{
 				_assertions.Add(new ExceptionAssertion(name));
 
 				Console.WriteLine($"[added] : assertion = '{name}'.");
+			}
+			finally
+			{
+				Lock.Release();
 			}
 		}
 
@@ -140,9 +152,15 @@ namespace Shuttle.Esb.Tests
 
 		public bool ShouldWait()
 		{
-			lock (Lock)
+			Lock.Wait();
+
+			try
 			{
 				return !_failed && _assertions.Find(item => !item.HasRun) != null;
+			}
+			finally
+			{
+				Lock.Release();
 			}
 		}
 
