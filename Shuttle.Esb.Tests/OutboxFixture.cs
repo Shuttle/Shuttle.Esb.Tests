@@ -96,9 +96,7 @@ namespace Shuttle.Esb.Tests
 
             Console.WriteLine("Sending {0} messages.", count);
 
-            var serviceBus = await serviceProvider.GetRequiredService<IServiceBus>().Start().ConfigureAwait(false);
-            
-            await using (serviceBus.ConfigureAwait(false))
+            await using (var serviceBus = await serviceProvider.GetRequiredService<IServiceBus>().Start().ConfigureAwait(false))
             {
                 for (var i = 0; i < count; i++)
                 {
@@ -133,12 +131,12 @@ namespace Shuttle.Esb.Tests
 
                 while (outboxObserver.HandledMessageCount < count && !timedOut)
                 {
-                    Thread.Sleep(25);
+                    await Task.Delay(25).ConfigureAwait(false);
 
                     timedOut = timeout < DateTime.Now;
                 }
 
-                Assert.IsFalse(timedOut, "Timed out before processing {0} errors.", count);
+                Assert.IsFalse(timedOut, "Timed out before processing {0} messages.", count);
 
                 for (var i = 0; i < count; i++)
                 {
@@ -150,16 +148,19 @@ namespace Shuttle.Esb.Tests
                 }
 
                 receiverWorkQueue.TryDispose();
+
                 await receiverWorkQueue.TryDrop().ConfigureAwait(false);
             }
+
+            queueService = CreateQueueService(services.BuildServiceProvider());
 
             var outboxWorkQueue = queueService.Get(string.Format(workQueueUriFormat, "test-outbox-work"));
 
             Assert.IsTrue(await outboxWorkQueue.IsEmpty().ConfigureAwait(false));
 
             outboxWorkQueue.TryDispose();
-            await outboxWorkQueue.TryDrop().ConfigureAwait(false);
 
+            await outboxWorkQueue.TryDrop().ConfigureAwait(false);
             await queueService.Get(string.Format(errorQueueUriFormat, "test-error")).TryDrop().ConfigureAwait(false);
         }
 

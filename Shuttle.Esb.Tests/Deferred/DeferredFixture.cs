@@ -44,7 +44,7 @@ namespace Shuttle.Esb.Tests
             {
                 module.Assign(serviceProvider.GetRequiredService<IPipelineFactory>());
 
-                using (serviceProvider.GetRequiredService<IServiceBus>().Start())
+                await using (await serviceProvider.GetRequiredService<IServiceBus>().Start().ConfigureAwait(false))
                 {
                     var ignoreTillDate = DateTime.Now.AddSeconds(2);
 
@@ -69,7 +69,7 @@ namespace Shuttle.Esb.Tests
                            &&
                            !timedOut)
                     {
-                        Thread.Sleep(millisecondsToDefer);
+                        await Task.Delay(millisecondsToDefer).ConfigureAwait(false);
 
                         timedOut = timeout < DateTime.Now;
                     }

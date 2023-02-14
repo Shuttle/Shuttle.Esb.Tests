@@ -104,7 +104,7 @@ namespace Shuttle.Esb.Tests
 
                     while (!exception && idleThreads.Count < threadCount)
                     {
-                        Thread.Sleep(5);
+                        await Task.Delay(5).ConfigureAwait(false);
                     }
 
                     Assert.IsNull(serviceBusConfiguration.Inbox.ErrorQueue.GetMessage());

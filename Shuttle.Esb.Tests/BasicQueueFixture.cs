@@ -61,18 +61,18 @@ namespace Shuttle.Esb.Tests
             var receivedMessage = await workQueue.GetMessage().ConfigureAwait(false);
 
             Assert.IsNotNull(receivedMessage);
-            Assert.IsNull(workQueue.GetMessage());
+            Assert.IsNull(await workQueue.GetMessage().ConfigureAwait(false));
 
             await workQueue.Release(receivedMessage.AcknowledgementToken).ConfigureAwait(false);
 
             receivedMessage = await workQueue.GetMessage().ConfigureAwait(false);
 
             Assert.IsNotNull(receivedMessage);
-            Assert.IsNull(workQueue.GetMessage());
+            Assert.IsNull(await workQueue.GetMessage().ConfigureAwait(false));
 
             await workQueue.Acknowledge(receivedMessage.AcknowledgementToken).ConfigureAwait(false);
 
-            Assert.IsNull(workQueue.GetMessage());
+            Assert.IsNull(await workQueue.GetMessage().ConfigureAwait(false));
 
             await workQueue.TryDrop().ConfigureAwait(false);
             
@@ -112,7 +112,7 @@ namespace Shuttle.Esb.Tests
 
             workQueue = await CreateWorkQueue(queueService, queueUriFormat, false).ConfigureAwait(false);
 
-            Assert.IsNull(workQueue.GetMessage());
+            Assert.IsNull(await workQueue.GetMessage().ConfigureAwait(false));
 
             await workQueue.TryDrop().ConfigureAwait(false);
             

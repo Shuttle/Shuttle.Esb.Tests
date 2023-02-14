@@ -7,7 +7,7 @@ namespace Shuttle.Esb.Tests
 	{
 		public Task ProcessMessage(IHandlerContext<ErrorCommand> context)
 		{
-			throw new ApplicationException("[testing expection handling]");
+			throw new ApplicationException("[testing exception handling]");
 		}
 	}
 }

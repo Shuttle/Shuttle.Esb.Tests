@@ -141,7 +141,7 @@ namespace Shuttle.Esb.Tests
 
                 sw.Reset();
 
-                using (serviceProvider.GetRequiredService<IServiceBus>().Start())
+                await using (await serviceProvider.GetRequiredService<IServiceBus>().Start().ConfigureAwait(false))
                 {
                     Console.WriteLine($"[starting] : {DateTime.Now:HH:mm:ss.fff}");
 
@@ -151,7 +151,7 @@ namespace Shuttle.Esb.Tests
 
                     while (throughputObserver.HandledMessageCount < messageCount && !timedOut)
                     {
-                        Thread.Sleep(25);
+                        await Task.Delay(25).ConfigureAwait(false);
 
                         timedOut = DateTime.Now > timeout;
                     }
@@ -239,7 +239,7 @@ namespace Shuttle.Esb.Tests
                     while (!inboxMessagePipelineObserver.HasReceivedPipelineException &&
                            !timedOut)
                     {
-                        Thread.Sleep(25);
+                        await Task.Delay(25).ConfigureAwait(false);
 
                         timedOut = DateTime.Now > timeout;
                     }
@@ -250,17 +250,17 @@ namespace Shuttle.Esb.Tests
                     }
                     finally
                     {
-                        await serviceBus.Stop();
+                        await serviceBus.Stop().ConfigureAwait(false);
                     }
 
                     if (hasErrorQueue)
                     {
-                        Assert.Null(queueService.Get(string.Format(queueUriFormat, "test-inbox-work")).GetMessage());
-                        Assert.NotNull(queueService.Get(string.Format(queueUriFormat, "test-error")).GetMessage());
+                        Assert.Null(await queueService.Get(string.Format(queueUriFormat, "test-inbox-work")).GetMessage().ConfigureAwait(false));
+                        Assert.NotNull(await queueService.Get(string.Format(queueUriFormat, "test-error")).GetMessage().ConfigureAwait(false));
                     }
                     else
                     {
-                        Assert.NotNull(queueService.Get(string.Format(queueUriFormat, "test-inbox-work")).GetMessage());
+                        Assert.NotNull(await queueService.Get(string.Format(queueUriFormat, "test-inbox-work")).GetMessage().ConfigureAwait(false));
                     }
                 }
 
@@ -352,7 +352,7 @@ namespace Shuttle.Esb.Tests
 
                     while (idleThreads.Count < threadCount)
                     {
-                        Thread.Sleep(30);
+                        await Task.Delay(30).ConfigureAwait(false);
                     }
                 }
 

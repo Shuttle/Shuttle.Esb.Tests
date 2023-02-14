@@ -101,36 +101,33 @@ namespace Shuttle.Esb.Tests
                 workerServiceBusConfiguration.Configure(workerServiceBusOptions);
 
                 await ConfigureDistributorQueues(distributorServiceBusConfiguration).ConfigureAwait(false);
-                ConfigureWorkerQueues(workerServiceBusConfiguration);
+                await ConfigureWorkerQueues(workerServiceBusConfiguration).ConfigureAwait(false);
 
                 module.Assign(workerServiceProvider.GetRequiredService<IPipelineFactory>());
 
                 var distributorBus = distributorServiceProvider.GetRequiredService<IServiceBus>();
                 var workerBus = workerServiceProvider.GetRequiredService<IServiceBus>();
 
-                await using (distributorBus.ConfigureAwait(false))
-                await using (workerBus.ConfigureAwait(false))
+                var workQueue = distributorServiceBusConfiguration.Inbox.WorkQueue;
+
+                for (var i = 0; i < messageCount; i++)
                 {
-                    for (var i = 0; i < messageCount; i++)
+                    var command = new SimpleCommand
                     {
-                        var command = new SimpleCommand
-                        {
-                            Name = Guid.NewGuid().ToString()
-                        };
+                        Name = Guid.NewGuid().ToString()
+                    };
+                    
+                    await transportMessagePipeline.Execute(command, null, builder =>
+                    {
+                        builder.WithRecipient(workQueue);
+                    }).ConfigureAwait(false);
 
-                        var workQueue = distributorServiceBusConfiguration.Inbox.WorkQueue;
+                    await workQueue.Enqueue(transportMessagePipeline.State.GetTransportMessage(), await serializer.Serialize(transportMessagePipeline.State.GetTransportMessage()).ConfigureAwait(false)).ConfigureAwait(false);
+                }
 
-                        await transportMessagePipeline.Execute(command, null, builder =>
-                        {
-                            builder.WithRecipient(workQueue);
-                        }).ConfigureAwait(false);
-
-                        await workQueue.Enqueue(transportMessagePipeline.State.GetTransportMessage(), await serializer.Serialize(transportMessagePipeline.State.GetTransportMessage()).ConfigureAwait(false)).ConfigureAwait(false);
-                    }
-
-                    await distributorBus.Start();
-                    await workerBus.Start();
-
+                await using (await distributorBus.Start().ConfigureAwait(false))
+                await using (await workerBus.Start().ConfigureAwait(false))
+                {
                     var timeout = DateTime.Now.AddSeconds(timeoutSeconds < 5 ? 5 : timeoutSeconds);
                     var timedOut = false;
 
@@ -138,7 +135,7 @@ namespace Shuttle.Esb.Tests
 
                     while (!module.AllMessagesHandled() && !timedOut)
                     {
-                        Thread.Sleep(50);
+                        await Task.Delay(50).ConfigureAwait(false);
 
                         timedOut = timeout < DateTime.Now;
                     }
@@ -159,24 +156,24 @@ namespace Shuttle.Esb.Tests
 
         private async Task ConfigureDistributorQueues(IServiceBusConfiguration serviceBusConfiguration)
         {
-            await serviceBusConfiguration.Inbox.WorkQueue.TryDrop();
-            await serviceBusConfiguration.Inbox.ErrorQueue.TryDrop();
-            await serviceBusConfiguration.ControlInbox.WorkQueue.TryDrop();
+            await serviceBusConfiguration.Inbox.WorkQueue.TryDrop().ConfigureAwait(false);
+            await serviceBusConfiguration.Inbox.ErrorQueue.TryDrop().ConfigureAwait(false);
+            await serviceBusConfiguration.ControlInbox.WorkQueue.TryDrop().ConfigureAwait(false);
 
-            await serviceBusConfiguration.CreatePhysicalQueues();
+            await serviceBusConfiguration.CreatePhysicalQueues().ConfigureAwait(false);
 
-            await serviceBusConfiguration.Inbox.WorkQueue.TryPurge();
-            await serviceBusConfiguration.ControlInbox.WorkQueue.TryPurge();
-            await serviceBusConfiguration.Inbox.ErrorQueue.TryPurge();
+            await serviceBusConfiguration.Inbox.WorkQueue.TryPurge().ConfigureAwait(false);
+            await serviceBusConfiguration.ControlInbox.WorkQueue.TryPurge().ConfigureAwait(false);
+            await serviceBusConfiguration.Inbox.ErrorQueue.TryPurge().ConfigureAwait(false);
         }
 
-        private void ConfigureWorkerQueues(IServiceBusConfiguration serviceBusConfiguration)
+        private async Task ConfigureWorkerQueues(IServiceBusConfiguration serviceBusConfiguration)
         {
-            serviceBusConfiguration.Inbox.WorkQueue.TryDrop();
+            await serviceBusConfiguration.Inbox.WorkQueue.TryDrop().ConfigureAwait(false);
 
-            serviceBusConfiguration.CreatePhysicalQueues();
+            await serviceBusConfiguration.CreatePhysicalQueues().ConfigureAwait(false);
 
-            serviceBusConfiguration.Inbox.WorkQueue.TryPurge();
+            await serviceBusConfiguration.Inbox.WorkQueue.TryPurge().ConfigureAwait(false);
         }
 
         public class WorkerModule : IPipelineObserver<OnAfterHandleMessage>
