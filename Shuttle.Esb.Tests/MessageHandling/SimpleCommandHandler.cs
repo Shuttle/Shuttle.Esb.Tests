@@ -7,7 +7,7 @@ namespace Shuttle.Esb.Tests
 	{
 		public Task ProcessMessage(IHandlerContext<SimpleCommand> context)
 		{
-			Console.WriteLine($"[executed] : name = '{context.Message.Name}'");
+			Console.WriteLine($"[SimpleCommandHandler:SimpleCommand] : name = '{context.Message.Name}'");
 
 			return Task.CompletedTask;
 		}

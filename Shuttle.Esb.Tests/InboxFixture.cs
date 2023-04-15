@@ -298,7 +298,7 @@ namespace Shuttle.Esb.Tests
 
             var serviceBusOptions = AddServiceBus(services, true, threadCount, isTransactional, queueUriFormat, TimeSpan.FromMilliseconds(25));
 
-            var module = new InboxConcurrencyModule();
+            var module = new InboxConcurrencyFeature();
 
             services.AddSingleton(module);
 
@@ -384,7 +384,7 @@ namespace Shuttle.Esb.Tests
                 }
             };
 
-            services.AddSingleton<InboxDeferredModule>();
+            services.AddSingleton<InboxDeferredFeature>();
 
             services.AddServiceBus(builder =>
             {
@@ -403,13 +403,13 @@ namespace Shuttle.Esb.Tests
 
             serviceBusConfiguration.Configure(serviceBusOptions);
 
-            await ConfigureQueues(serviceProvider, serviceBusConfiguration, queueUriFormat, true);
+            await ConfigureQueues(serviceProvider, serviceBusConfiguration, queueUriFormat, true).ConfigureAwait(false);
 
             try
             {
-                var module = serviceProvider.GetRequiredService<InboxDeferredModule>();
+                var module = serviceProvider.GetRequiredService<InboxDeferredFeature>();
 
-                var serviceBus = await serviceProvider.GetRequiredService<IServiceBus>().Start();
+                var serviceBus = await serviceProvider.GetRequiredService<IServiceBus>().Start().ConfigureAwait(false);
                 
                 await using (serviceBus.ConfigureAwait(false))
                 {

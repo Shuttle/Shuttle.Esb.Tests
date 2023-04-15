@@ -21,7 +21,7 @@ namespace Shuttle.Esb.Tests
                 builder.Options = serviceBusOptions;
             });
 
-            services.AddSingleton<ReceivePipelineExceptionModule>();
+            services.AddSingleton<ReceivePipelineExceptionFeature>();
 
             var serviceProvider = services.BuildServiceProvider();
 
@@ -53,7 +53,7 @@ namespace Shuttle.Esb.Tests
 
             var pipelineFactory = serviceProvider.GetRequiredService<IPipelineFactory>();
             var transportMessagePipeline = pipelineFactory.GetPipeline<TransportMessagePipeline>();
-            var module = serviceProvider.GetRequiredService<ReceivePipelineExceptionModule>();
+            var module = serviceProvider.GetRequiredService<ReceivePipelineExceptionFeature>();
             var serializer = serviceProvider.GetRequiredService<ISerializer>();
 
             var serviceBus = serviceProvider.GetRequiredService<IServiceBus>();

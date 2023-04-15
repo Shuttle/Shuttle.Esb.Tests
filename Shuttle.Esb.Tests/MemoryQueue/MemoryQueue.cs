@@ -8,203 +8,215 @@ using Shuttle.Core.Streams;
 
 namespace Shuttle.Esb.Tests
 {
-	public class MemoryQueue : IQueue, ICreateQueue, IPurgeQueue
-	{
-		internal const string Scheme = "memory";
+    public class MemoryQueue : IQueue, ICreateQueue, IPurgeQueue
+    {
+        internal const string Scheme = "memory";
 
-		private static readonly object Lock = new object();
+        private static readonly object Lock = new object();
 
-		private static Dictionary<string, Dictionary<int, MemoryQueueItem>> _queues =
-			new Dictionary<string, Dictionary<int, MemoryQueueItem>>();
+        private static readonly Dictionary<string, Dictionary<int, MemoryQueueItem>> _queues =
+            new Dictionary<string, Dictionary<int, MemoryQueueItem>>();
 
-		private readonly List<int> _unacknowledgedMessageIds = new List<int>();
-		private int _itemId;
+        private readonly List<int> _unacknowledgedMessageIds = new List<int>();
+        private int _itemId;
 
-		public MemoryQueue(Uri uri)
-		{
-			Guard.AgainstNull(uri, nameof(uri));
+        public MemoryQueue(Uri uri)
+        {
+            Guard.AgainstNull(uri, nameof(uri));
 
-			if (!uri.Scheme.Equals(Scheme, StringComparison.InvariantCultureIgnoreCase))
-			{
-				throw new InvalidSchemeException(Scheme, uri.ToString());
-			}
+            if (!uri.Scheme.Equals(Scheme, StringComparison.InvariantCultureIgnoreCase))
+            {
+                throw new InvalidSchemeException(Scheme, uri.ToString());
+            }
 
-			var builder = new UriBuilder(uri);
+            var builder = new UriBuilder(uri);
 
-			if (uri.Host.Equals("."))
-			{
-				builder.Host = Environment.MachineName.ToLower();
-			}
+            if (uri.Host.Equals("."))
+            {
+                builder.Host = Environment.MachineName.ToLower();
+            }
 
-			if (uri.LocalPath == "/")
-			{
-				builder.Path = "/default";
-			}
+            if (uri.LocalPath == "/")
+            {
+                builder.Path = "/default";
+            }
 
-			Uri = new QueueUri(builder.Uri);
+            Uri = new QueueUri(builder.Uri);
 
-			if (Uri.Uri.Host != Environment.MachineName.ToLower())
-			{
-				throw new UriFormatException(string.Format(Resources.UriFormatException,
-				    $"memory://{{.|{Environment.MachineName.ToLower()}}}/{{name}}", uri));
-			}
+            if (Uri.Uri.Host != Environment.MachineName.ToLower())
+            {
+                throw new UriFormatException(string.Format(Resources.UriFormatException,
+                    $"memory://{{.|{Environment.MachineName.ToLower()}}}/{{name}}", uri));
+            }
 
-			Create().GetAwaiter().GetResult();
-		}
+            Create().GetAwaiter().GetResult();
+        }
 
-		public QueueUri Uri { get; }
-		public bool IsStream => false;
+        public async Task Create()
+        {
+            if (!_queues.ContainsKey(Uri.ToString()))
+            {
+                _queues.Add(Uri.ToString(), new Dictionary<int, MemoryQueueItem>());
+            }
 
-		public async ValueTask<bool> IsEmpty()
-		{
-			bool result;
+            OperationCompleted.Invoke(this, new OperationCompletedEventArgs("Create"));
 
-			lock (Lock)
-			{
-				result = _queues[Uri.ToString()].Count == 0;
-			}
+            await Task.CompletedTask.ConfigureAwait(false);
+        }
 
-			return await new ValueTask<bool>(result).ConfigureAwait(false);
-		}
+        public async Task Purge()
+        {
+            lock (Lock)
+            {
+                _queues[Uri.ToString()].Clear();
+            }
+
+            OperationCompleted.Invoke(this, new OperationCompletedEventArgs("Create"));
+
+            await Task.CompletedTask.ConfigureAwait(false);
+        }
+
+        public QueueUri Uri { get; }
+        public bool IsStream => false;
+
+        public async ValueTask<bool> IsEmpty()
+        {
+            bool result;
+
+            lock (Lock)
+            {
+                result = _queues[Uri.ToString()].Count == 0;
+            }
+
+            return await new ValueTask<bool>(result).ConfigureAwait(false);
+        }
 
         public async Task Enqueue(TransportMessage transportMessage, Stream stream)
-		{
-			lock (Lock)
-			{
-				_itemId++;
+        {
+            lock (Lock)
+            {
+                _itemId++;
 
-				_queues[Uri.ToString()].Add(_itemId, new MemoryQueueItem(_itemId, transportMessage.MessageId, stream.Copy()));
-			}
+                _queues[Uri.ToString()].Add(_itemId, new MemoryQueueItem(_itemId, transportMessage.MessageId, stream.Copy()));
+            }
 
-			await Task.CompletedTask.ConfigureAwait(false);
-		}
+            await Task.CompletedTask.ConfigureAwait(false);
+        }
 
-		public async Task<ReceivedMessage> GetMessage()
-		{
-			ReceivedMessage result = null; 
+        public async Task<ReceivedMessage> GetMessage()
+        {
+            ReceivedMessage result = null;
 
-			lock (Lock)
-			{
-				var queue = _queues[Uri.ToString()];
+            lock (Lock)
+            {
+                var queue = _queues[Uri.ToString()];
 
-				var index = 0;
+                var index = 0;
 
-				while (index < queue.Count)
-				{
-					var pair = queue.ElementAt(index);
+                while (index < queue.Count)
+                {
+                    var pair = queue.ElementAt(index);
 
-					if (!_unacknowledgedMessageIds.Contains(pair.Value.ItemId))
-					{
-						_unacknowledgedMessageIds.Add(pair.Value.ItemId);
+                    if (!_unacknowledgedMessageIds.Contains(pair.Value.ItemId))
+                    {
+                        _unacknowledgedMessageIds.Add(pair.Value.ItemId);
 
-						result = new ReceivedMessage(pair.Value.Stream, pair.Value.ItemId);
+                        result = new ReceivedMessage(pair.Value.Stream, pair.Value.ItemId);
 
-						break;
-					}
+                        break;
+                    }
 
-					index++;
-				}
-			}
+                    index++;
+                }
+            }
 
-			return await Task.FromResult(result).ConfigureAwait(false);
-		}
+            return await Task.FromResult(result).ConfigureAwait(false);
+        }
 
-		public async Task Acknowledge(object acknowledgementToken)
-		{
-			var itemId = (int) acknowledgementToken;
+        public async Task Acknowledge(object acknowledgementToken)
+        {
+            var itemId = (int)acknowledgementToken;
 
-			lock (Lock)
-			{
-				var queue = _queues[Uri.ToString()];
+            lock (Lock)
+            {
+                var queue = _queues[Uri.ToString()];
 
-				if (!queue.ContainsKey(itemId) || !_unacknowledgedMessageIds.Contains(itemId))
-				{
-					return;
-				}
+                if (!queue.ContainsKey(itemId) || !_unacknowledgedMessageIds.Contains(itemId))
+                {
+                    return;
+                }
 
-				if (queue.ContainsKey(itemId))
-				{
-					queue.Remove(itemId);
-				}
+                if (queue.ContainsKey(itemId))
+                {
+                    queue.Remove(itemId);
+                }
 
-				_unacknowledgedMessageIds.Remove(itemId);
-			}
+                _unacknowledgedMessageIds.Remove(itemId);
+            }
 
-			await Task.CompletedTask.ConfigureAwait(false);
-		}
+            await Task.CompletedTask.ConfigureAwait(false);
+        }
 
-		public async Task Release(object acknowledgementToken)
-		{
-			var itemId = (int) acknowledgementToken;
+        public async Task Release(object acknowledgementToken)
+        {
+            var itemId = (int)acknowledgementToken;
 
-			lock (Lock)
-			{
-				var queue = _queues[Uri.ToString()];
+            lock (Lock)
+            {
+                var queue = _queues[Uri.ToString()];
 
-				if (!queue.ContainsKey(itemId) || !_unacknowledgedMessageIds.Contains(itemId))
-				{
-					return;
-				}
+                if (!queue.ContainsKey(itemId) || !_unacknowledgedMessageIds.Contains(itemId))
+                {
+                    return;
+                }
 
-				if (queue.ContainsKey(itemId))
-				{
-					var message = queue[itemId];
+                if (queue.ContainsKey(itemId))
+                {
+                    var message = queue[itemId];
 
-					queue.Remove(itemId);
+                    queue.Remove(itemId);
 
-					queue.Add(itemId, message);
-				}
+                    queue.Add(itemId, message);
+                }
 
-				_unacknowledgedMessageIds.Remove(itemId);
-			}
+                _unacknowledgedMessageIds.Remove(itemId);
+            }
 
-			await Task.CompletedTask.ConfigureAwait(false);
-		}
+            await Task.CompletedTask.ConfigureAwait(false);
+        }
 
-		//public bool IsLocal => true;
+        public event EventHandler<MessageEnqueuedEventArgs> MessageEnqueued = delegate
+        {
+        };
 
-	 //   public static IQueue From(string uri)
-		//{
-		//	return new MemoryQueue(new Uri(uri));
-		//}
+        public event EventHandler<MessageAcknowledgedEventArgs> MessageAcknowledged = delegate
+        {
+        };
 
-		//public static void Clear()
-		//{
-		//	_queues = new Dictionary<string, Dictionary<int, MemoryQueueItem>>();
-		//}
+        public event EventHandler<MessageReleasedEventArgs> MessageReleased = delegate
+        {
+        };
 
-		public async Task Create()
-		{
-			if (!_queues.ContainsKey(Uri.ToString()))
-			{
-				_queues.Add(Uri.ToString(), new Dictionary<int, MemoryQueueItem>());
-			}
+        public event EventHandler<MessageReceivedEventArgs> MessageReceived = delegate
+        {
+        };
 
-			await Task.CompletedTask.ConfigureAwait(false);
-		}
+        public event EventHandler<OperationCompletedEventArgs> OperationCompleted = delegate
+        {
+        };
+    }
 
-		public async Task Purge()
-		{
-			lock (Lock)
-			{
-				_queues[Uri.ToString()].Clear();
-			}
+    internal class MemoryQueueItem
+    {
+        public MemoryQueueItem(int index, Guid messageId, Stream stream)
+        {
+            ItemId = index;
+            MessageId = messageId;
+            Stream = stream;
+        }
 
-			await Task.CompletedTask.ConfigureAwait(false);
-		}
-	}
-
-	internal class MemoryQueueItem
-	{
-		public int ItemId { get; }
-		public Guid MessageId { get; }
-		public Stream Stream { get; }
-
-		public MemoryQueueItem(int index, Guid messageId, Stream stream)
-		{
-			ItemId = index;
-			MessageId = messageId;
-			Stream = stream;
-		}
-	}
+        public int ItemId { get; }
+        public Guid MessageId { get; }
+        public Stream Stream { get; }
+    }
 }

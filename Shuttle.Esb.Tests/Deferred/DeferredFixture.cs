@@ -21,7 +21,7 @@ namespace Shuttle.Esb.Tests
             const int deferredMessageCount = 10;
             const int millisecondsToDefer = 250;
 
-            var module = new DeferredMessageModule(deferredMessageCount);
+            var module = new DeferredMessageFeature(deferredMessageCount);
 
             services.AddSingleton(module);
 

@@ -7,7 +7,7 @@ namespace Shuttle.Esb.Tests
 	{
 		public async Task ProcessMessage(IHandlerContext<ConcurrentCommand> context)
 		{
-			Console.WriteLine($"[processing message] : index = {context.Message.MessageIndex}");
+			Console.WriteLine($"[ConcurrentHandler:ConcurrentCommand] : index = {context.Message.MessageIndex}");
 
 			await Task.Delay(500).ConfigureAwait(false);
 		}
