@@ -97,9 +97,6 @@ namespace Shuttle.Esb.Tests
 
             try
             {
-                distributorServiceBusConfiguration.Configure(distributorServiceBusOptions);
-                workerServiceBusConfiguration.Configure(workerServiceBusOptions);
-
                 await ConfigureDistributorQueues(distributorServiceBusConfiguration).ConfigureAwait(false);
                 await ConfigureWorkerQueues(workerServiceBusConfiguration).ConfigureAwait(false);
 

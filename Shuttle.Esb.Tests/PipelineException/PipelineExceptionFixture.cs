@@ -25,6 +25,8 @@ namespace Shuttle.Esb.Tests
 
             var serviceProvider = services.BuildServiceProvider();
 
+            serviceProvider.GetRequiredService<IQueueService>().WireQueueCreated();
+
             serviceBusOptions.Inbox = new InboxOptions
             {
                 WorkQueueUri = string.Format(queueUriFormat, "test-inbox-work"),
@@ -35,8 +37,6 @@ namespace Shuttle.Esb.Tests
             };
 
             var serviceBusConfiguration = serviceProvider.GetRequiredService<IServiceBusConfiguration>();
-
-            serviceBusConfiguration.Configure(serviceBusOptions);
 
             try
             {

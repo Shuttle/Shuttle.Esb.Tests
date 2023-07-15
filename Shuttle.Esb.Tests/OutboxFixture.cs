@@ -167,7 +167,7 @@ namespace Shuttle.Esb.Tests
         private async Task ConfigureQueues(IServiceProvider serviceProvider, string queueUriFormat,
             string errorQueueUriFormat)
         {
-            var queueService = serviceProvider.GetRequiredService<IQueueService>();
+            var queueService = serviceProvider.GetRequiredService<IQueueService>().WireQueueCreated();
             var outboxWorkQueue = queueService.Get(string.Format(queueUriFormat, "test-outbox-work"));
             var errorQueue = queueService.Get(string.Format(errorQueueUriFormat, "test-error"));
 

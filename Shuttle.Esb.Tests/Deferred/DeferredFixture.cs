@@ -25,7 +25,7 @@ namespace Shuttle.Esb.Tests
 
             services.AddSingleton(module);
 
-            var serviceBusOptions = AddServiceBus(services, 1, isTransactional, queueUriFormat);
+            AddServiceBus(services, 1, isTransactional, queueUriFormat);
 
             var serviceProvider = services.BuildServiceProvider();
 
@@ -35,8 +35,6 @@ namespace Shuttle.Esb.Tests
             var serializer = serviceProvider.GetRequiredService<ISerializer>();
 
             var queueService = CreateQueueService(serviceProvider);
-
-            serviceBusConfiguration.Configure(serviceBusOptions);
 
             await ConfigureQueues(serviceProvider, serviceBusConfiguration, queueUriFormat).ConfigureAwait(false);
 
@@ -119,10 +117,9 @@ namespace Shuttle.Esb.Tests
                 $"[message enqueued] : name = '{command.Name}' / deferred till date = '{ignoreTillDate}'");
         }
 
-        private async Task ConfigureQueues(IServiceProvider serviceProvider, IServiceBusConfiguration serviceBusConfiguration,
-            string queueUriFormat)
+        private async Task ConfigureQueues(IServiceProvider serviceProvider, IServiceBusConfiguration serviceBusConfiguration, string queueUriFormat)
         {
-            var queueService = serviceProvider.GetRequiredService<IQueueService>();
+            var queueService = serviceProvider.GetRequiredService<IQueueService>().WireQueueCreated();
 
             var inboxWorkQueue = queueService.Get(string.Format(queueUriFormat, "test-inbox-work"));
             var inboxDeferredQueue = queueService.Get(string.Format(queueUriFormat, "test-inbox-deferred"));
@@ -139,8 +136,7 @@ namespace Shuttle.Esb.Tests
             await errorQueue.TryPurge().ConfigureAwait(false);
         }
 
-        protected ServiceBusOptions AddServiceBus(IServiceCollection services, int threadCount, bool isTransactional,
-            string queueUriFormat)
+        protected void AddServiceBus(IServiceCollection services, int threadCount, bool isTransactional, string queueUriFormat)
         {
             Guard.AgainstNull(services, nameof(services));
 
@@ -155,8 +151,6 @@ namespace Shuttle.Esb.Tests
             {
                 builder.Options = serviceBusOptions;
             });
-
-            return serviceBusOptions;
         }
 
         private ServiceBusOptions GetServiceBusOptions(int threadCount, string queueUriFormat)

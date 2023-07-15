@@ -25,7 +25,7 @@ namespace Shuttle.Esb.Tests
 
             var padlock = new object();
 
-            var serviceBusOptions = AddServiceBus(services, threadCount, isTransactional, queueUriFormat);
+            AddServiceBus(services, threadCount, isTransactional, queueUriFormat);
 
             services.AddSingleton<IMessageRouteProvider>(new IdempotenceMessageRouteProvider());
             services.AddSingleton<IMessageHandlerInvoker, IdempotenceMessageHandlerInvoker>();
@@ -39,8 +39,6 @@ namespace Shuttle.Esb.Tests
             var transportMessagePipeline = pipelineFactory.GetPipeline<TransportMessagePipeline>();
             var serviceBusConfiguration = serviceProvider.GetRequiredService<IServiceBusConfiguration>();
             var serializer = serviceProvider.GetRequiredService<ISerializer>();
-
-            serviceBusConfiguration.Configure(serviceBusOptions);
 
             await ConfigureQueues(serviceProvider, serviceBusConfiguration, queueUriFormat).ConfigureAwait(false);
 
@@ -123,7 +121,8 @@ namespace Shuttle.Esb.Tests
 
         private async Task ConfigureQueues(IServiceProvider serviceProvider, IServiceBusConfiguration serviceBusConfiguration, string queueUriFormat)
         {
-            var queueService = serviceProvider.GetRequiredService<IQueueService>();
+            var queueService = serviceProvider.GetRequiredService<IQueueService>().WireQueueCreated();
+
             var inboxWorkQueue = queueService.Get(string.Format(queueUriFormat, "test-inbox-work"));
             var errorQueue = queueService.Get(string.Format(queueUriFormat, "test-error"));
 

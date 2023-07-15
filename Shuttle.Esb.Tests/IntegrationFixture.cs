@@ -20,22 +20,24 @@ namespace Shuttle.Esb.Tests
             "test-error"
         };
 
-        protected QueueService CreateQueueService(IServiceProvider serviceProvider)
+        protected IQueueService CreateQueueService(IServiceProvider serviceProvider)
         {
             return new QueueService(serviceProvider.GetRequiredService<IQueueFactoryService>(),
-                serviceProvider.GetRequiredService<IUriResolver>());
+                serviceProvider.GetRequiredService<IUriResolver>()).WireQueueCreated();
         }
 
-        protected async Task TryDropQueues(QueueService queueService, string queueUriFormat)
+        protected async Task TryDropQueues(IQueueService queueService, string queueUriFormat)
         {
             foreach (var queueUri in _queueUris)
             {
-                if (!queueService.Contains(queueUri))
+                var uri = string.Format(queueUriFormat, queueUri);
+
+                if (!queueService.Contains(uri))
                 {
                     continue;
                 }
 
-                await queueService.Get(string.Format(queueUriFormat, queueUri)).TryDrop().ConfigureAwait(false);
+                await queueService.Get(uri).TryDrop().ConfigureAwait(false);
             }
         }
     }

@@ -81,7 +81,7 @@ namespace Shuttle.Esb.Tests
                 threadCount = 1;
             }
 
-            var serviceBusOptions = AddServiceBus(services, true, threadCount, isTransactional, queueUriFormat, TimeSpan.FromMilliseconds(25));
+            AddServiceBus(services, true, threadCount, isTransactional, queueUriFormat, TimeSpan.FromMilliseconds(25));
 
             services.AddSingleton<ProcessorThreadObserver, ProcessorThreadObserver>();
 
@@ -114,8 +114,6 @@ namespace Shuttle.Esb.Tests
 
             try
             {
-                serviceBusConfiguration.Configure(serviceBusOptions);
-
                 await ConfigureQueues(serviceProvider, serviceBusConfiguration, queueUriFormat, true).ConfigureAwait(false);
 
                 Console.WriteLine(
@@ -188,10 +186,8 @@ namespace Shuttle.Esb.Tests
         protected async Task TestInboxError(IServiceCollection services, string queueUriFormat, bool hasErrorQueue,
             bool isTransactional)
         {
-            var serviceBusOptions = AddServiceBus(services, hasErrorQueue, 1, isTransactional, queueUriFormat, TimeSpan.FromMilliseconds(25));
-
-            serviceBusOptions.Inbox.MaximumFailureCount = 0;
-
+            AddServiceBus(services, hasErrorQueue, 1, isTransactional, queueUriFormat, TimeSpan.FromMilliseconds(25));
+            
             var serviceProvider = services.BuildServiceProvider();
 
             var pipelineFactory = serviceProvider.GetRequiredService<IPipelineFactory>();
@@ -214,8 +210,6 @@ namespace Shuttle.Esb.Tests
 
             try
             {
-                serviceBusConfiguration.Configure(serviceBusOptions);
-
                 await ConfigureQueues(serviceProvider, serviceBusConfiguration, queueUriFormat, hasErrorQueue).ConfigureAwait(false);
 
                 var serviceBus = serviceProvider.GetRequiredService<IServiceBus>();
@@ -272,10 +266,9 @@ namespace Shuttle.Esb.Tests
             }
         }
 
-        private async Task ConfigureQueues(IServiceProvider serviceProvider, IServiceBusConfiguration serviceBusConfiguration,
-            string queueUriFormat, bool hasErrorQueue)
+        private async Task ConfigureQueues(IServiceProvider serviceProvider, IServiceBusConfiguration serviceBusConfiguration, string queueUriFormat, bool hasErrorQueue)
         {
-            var queueService = serviceProvider.GetRequiredService<IQueueService>();
+            var queueService = serviceProvider.GetRequiredService<IQueueService>().WireQueueCreated();
 
             var inboxWorkQueue = queueService.Get(string.Format(queueUriFormat, "test-inbox-work"));
             var errorQueue = hasErrorQueue ? queueService.Get(string.Format(queueUriFormat, "test-error")) : null;
@@ -296,7 +289,7 @@ namespace Shuttle.Esb.Tests
 
             var padlock = new object();
 
-            var serviceBusOptions = AddServiceBus(services, true, threadCount, isTransactional, queueUriFormat, TimeSpan.FromMilliseconds(25));
+            AddServiceBus(services, true, threadCount, isTransactional, queueUriFormat, TimeSpan.FromMilliseconds(25));
 
             var module = new InboxConcurrencyFeature();
 
@@ -316,8 +309,6 @@ namespace Shuttle.Esb.Tests
 
             try
             {
-                serviceBusConfiguration.Configure(serviceBusOptions);
-
                 await ConfigureQueues(serviceProvider, serviceBusConfiguration, queueUriFormat, true).ConfigureAwait(false);
 
                 var serviceBus = serviceProvider.GetRequiredService<IServiceBus>();
@@ -401,8 +392,6 @@ namespace Shuttle.Esb.Tests
 
             var queueService = CreateQueueService(serviceProvider);
 
-            serviceBusConfiguration.Configure(serviceBusOptions);
-
             await ConfigureQueues(serviceProvider, serviceBusConfiguration, queueUriFormat, true).ConfigureAwait(false);
 
             try
@@ -448,7 +437,7 @@ namespace Shuttle.Esb.Tests
 
         protected async Task TestInboxExpiry(IServiceCollection services, string queueUriFormat)
         {
-            await TestInboxExpiry(services, queueUriFormat, TimeSpan.FromMilliseconds(500));
+            await TestInboxExpiry(services, queueUriFormat, TimeSpan.FromMilliseconds(500)).ConfigureAwait(false);
         }
 
         protected async Task TestInboxExpiry(IServiceCollection services, string queueUriFormat, TimeSpan expiryDuration)
@@ -456,6 +445,8 @@ namespace Shuttle.Esb.Tests
             services.AddServiceBus();
 
             var serviceProvider = services.BuildServiceProvider();
+
+            serviceProvider.GetRequiredService<IQueueService>().WireQueueCreated();
 
             var pipelineFactory = serviceProvider.GetRequiredService<IPipelineFactory>();
             var transportMessagePipeline = pipelineFactory.GetPipeline<TransportMessagePipeline>();
@@ -513,7 +504,8 @@ namespace Shuttle.Esb.Tests
                     ErrorQueueUri = hasErrorQueue ? string.Format(queueUriFormat, "test-error") : string.Empty,
                     DurationToSleepWhenIdle = new List<TimeSpan> { durationToSleepWhenIdle },
                     DurationToIgnoreOnFailure = new List<TimeSpan> { TimeSpan.FromMilliseconds(25) },
-                    ThreadCount = threadCount
+                    ThreadCount = threadCount,
+                    MaximumFailureCount = 0
                 }
             };
 
