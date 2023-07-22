@@ -268,7 +268,7 @@ namespace Shuttle.Esb.Tests
 
         private async Task ConfigureQueues(IServiceProvider serviceProvider, IServiceBusConfiguration serviceBusConfiguration, string queueUriFormat, bool hasErrorQueue)
         {
-            var queueService = serviceProvider.GetRequiredService<IQueueService>().WireQueueCreated();
+            var queueService = serviceProvider.GetRequiredService<IQueueService>();
 
             var inboxWorkQueue = queueService.Get(string.Format(queueUriFormat, "test-inbox-work"));
             var errorQueue = hasErrorQueue ? queueService.Get(string.Format(queueUriFormat, "test-error")) : null;
@@ -445,9 +445,6 @@ namespace Shuttle.Esb.Tests
             services.AddServiceBus();
 
             var serviceProvider = services.BuildServiceProvider();
-
-            serviceProvider.GetRequiredService<IQueueService>().WireQueueCreated();
-
             var pipelineFactory = serviceProvider.GetRequiredService<IPipelineFactory>();
             var transportMessagePipeline = pipelineFactory.GetPipeline<TransportMessagePipeline>();
             var serializer = serviceProvider.GetRequiredService<ISerializer>();

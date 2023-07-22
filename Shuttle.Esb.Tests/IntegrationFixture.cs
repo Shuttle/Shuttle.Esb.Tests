@@ -23,7 +23,7 @@ namespace Shuttle.Esb.Tests
         protected IQueueService CreateQueueService(IServiceProvider serviceProvider)
         {
             return new QueueService(serviceProvider.GetRequiredService<IQueueFactoryService>(),
-                serviceProvider.GetRequiredService<IUriResolver>()).WireQueueCreated();
+                serviceProvider.GetRequiredService<IUriResolver>()).WireQueueEvents();
         }
 
         protected async Task TryDropQueues(IQueueService queueService, string queueUriFormat)

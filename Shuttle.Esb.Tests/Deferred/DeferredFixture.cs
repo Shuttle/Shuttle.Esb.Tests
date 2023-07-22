@@ -119,7 +119,7 @@ namespace Shuttle.Esb.Tests
 
         private async Task ConfigureQueues(IServiceProvider serviceProvider, IServiceBusConfiguration serviceBusConfiguration, string queueUriFormat)
         {
-            var queueService = serviceProvider.GetRequiredService<IQueueService>().WireQueueCreated();
+            var queueService = serviceProvider.GetRequiredService<IQueueService>();
 
             var inboxWorkQueue = queueService.Get(string.Format(queueUriFormat, "test-inbox-work"));
             var inboxDeferredQueue = queueService.Get(string.Format(queueUriFormat, "test-inbox-deferred"));

@@ -6,7 +6,7 @@ namespace Shuttle.Esb.Tests
 {
     public static class IQueueServiceExtensions
     {
-        public static IQueueService WireQueueCreated(this IQueueService queueService)
+        public static IQueueService WireQueueEvents(this IQueueService queueService)
         {
             Guard.AgainstNull(queueService, nameof(queueService));
 
