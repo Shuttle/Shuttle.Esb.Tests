@@ -21,7 +21,7 @@ namespace Shuttle.Esb.Tests
                 builder.Options = serviceBusOptions;
             });
 
-            services.AddSingleton<ReceivePipelineExceptionFeature>();
+            services.AddPipelineFeature<ReceivePipelineExceptionFeature>();
 
             var serviceProvider = services.BuildServiceProvider();
 
@@ -51,7 +51,7 @@ namespace Shuttle.Esb.Tests
 
             var pipelineFactory = serviceProvider.GetRequiredService<IPipelineFactory>();
             var transportMessagePipeline = pipelineFactory.GetPipeline<TransportMessagePipeline>();
-            var module = serviceProvider.GetRequiredService<ReceivePipelineExceptionFeature>();
+            var feature = (ReceivePipelineExceptionFeature)serviceProvider.GetRequiredService<IPipelineFeature>();
             var serializer = serviceProvider.GetRequiredService<ISerializer>();
 
             var serviceBus = serviceProvider.GetRequiredService<IServiceBus>();
@@ -71,7 +71,7 @@ namespace Shuttle.Esb.Tests
 
                 await serviceBus.Start().ConfigureAwait(false);
 
-                while (module.ShouldWait())
+                while (feature.ShouldWait())
                 {
                     await Task.Delay(10).ConfigureAwait(false);
                 }

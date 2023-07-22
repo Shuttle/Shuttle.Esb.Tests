@@ -15,6 +15,11 @@ namespace Shuttle.Esb.Tests
         private readonly object _lock = new object();
         private DateTime _firstDateAfterGetMessage = DateTime.MinValue;
 
+        public InboxConcurrencyFeature(IPipelineFactory pipelineFactory)
+        {
+            Guard.AgainstNull(pipelineFactory, nameof(pipelineFactory)).PipelineCreated += PipelineCreated;
+        }
+
         public int OnAfterGetMessageCount => _datesAfterGetMessage.Count;
 
         public async Task Execute(OnAfterGetMessage pipelineEvent)
@@ -56,13 +61,6 @@ namespace Shuttle.Esb.Tests
                 _datesAfterGetMessage.All(
                     dateTime => dateTime.Subtract(_firstDateAfterGetMessage) <=
                                 TimeSpan.FromMilliseconds(msToComplete));
-        }
-
-        public void Assign(IPipelineFactory pipelineFactory)
-        {
-            Guard.AgainstNull(pipelineFactory, nameof(pipelineFactory));
-
-            pipelineFactory.PipelineCreated += PipelineCreated;
         }
     }
 }

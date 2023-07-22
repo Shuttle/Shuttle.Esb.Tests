@@ -21,9 +21,12 @@ namespace Shuttle.Esb.Tests
             const int deferredMessageCount = 10;
             const int millisecondsToDefer = 250;
 
-            var module = new DeferredMessageFeature(deferredMessageCount);
+            services.AddOptions<MessageCountOptions>().Configure(options =>
+            {
+                options.MessageCount = deferredMessageCount;
+            });
 
-            services.AddSingleton(module);
+            services.AddPipelineFeature<DeferredMessageFeature>();
 
             AddServiceBus(services, 1, isTransactional, queueUriFormat);
 
@@ -33,6 +36,7 @@ namespace Shuttle.Esb.Tests
             var transportMessagePipeline = pipelineFactory.GetPipeline<TransportMessagePipeline>();
             var serviceBusConfiguration = serviceProvider.GetRequiredService<IServiceBusConfiguration>();
             var serializer = serviceProvider.GetRequiredService<ISerializer>();
+            var feature = (DeferredMessageFeature)serviceProvider.GetRequiredService<IPipelineFeature>();
 
             var queueService = CreateQueueService(serviceProvider);
 
@@ -40,8 +44,6 @@ namespace Shuttle.Esb.Tests
 
             try
             {
-                module.Assign(serviceProvider.GetRequiredService<IPipelineFactory>());
-
                 await using (await serviceProvider.GetRequiredService<IServiceBus>().Start().ConfigureAwait(false))
                 {
                     var ignoreTillDate = DateTime.Now.AddSeconds(2);
@@ -63,7 +65,7 @@ namespace Shuttle.Esb.Tests
                     Console.WriteLine($"[start wait] : now = '{DateTime.Now}'");
 
                     // wait for the message to be returned from the deferred queue
-                    while (!module.AllMessagesHandled()
+                    while (!feature.AllMessagesHandled()
                            &&
                            !timedOut)
                     {
@@ -76,11 +78,11 @@ namespace Shuttle.Esb.Tests
                         $"[end wait] : now = '{DateTime.Now}' / timeout = '{timeout}' / timed out = '{timedOut}'");
 
                     Console.WriteLine(
-                        $"{module.NumberOfDeferredMessagesReturned} of {deferredMessageCount} deferred messages returned to the inbox.");
+                        $"{feature.NumberOfDeferredMessagesReturned} of {deferredMessageCount} deferred messages returned to the inbox.");
                     Console.WriteLine(
-                        $"{module.NumberOfMessagesHandled} of {deferredMessageCount} deferred messages handled.");
+                        $"{feature.NumberOfMessagesHandled} of {deferredMessageCount} deferred messages handled.");
 
-                    Assert.IsTrue(module.AllMessagesHandled(), "All the deferred messages were not handled.");
+                    Assert.IsTrue(feature.AllMessagesHandled(), "All the deferred messages were not handled.");
 
                     Assert.IsTrue(await serviceBusConfiguration.Inbox.ErrorQueue.IsEmpty().ConfigureAwait(false));
                     Assert.IsNull(await serviceBusConfiguration.Inbox.DeferredQueue.GetMessage().ConfigureAwait(false));

@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Threading.Tasks;
+using Microsoft.Extensions.Options;
 using Shuttle.Core.Contract;
 using Shuttle.Core.Pipelines;
 
@@ -13,9 +14,12 @@ namespace Shuttle.Esb.Tests
 		private readonly object _lock = new object();
 	    private readonly int _deferredMessageCount;
 
-	    public DeferredMessageFeature(int deferredMessageCount)
+	    public DeferredMessageFeature(IOptions<MessageCountOptions> options, IPipelineFactory pipelineFactory)
 		{
-            _deferredMessageCount = deferredMessageCount;
+			Guard.AgainstNull(options, nameof(options));
+            Guard.AgainstNull(pipelineFactory, nameof(pipelineFactory)).PipelineCreated += PipelineCreated;
+
+            _deferredMessageCount = Guard.AgainstNull(options.Value, nameof(options.Value)).MessageCount; 
 		}
 
 		public int NumberOfDeferredMessagesReturned { get; private set; }
@@ -62,13 +66,6 @@ namespace Shuttle.Esb.Tests
 		public bool AllMessagesHandled()
 		{
 			return NumberOfMessagesHandled == _deferredMessageCount;
-		}
-
-		public void Assign(IPipelineFactory pipelineFactory)
-		{
-			Guard.AgainstNull(pipelineFactory, nameof(pipelineFactory));
-
-			pipelineFactory.PipelineCreated += PipelineCreated;
 		}
 	}
 }

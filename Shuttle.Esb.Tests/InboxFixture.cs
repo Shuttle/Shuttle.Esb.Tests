@@ -291,9 +291,7 @@ namespace Shuttle.Esb.Tests
 
             AddServiceBus(services, true, threadCount, isTransactional, queueUriFormat, TimeSpan.FromMilliseconds(25));
 
-            var module = new InboxConcurrencyFeature();
-
-            services.AddSingleton(module);
+            services.AddPipelineFeature<InboxConcurrencyFeature>();
 
             var serviceProvider = services.BuildServiceProvider();
 
@@ -302,8 +300,7 @@ namespace Shuttle.Esb.Tests
             var transportMessagePipeline = pipelineFactory.GetPipeline<TransportMessagePipeline>();
             var serviceBusConfiguration = serviceProvider.GetRequiredService<IServiceBusConfiguration>();
             var serializer = serviceProvider.GetRequiredService<ISerializer>();
-
-            module.Assign(serviceProvider.GetRequiredService<IPipelineFactory>());
+            var feature = (InboxConcurrencyFeature)serviceProvider.GetRequiredService<IPipelineFeature>();
 
             var queueService = CreateQueueService(serviceProvider);
 
@@ -354,10 +351,10 @@ namespace Shuttle.Esb.Tests
                 queueService.TryDispose();
             }
 
-            Assert.AreEqual(threadCount, module.OnAfterGetMessageCount,
-                $"Got {module.OnAfterGetMessageCount} messages but {threadCount} were sent.");
+            Assert.AreEqual(threadCount, feature.OnAfterGetMessageCount,
+                $"Got {feature.OnAfterGetMessageCount} messages but {threadCount} were sent.");
 
-            Assert.IsTrue(module.AllMessagesReceivedWithinTimespan(msToComplete),
+            Assert.IsTrue(feature.AllMessagesReceivedWithinTimespan(msToComplete),
                 "All dequeued messages have to be within {0} ms of first get message.", msToComplete);
         }
 
@@ -375,7 +372,7 @@ namespace Shuttle.Esb.Tests
                 }
             };
 
-            services.AddSingleton<InboxDeferredFeature>();
+            services.AddPipelineFeature<InboxDeferredFeature>();
 
             services.AddServiceBus(builder =>
             {
@@ -396,7 +393,7 @@ namespace Shuttle.Esb.Tests
 
             try
             {
-                var module = serviceProvider.GetRequiredService<InboxDeferredFeature>();
+                var feature = (InboxDeferredFeature)serviceProvider.GetRequiredService<IPipelineFeature>();
 
                 var serviceBus = await serviceProvider.GetRequiredService<IServiceBus>().Start().ConfigureAwait(false);
                 
@@ -416,14 +413,14 @@ namespace Shuttle.Esb.Tests
 
                     var messageId = transportMessage.MessageId;
 
-                    while (module.TransportMessage == null && DateTime.Now < timeout)
+                    while (feature.TransportMessage == null && DateTime.Now < timeout)
                     {
-                        await Task.Delay(5);
+                        await Task.Delay(5).ConfigureAwait(false);
                     }
 
-                    Assert.IsNotNull(module.TransportMessage);
-                    Assert.True(messageId.Equals(module.TransportMessage.MessageId));
-                    Assert.True(messageType.Equals(module.TransportMessage.MessageType,
+                    Assert.IsNotNull(feature.TransportMessage);
+                    Assert.True(messageId.Equals(feature.TransportMessage.MessageId));
+                    Assert.True(messageType.Equals(feature.TransportMessage.MessageType,
                         StringComparison.OrdinalIgnoreCase));
                 }
 
@@ -472,7 +469,7 @@ namespace Shuttle.Esb.Tests
                 // wait until the message expires
                 await Task.Delay(500).ConfigureAwait(false);
 
-                Assert.IsNull(queue.GetMessage(),
+                Assert.IsNull(await queue.GetMessage().ConfigureAwait(false),
                     "The message did not expire.  Call this test only if your queue actually supports message expiry internally.");
 
                 await queue.TryDrop().ConfigureAwait(false);

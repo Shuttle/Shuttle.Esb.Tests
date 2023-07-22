@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 using NUnit.Framework;
 using Shuttle.Core.Contract;
 using Shuttle.Core.Pipelines;
@@ -62,9 +63,12 @@ namespace Shuttle.Esb.Tests
 
             var distributorQueueService = CreateQueueService(distributorServiceProvider);
 
-            var module = new WorkerModule(messageCount);
+            workerServices.AddOptions<MessageCountOptions>().Configure(options =>
+            {
+                options.MessageCount = messageCount;
+            });
 
-            workerServices.AddSingleton(module);
+            workerServices.AddPipelineFeature<WorkerFeature>();
 
             workerServices.AddTransactionScope(builder =>
             {
@@ -95,12 +99,12 @@ namespace Shuttle.Esb.Tests
             var workerServiceProvider = workerServices.BuildServiceProvider();
             var workerServiceBusConfiguration = workerServiceProvider.GetRequiredService<IServiceBusConfiguration>();
 
+            var feature = (WorkerFeature)workerServiceProvider.GetRequiredService<IPipelineFeature>();
+
             try
             {
                 await ConfigureDistributorQueues(distributorServiceBusConfiguration).ConfigureAwait(false);
                 await ConfigureWorkerQueues(workerServiceBusConfiguration).ConfigureAwait(false);
-
-                module.Assign(workerServiceProvider.GetRequiredService<IPipelineFactory>());
 
                 var distributorBus = distributorServiceProvider.GetRequiredService<IServiceBus>();
                 var workerBus = workerServiceProvider.GetRequiredService<IServiceBus>();
@@ -130,7 +134,7 @@ namespace Shuttle.Esb.Tests
 
                     Console.WriteLine($"[start wait] : now = '{DateTime.Now}'");
 
-                    while (!module.AllMessagesHandled() && !timedOut)
+                    while (!feature.AllMessagesHandled() && !timedOut)
                     {
                         await Task.Delay(50).ConfigureAwait(false);
 
@@ -140,7 +144,7 @@ namespace Shuttle.Esb.Tests
                     Console.WriteLine(
                         $"[end wait] : now = '{DateTime.Now}' / timeout = '{timeout}' / timed out = '{timedOut}'");
 
-                    Assert.IsTrue(module.AllMessagesHandled(), "Not all messages were handled.");
+                    Assert.IsTrue(feature.AllMessagesHandled(), "Not all messages were handled.");
                 }
 
                 await TryDropQueues(distributorQueueService, queueUriFormat).ConfigureAwait(false);
@@ -173,15 +177,20 @@ namespace Shuttle.Esb.Tests
             await serviceBusConfiguration.Inbox.WorkQueue.TryPurge().ConfigureAwait(false);
         }
 
-        public class WorkerModule : IPipelineObserver<OnAfterHandleMessage>
+        public class WorkerFeature : 
+            IPipelineFeature,
+            IPipelineObserver<OnAfterHandleMessage>
         {
             private readonly object _lock = new object();
             private readonly int _messageCount;
             private int _messagesHandled;
 
-            public WorkerModule(int messageCount)
+            public WorkerFeature(IOptions<MessageCountOptions> options, IPipelineFactory pipelineFactory)
             {
-                _messageCount = messageCount;
+                Guard.AgainstNull(options, nameof(options));
+                Guard.AgainstNull(pipelineFactory, nameof(pipelineFactory)).PipelineCreated += PipelineCreated;
+
+                _messageCount = Guard.AgainstNull(options.Value, nameof(options.Value)).MessageCount;
             }
 
             public async Task Execute(OnAfterHandleMessage pipelineEvent1)
@@ -215,13 +224,6 @@ namespace Shuttle.Esb.Tests
             public bool AllMessagesHandled()
             {
                 return _messagesHandled == _messageCount;
-            }
-
-            public void Assign(IPipelineFactory pipelineFactory)
-            {
-                Guard.AgainstNull(pipelineFactory, nameof(pipelineFactory));
-
-                pipelineFactory.PipelineCreated += PipelineCreated;
             }
         }
     }
