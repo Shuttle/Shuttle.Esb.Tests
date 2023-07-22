@@ -393,7 +393,7 @@ namespace Shuttle.Esb.Tests
 
             try
             {
-                var feature = serviceProvider.GetRequiredService<IPipelineFeature>();
+                var feature = (InboxDeferredFeature)serviceProvider.GetRequiredService<IPipelineFeature>();
 
                 var serviceBus = await serviceProvider.GetRequiredService<IServiceBus>().Start().ConfigureAwait(false);
                 
