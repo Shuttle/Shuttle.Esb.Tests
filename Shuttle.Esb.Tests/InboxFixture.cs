@@ -285,7 +285,7 @@ namespace Shuttle.Esb.Tests
         protected async Task TestInboxConcurrency(IServiceCollection services, string queueUriFormat, int msToComplete,
             bool isTransactional)
         {
-            const int threadCount = 1;
+            const int threadCount = 3;
 
             var padlock = new object();
 
@@ -393,7 +393,7 @@ namespace Shuttle.Esb.Tests
 
             try
             {
-                var feature = (InboxDeferredFeature)serviceProvider.GetRequiredService<IPipelineFeature>();
+                var feature = serviceProvider.GetRequiredService<IPipelineFeature>();
 
                 var serviceBus = await serviceProvider.GetRequiredService<IServiceBus>().Start().ConfigureAwait(false);
                 
