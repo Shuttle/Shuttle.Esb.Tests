@@ -394,6 +394,7 @@ namespace Shuttle.Esb.Tests
             try
             {
                 var feature = (InboxDeferredFeature)serviceProvider.GetRequiredService<IPipelineFeature>();
+                var deferDuration = TimeSpan.FromMilliseconds(500);
 
                 var serviceBus = await serviceProvider.GetRequiredService<IServiceBus>().Start().ConfigureAwait(false);
                 
@@ -403,11 +404,11 @@ namespace Shuttle.Esb.Tests
                         builder =>
                         {
                             builder
-                                .Defer(DateTime.Now.AddMilliseconds(500))
+                                .Defer(DateTime.Now.Add(deferDuration))
                                 .WithRecipient(serviceBusConfiguration.Inbox.WorkQueue);
                         }).ConfigureAwait(false);
 
-                    var timeout = DateTime.Now.AddMilliseconds(1000);
+                    var timeout = DateTime.Now.Add(deferDuration.Multiply(2));
 
                     Assert.IsNotNull(transportMessage);
 
@@ -415,7 +416,7 @@ namespace Shuttle.Esb.Tests
 
                     while (feature.TransportMessage == null && DateTime.Now < timeout)
                     {
-                        await Task.Delay(5).ConfigureAwait(false);
+                        await Task.Delay(50).ConfigureAwait(false);
                     }
 
                     Assert.IsNotNull(feature.TransportMessage);
