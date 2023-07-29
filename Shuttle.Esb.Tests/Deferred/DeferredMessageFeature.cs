@@ -7,7 +7,6 @@ using Shuttle.Core.Pipelines;
 namespace Shuttle.Esb.Tests
 {
 	public class DeferredMessageFeature :
-		IPipelineFeature,
 		IPipelineObserver<OnAfterHandleMessage>,
 		IPipelineObserver<OnAfterProcessDeferredMessage>
 	{

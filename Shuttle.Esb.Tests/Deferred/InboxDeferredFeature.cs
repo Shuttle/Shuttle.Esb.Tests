@@ -1,4 +1,3 @@
-using System;
 using System.Threading.Tasks;
 using Shuttle.Core.Contract;
 using Shuttle.Core.Pipelines;
@@ -6,7 +5,6 @@ using Shuttle.Core.Pipelines;
 namespace Shuttle.Esb.Tests
 {
     public class InboxDeferredFeature :
-        IPipelineFeature,
         IPipelineObserver<OnAfterDeserializeTransportMessage>
     {
         public TransportMessage TransportMessage { get; private set; }

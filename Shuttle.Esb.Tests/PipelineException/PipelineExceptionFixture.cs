@@ -4,6 +4,7 @@ using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 using NUnit.Framework;
 using Shuttle.Core.Pipelines;
 using Shuttle.Core.Serialization;
@@ -19,11 +20,12 @@ namespace Shuttle.Esb.Tests
             services.AddServiceBus(builder =>
             {
                 builder.Options = serviceBusOptions;
+                builder.SuppressHostedService = true;
             });
 
-            services.AddPipelineFeature<ReceivePipelineExceptionFeature>();
+            services.AddSingleton<ReceivePipelineExceptionFeature>();
 
-            var serviceProvider = services.BuildServiceProvider();
+            var serviceProvider = await services.BuildServiceProvider().StartHostedServices().ConfigureAwait(false);
 
             serviceBusOptions.Inbox = new InboxOptions
             {
@@ -51,7 +53,7 @@ namespace Shuttle.Esb.Tests
 
             var pipelineFactory = serviceProvider.GetRequiredService<IPipelineFactory>();
             var transportMessagePipeline = pipelineFactory.GetPipeline<TransportMessagePipeline>();
-            var feature = (ReceivePipelineExceptionFeature)serviceProvider.GetRequiredService<IPipelineFeature>();
+            var feature = serviceProvider.GetRequiredService<ReceivePipelineExceptionFeature>();
             var serializer = serviceProvider.GetRequiredService<ISerializer>();
 
             var serviceBus = serviceProvider.GetRequiredService<IServiceBus>();
@@ -76,6 +78,8 @@ namespace Shuttle.Esb.Tests
                     await Task.Delay(10).ConfigureAwait(false);
                 }
             }
+
+            await serviceProvider.StopHostedServices().ConfigureAwait(false);
         }
 
         private ServiceBusOptions GetServiceBusOptions(int threadCount, string queueUriFormat)

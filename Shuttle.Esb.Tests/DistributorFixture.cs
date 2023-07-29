@@ -51,9 +51,10 @@ namespace Shuttle.Esb.Tests
             distributorServices.AddServiceBus(builder =>
             {
                 builder.Options = distributorServiceBusOptions;
+                builder.SuppressHostedService = true;
             });
 
-            var distributorServiceProvider = distributorServices.BuildServiceProvider();
+            var distributorServiceProvider = await distributorServices.BuildServiceProvider().StartHostedServices().ConfigureAwait(false);
 
             var distributorServiceBusConfiguration =
                 distributorServiceProvider.GetRequiredService<IServiceBusConfiguration>();
@@ -68,7 +69,7 @@ namespace Shuttle.Esb.Tests
                 options.MessageCount = messageCount;
             });
 
-            workerServices.AddPipelineFeature<WorkerFeature>();
+            workerServices.AddSingleton<WorkerFeature>();
 
             workerServices.AddTransactionScope(builder =>
             {
@@ -94,12 +95,13 @@ namespace Shuttle.Esb.Tests
             workerServices.AddServiceBus(builder =>
             {
                 builder.Options = workerServiceBusOptions;
+                builder.SuppressHostedService = true;
             });
 
-            var workerServiceProvider = workerServices.BuildServiceProvider();
+            var workerServiceProvider = await workerServices.BuildServiceProvider().StartHostedServices().ConfigureAwait(false);
             var workerServiceBusConfiguration = workerServiceProvider.GetRequiredService<IServiceBusConfiguration>();
 
-            var feature = (WorkerFeature)workerServiceProvider.GetRequiredService<IPipelineFeature>();
+            var feature = workerServiceProvider.GetRequiredService<WorkerFeature>();
 
             try
             {
@@ -115,7 +117,8 @@ namespace Shuttle.Esb.Tests
                 {
                     var command = new SimpleCommand
                     {
-                        Name = Guid.NewGuid().ToString()
+                        Name = Guid.NewGuid().ToString(),
+                        Context = "TestDistributor"
                     };
                     
                     await transportMessagePipeline.Execute(command, null, builder =>
@@ -152,6 +155,9 @@ namespace Shuttle.Esb.Tests
             finally
             {
                 distributorQueueService.TryDispose();
+
+                await workerServiceProvider.StopHostedServices().ConfigureAwait(false);
+                await distributorServiceProvider.StopHostedServices().ConfigureAwait(false);
             }
         }
 
@@ -178,7 +184,6 @@ namespace Shuttle.Esb.Tests
         }
 
         public class WorkerFeature : 
-            IPipelineFeature,
             IPipelineObserver<OnAfterHandleMessage>
         {
             private readonly object _lock = new object();

@@ -8,7 +8,6 @@ using Shuttle.Core.Pipelines;
 namespace Shuttle.Esb.Tests
 {
     public class InboxConcurrencyFeature :
-        IPipelineFeature,
         IPipelineObserver<OnAfterGetMessage>
     {
         private readonly List<DateTime> _datesAfterGetMessage = new List<DateTime>();

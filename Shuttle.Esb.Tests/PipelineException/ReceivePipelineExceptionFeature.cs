@@ -10,7 +10,6 @@ using Shuttle.Core.Reflection;
 namespace Shuttle.Esb.Tests
 {
 	public class ReceivePipelineExceptionFeature :
-		IPipelineFeature,
 		IPipelineObserver<OnGetMessage>,
 		IPipelineObserver<OnAfterGetMessage>,
 		IPipelineObserver<OnDeserializeTransportMessage>,

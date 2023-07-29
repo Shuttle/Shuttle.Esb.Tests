@@ -1,10 +1,9 @@
 ﻿using System;
-using System.Runtime.CompilerServices;
 using Shuttle.Core.Contract;
 
 namespace Shuttle.Esb.Tests
 {
-    public static class IQueueServiceExtensions
+    public static class QueueServiceExtensions
     {
         public static IQueueService WireQueueEvents(this IQueueService queueService)
         {

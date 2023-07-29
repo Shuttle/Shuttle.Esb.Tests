@@ -26,17 +26,19 @@ namespace Shuttle.Esb.Tests
                 options.MessageCount = deferredMessageCount;
             });
 
-            services.AddPipelineFeature<DeferredMessageFeature>();
+            services.AddSingleton<DeferredMessageFeature>();
 
-            AddServiceBus(services, 1, isTransactional, queueUriFormat);
+            ConfigureServices(services, 1, isTransactional, queueUriFormat);
 
-            var serviceProvider = services.BuildServiceProvider();
+            var serviceProvider = await services.BuildServiceProvider().StartHostedServices().ConfigureAwait(false);
+
+            serviceProvider.GetRequiredService<DeferredMessageFeature>();
 
             var pipelineFactory = serviceProvider.GetRequiredService<IPipelineFactory>();
             var transportMessagePipeline = pipelineFactory.GetPipeline<TransportMessagePipeline>();
             var serviceBusConfiguration = serviceProvider.GetRequiredService<IServiceBusConfiguration>();
             var serializer = serviceProvider.GetRequiredService<ISerializer>();
-            var feature = (DeferredMessageFeature)serviceProvider.GetRequiredService<IPipelineFeature>();
+            var feature = serviceProvider.GetRequiredService<DeferredMessageFeature>();
 
             var queueService = CreateQueueService(serviceProvider);
 
@@ -44,30 +46,31 @@ namespace Shuttle.Esb.Tests
 
             try
             {
+                //var ignoreTillDate = DateTime.Now.AddSeconds(2);
+                var ignoreTillDate = DateTime.Now.AddSeconds(30);
+
+                for (var i = 0; i < deferredMessageCount; i++)
+                {
+                    await EnqueueDeferredMessage(serviceBusConfiguration, transportMessagePipeline, serializer,
+                        ignoreTillDate).ConfigureAwait(false);
+
+                    ignoreTillDate = ignoreTillDate.AddMilliseconds(millisecondsToDefer);
+                }
+
+                var timeout =
+                    ignoreTillDate.AddMilliseconds(deferredMessageCount * millisecondsToDefer +
+                                                   millisecondsToDefer * 2);
+                var timedOut = false;
+
                 await using (await serviceProvider.GetRequiredService<IServiceBus>().Start().ConfigureAwait(false))
                 {
-                    var ignoreTillDate = DateTime.Now.AddSeconds(2);
-
-                    for (var i = 0; i < deferredMessageCount; i++)
-                    {
-                        await EnqueueDeferredMessage(serviceBusConfiguration, transportMessagePipeline, serializer,
-                            ignoreTillDate).ConfigureAwait(false);
-
-                        ignoreTillDate = ignoreTillDate.AddMilliseconds(millisecondsToDefer);
-                    }
-
                     // add the extra time else there is no time to process message being returned
-                    var timeout =
-                        ignoreTillDate.AddMilliseconds(deferredMessageCount * millisecondsToDefer +
-                                                       millisecondsToDefer * 2);
-                    var timedOut = false;
-
                     Console.WriteLine($"[start wait] : now = '{DateTime.Now}'");
 
                     // wait for the message to be returned from the deferred queue
-                    while (!feature.AllMessagesHandled()
-                           &&
-                           !timedOut)
+                    while (!feature.AllMessagesHandled())
+                           //&&
+                           //!timedOut)
                     {
                         await Task.Delay(millisecondsToDefer).ConfigureAwait(false);
 
@@ -94,6 +97,8 @@ namespace Shuttle.Esb.Tests
             finally
             {
                 queueService.TryDispose();
+
+                await serviceProvider.StopHostedServices().ConfigureAwait(false);
             }
         }
 
@@ -102,7 +107,8 @@ namespace Shuttle.Esb.Tests
         {
             var command = new SimpleCommand
             {
-                Name = Guid.NewGuid().ToString()
+                Name = Guid.NewGuid().ToString(),
+                Context = "EnqueueDeferredMessage"
             };
 
             await transportMessagePipeline.Execute(command, null, builder =>
@@ -114,9 +120,6 @@ namespace Shuttle.Esb.Tests
             await serviceBusConfiguration.Inbox.WorkQueue.Enqueue(
                 transportMessagePipeline.State.GetTransportMessage(),
                 await serializer.Serialize(transportMessagePipeline.State.GetTransportMessage()).ConfigureAwait(false)).ConfigureAwait(false);
-
-            Console.WriteLine(
-                $"[message enqueued] : name = '{command.Name}' / deferred till date = '{ignoreTillDate}'");
         }
 
         private async Task ConfigureQueues(IServiceProvider serviceProvider, IServiceBusConfiguration serviceBusConfiguration, string queueUriFormat)
@@ -138,7 +141,7 @@ namespace Shuttle.Esb.Tests
             await errorQueue.TryPurge().ConfigureAwait(false);
         }
 
-        protected void AddServiceBus(IServiceCollection services, int threadCount, bool isTransactional, string queueUriFormat)
+        protected void ConfigureServices(IServiceCollection services, int threadCount, bool isTransactional, string queueUriFormat)
         {
             Guard.AgainstNull(services, nameof(services));
 
@@ -152,7 +155,10 @@ namespace Shuttle.Esb.Tests
             services.AddServiceBus(builder =>
             {
                 builder.Options = serviceBusOptions;
+                builder.SuppressHostedService = true;
             });
+
+            services.ConfigureLogging();
         }
 
         private ServiceBusOptions GetServiceBusOptions(int threadCount, string queueUriFormat)

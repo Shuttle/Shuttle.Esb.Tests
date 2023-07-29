@@ -2,11 +2,11 @@ using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using Microsoft.Extensions.DependencyInjection;
-using Shuttle.Core.Contract;
-using Shuttle.Core.Transactions;
+using NUnit.Framework;
 
 namespace Shuttle.Esb.Tests
 {
+    [NonParallelizable]
     public class IntegrationFixture
     {
         private readonly List<string> _queueUris = new List<string>

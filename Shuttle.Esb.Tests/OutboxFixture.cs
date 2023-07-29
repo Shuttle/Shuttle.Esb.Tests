@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.DependencyInjection;
 using Moq;
@@ -31,6 +30,29 @@ namespace Shuttle.Esb.Tests
 
     public abstract class OutboxFixture : IntegrationFixture
     {
+        private async Task ConfigureQueues(IServiceProvider serviceProvider, string queueUriFormat,
+            string errorQueueUriFormat)
+        {
+            var queueService = serviceProvider.GetRequiredService<IQueueService>();
+            var outboxWorkQueue = queueService.Get(string.Format(queueUriFormat, "test-outbox-work"));
+            var errorQueue = queueService.Get(string.Format(errorQueueUriFormat, "test-error"));
+
+            var receiverWorkQueue =
+                queueService.Get(string.Format(queueUriFormat, "test-receiver-work"));
+
+            await outboxWorkQueue.TryDrop().ConfigureAwait(false);
+            await receiverWorkQueue.TryDrop().ConfigureAwait(false);
+            await errorQueue.TryDrop().ConfigureAwait(false);
+
+            await outboxWorkQueue.TryCreate().ConfigureAwait(false);
+            await receiverWorkQueue.TryCreate().ConfigureAwait(false);
+            await errorQueue.TryCreate().ConfigureAwait(false);
+
+            await outboxWorkQueue.TryPurge().ConfigureAwait(false);
+            await receiverWorkQueue.TryPurge().ConfigureAwait(false);
+            await errorQueue.TryPurge().ConfigureAwait(false);
+        }
+
         protected async Task TestOutboxSending(IServiceCollection services, string workQueueUriFormat, int threadCount,
             bool isTransactional)
         {
@@ -66,6 +88,8 @@ namespace Shuttle.Esb.Tests
                             ThreadCount = threadCount
                         }
                 };
+
+                builder.SuppressHostedService = true;
             });
 
             var messageRouteProvider = new Mock<IMessageRouteProvider>();
@@ -76,13 +100,13 @@ namespace Shuttle.Esb.Tests
 
             services.AddSingleton(messageRouteProvider.Object);
 
-            var serviceProvider = services.BuildServiceProvider();
+            var serviceProvider = await services.BuildServiceProvider().StartHostedServices().ConfigureAwait(false);
 
             var pipelineFactory = serviceProvider.GetRequiredService<IPipelineFactory>();
 
             var outboxObserver = new OutboxObserver();
 
-            pipelineFactory.PipelineCreated += delegate (object sender, PipelineEventArgs args)
+            pipelineFactory.PipelineCreated += delegate(object sender, PipelineEventArgs args)
             {
                 if (args.Pipeline.GetType() == typeof(OutboxPipeline))
                 {
@@ -100,7 +124,7 @@ namespace Shuttle.Esb.Tests
             {
                 for (var i = 0; i < count; i++)
                 {
-                    await serviceBus.Send(new SimpleCommand()).ConfigureAwait(false);
+                    await serviceBus.Send(new SimpleCommand { Context = "TestOutboxSending" }).ConfigureAwait(false);
                 }
 
                 var receiverWorkQueue = queueService.Get(receiverWorkQueueUri);
@@ -152,6 +176,8 @@ namespace Shuttle.Esb.Tests
                 await receiverWorkQueue.TryDrop().ConfigureAwait(false);
             }
 
+            await serviceProvider.StopHostedServices().ConfigureAwait(false);
+
             queueService = CreateQueueService(services.BuildServiceProvider());
 
             var outboxWorkQueue = queueService.Get(string.Format(workQueueUriFormat, "test-outbox-work"));
@@ -162,29 +188,6 @@ namespace Shuttle.Esb.Tests
 
             await outboxWorkQueue.TryDrop().ConfigureAwait(false);
             await queueService.Get(string.Format(errorQueueUriFormat, "test-error")).TryDrop().ConfigureAwait(false);
-        }
-
-        private async Task ConfigureQueues(IServiceProvider serviceProvider, string queueUriFormat,
-            string errorQueueUriFormat)
-        {
-            var queueService = serviceProvider.GetRequiredService<IQueueService>();
-            var outboxWorkQueue = queueService.Get(string.Format(queueUriFormat, "test-outbox-work"));
-            var errorQueue = queueService.Get(string.Format(errorQueueUriFormat, "test-error"));
-
-            var receiverWorkQueue =
-                queueService.Get(string.Format(queueUriFormat, "test-receiver-work"));
-
-            await outboxWorkQueue.TryDrop().ConfigureAwait(false);
-            await receiverWorkQueue.TryDrop().ConfigureAwait(false);
-            await errorQueue.TryDrop().ConfigureAwait(false);
-
-            await outboxWorkQueue.TryCreate().ConfigureAwait(false);
-            await receiverWorkQueue.TryCreate().ConfigureAwait(false);
-            await errorQueue.TryCreate().ConfigureAwait(false);
-
-            await outboxWorkQueue.TryPurge().ConfigureAwait(false);
-            await receiverWorkQueue.TryPurge().ConfigureAwait(false);
-            await errorQueue.TryPurge().ConfigureAwait(false);
         }
     }
 }
