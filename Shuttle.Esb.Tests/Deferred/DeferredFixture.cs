@@ -68,9 +68,9 @@ namespace Shuttle.Esb.Tests
                     Console.WriteLine($"[start wait] : now = '{DateTime.Now}'");
 
                     // wait for the message to be returned from the deferred queue
-                    while (!feature.AllMessagesHandled())
-                           //&&
-                           //!timedOut)
+                    while (!feature.AllMessagesHandled()
+                           &&
+                           !timedOut)
                     {
                         await Task.Delay(millisecondsToDefer).ConfigureAwait(false);
 
