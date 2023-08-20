@@ -3,8 +3,10 @@ using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using NUnit.Framework;
+using NUnit.Framework.Internal;
 using Shuttle.Core.Contract;
 using Shuttle.Core.Pipelines;
 using Shuttle.Core.Reflection;
@@ -55,6 +57,7 @@ namespace Shuttle.Esb.Tests
             });
 
             var distributorServiceProvider = await distributorServices.BuildServiceProvider().StartHostedServices().ConfigureAwait(false);
+            var logger = distributorServiceProvider.GetLogger<DistributorFixture>();
 
             var distributorServiceBusConfiguration =
                 distributorServiceProvider.GetRequiredService<IServiceBusConfiguration>();
@@ -62,7 +65,7 @@ namespace Shuttle.Esb.Tests
             var transportMessagePipeline = pipelineFactory.GetPipeline<TransportMessagePipeline>();
             var serializer = distributorServiceProvider.GetRequiredService<ISerializer>();
 
-            var distributorQueueService = CreateQueueService(distributorServiceProvider);
+            var distributorQueueService = distributorServiceProvider.CreateQueueService();
 
             workerServices.AddOptions<MessageCountOptions>().Configure(options =>
             {
@@ -135,7 +138,7 @@ namespace Shuttle.Esb.Tests
                     var timeout = DateTime.Now.AddSeconds(timeoutSeconds < 5 ? 5 : timeoutSeconds);
                     var timedOut = false;
 
-                    Console.WriteLine($"[start wait] : now = '{DateTime.Now}'");
+                    logger.LogInformation($"[start wait] : now = '{DateTime.Now}'");
 
                     while (!feature.AllMessagesHandled() && !timedOut)
                     {
@@ -144,13 +147,13 @@ namespace Shuttle.Esb.Tests
                         timedOut = timeout < DateTime.Now;
                     }
 
-                    Console.WriteLine(
+                    logger.LogInformation(
                         $"[end wait] : now = '{DateTime.Now}' / timeout = '{timeout}' / timed out = '{timedOut}'");
 
                     Assert.IsTrue(feature.AllMessagesHandled(), "Not all messages were handled.");
                 }
 
-                await TryDropQueues(distributorQueueService, queueUriFormat).ConfigureAwait(false);
+                await distributorQueueService.TryDropQueues(queueUriFormat).ConfigureAwait(false);
             }
             finally
             {
@@ -186,21 +189,23 @@ namespace Shuttle.Esb.Tests
         public class WorkerFeature : 
             IPipelineObserver<OnAfterHandleMessage>
         {
+            private readonly ILogger<WorkerFeature> _logger;
             private readonly object _lock = new object();
             private readonly int _messageCount;
             private int _messagesHandled;
 
-            public WorkerFeature(IOptions<MessageCountOptions> options, IPipelineFactory pipelineFactory)
+            public WorkerFeature(ILogger<WorkerFeature> logger, IOptions<MessageCountOptions> options, IPipelineFactory pipelineFactory)
             {
                 Guard.AgainstNull(options, nameof(options));
                 Guard.AgainstNull(pipelineFactory, nameof(pipelineFactory)).PipelineCreated += PipelineCreated;
 
+                _logger = Guard.AgainstNull(logger, nameof(logger));
                 _messageCount = Guard.AgainstNull(options.Value, nameof(options.Value)).MessageCount;
             }
 
             public async Task Execute(OnAfterHandleMessage pipelineEvent1)
             {
-                Console.WriteLine("[OnAfterHandleMessage]");
+                _logger.LogInformation("[OnAfterHandleMessage]");
 
                 lock (_lock)
                 {

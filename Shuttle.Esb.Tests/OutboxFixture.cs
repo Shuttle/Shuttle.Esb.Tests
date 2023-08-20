@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Moq;
 using NUnit.Framework;
 using Shuttle.Core.Contract;
@@ -102,6 +103,7 @@ namespace Shuttle.Esb.Tests
 
             var serviceProvider = await services.BuildServiceProvider().StartHostedServices().ConfigureAwait(false);
 
+            var logger = serviceProvider.GetLogger<OutboxFixture>();
             var pipelineFactory = serviceProvider.GetRequiredService<IPipelineFactory>();
 
             var outboxObserver = new OutboxObserver();
@@ -114,11 +116,11 @@ namespace Shuttle.Esb.Tests
                 }
             };
 
-            var queueService = CreateQueueService(serviceProvider);
+            var queueService = serviceProvider.CreateQueueService();
 
             await ConfigureQueues(serviceProvider, workQueueUriFormat, errorQueueUriFormat).ConfigureAwait(false);
 
-            Console.WriteLine("Sending {0} messages.", count);
+            logger.LogInformation("Sending {0} messages.", count);
 
             await using (var serviceBus = await serviceProvider.GetRequiredService<IServiceBus>().Start().ConfigureAwait(false))
             {
@@ -178,7 +180,7 @@ namespace Shuttle.Esb.Tests
 
             await serviceProvider.StopHostedServices().ConfigureAwait(false);
 
-            queueService = CreateQueueService(services.BuildServiceProvider());
+            queueService = services.BuildServiceProvider().CreateQueueService();
 
             var outboxWorkQueue = queueService.Get(string.Format(workQueueUriFormat, "test-outbox-work"));
 

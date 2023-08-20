@@ -25,7 +25,7 @@ namespace Shuttle.Esb.Tests
 
         public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception exception, Func<TState, Exception, string> formatter)
         {
-            _stream.WriteLine($"{formatter(state, exception)}");
+            _stream.WriteLine($"{DateTime.Now:O} - {formatter(state, exception)}");
             _stream.Flush();
         }
 

@@ -32,7 +32,7 @@ namespace Shuttle.Esb.Tests
 
             var serviceProvider = await services.BuildServiceProvider().StartHostedServices().ConfigureAwait(false);
 
-            var queueService = CreateQueueService(serviceProvider);
+            var queueService = serviceProvider.CreateQueueService();
             var handleMessageObserver = serviceProvider.GetRequiredService<IHandleMessageObserver>();
 
             var pipelineFactory = serviceProvider.GetRequiredService<IPipelineFactory>();
@@ -111,7 +111,7 @@ namespace Shuttle.Esb.Tests
                     Assert.AreEqual(enqueueUniqueMessages ? messageCount : 1, messageHandlerInvoker.ProcessedCount);
                 }
 
-                await TryDropQueues(queueService, queueUriFormat).ConfigureAwait(false);
+                await queueService.TryDropQueues(queueUriFormat).ConfigureAwait(false);
             }
             finally
             {

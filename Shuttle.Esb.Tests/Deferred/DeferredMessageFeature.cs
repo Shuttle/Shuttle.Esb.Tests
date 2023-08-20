@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Threading.Tasks;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Shuttle.Core.Contract;
 using Shuttle.Core.Pipelines;
@@ -10,15 +11,17 @@ namespace Shuttle.Esb.Tests
 		IPipelineObserver<OnAfterHandleMessage>,
 		IPipelineObserver<OnAfterProcessDeferredMessage>
 	{
+		private readonly ILogger<DeferredMessageFeature> _logger;
 		private readonly object _lock = new object();
 	    private readonly int _deferredMessageCount;
 
-	    public DeferredMessageFeature(IOptions<MessageCountOptions> options, IPipelineFactory pipelineFactory)
+	    public DeferredMessageFeature(IOptions<MessageCountOptions> options, ILogger<DeferredMessageFeature> logger, IPipelineFactory pipelineFactory)
 		{
 			Guard.AgainstNull(options, nameof(options));
-            Guard.AgainstNull(pipelineFactory, nameof(pipelineFactory)).PipelineCreated += PipelineCreated;
+			Guard.AgainstNull(pipelineFactory, nameof(pipelineFactory)).PipelineCreated += PipelineCreated;
 
-            _deferredMessageCount = Guard.AgainstNull(options.Value, nameof(options.Value)).MessageCount; 
+			_logger = Guard.AgainstNull(logger, nameof(logger));
+			_deferredMessageCount = Guard.AgainstNull(options.Value, nameof(options.Value)).MessageCount; 
 		}
 
 		public int NumberOfDeferredMessagesReturned { get; private set; }
@@ -36,7 +39,7 @@ namespace Shuttle.Esb.Tests
 
 		public async Task Execute(OnAfterHandleMessage pipelineEvent)
 		{
-			Console.WriteLine("[OnAfterHandleMessage]");
+			_logger.LogInformation("[OnAfterHandleMessage]");
 
 			lock (_lock)
 			{
@@ -48,7 +51,7 @@ namespace Shuttle.Esb.Tests
 
 		public async Task Execute(OnAfterProcessDeferredMessage pipelineEvent)
 		{
-			Console.WriteLine(
+			_logger.LogInformation(
 				$"[OnAfterProcessDeferredMessage] : deferred message returned = '{pipelineEvent.Pipeline.State.GetDeferredMessageReturned()}'");
 
 			if (pipelineEvent.Pipeline.State.GetDeferredMessageReturned())

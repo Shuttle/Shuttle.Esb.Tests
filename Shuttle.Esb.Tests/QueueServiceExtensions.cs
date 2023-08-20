@@ -1,60 +1,85 @@
 ﻿using System;
+using System.Collections.Generic;
+using System.Threading.Tasks;
+using Microsoft.Extensions.Logging;
 using Shuttle.Core.Contract;
 
 namespace Shuttle.Esb.Tests
 {
     public static class QueueServiceExtensions
     {
-        public static IQueueService WireQueueEvents(this IQueueService queueService)
+        private static readonly List<string> QueueUris = new List<string>
+        {
+            "test-worker-work",
+            "test-distributor-work",
+            "test-distributor-control",
+            "test-inbox-work",
+            "test-inbox-deferred",
+            "test-outbox-work",
+            "test-error"
+        };
+
+        public static async Task TryDropQueues(this IQueueService queueService, string queueUriFormat)
+        {
+            Guard.AgainstNull(queueService, nameof(queueService));
+            Guard.AgainstNullOrEmptyString(queueUriFormat, nameof(queueUriFormat));
+
+            foreach (var queueUri in QueueUris)
+            {
+                var uri = string.Format(queueUriFormat, queueUri);
+
+                if (!queueService.Contains(uri))
+                {
+                    continue;
+                }
+
+                await queueService.Get(uri).TryDrop().ConfigureAwait(false);
+            }
+        }
+
+        public static IQueueService WireQueueEvents(this IQueueService queueService, ILogger logger)
         {
             Guard.AgainstNull(queueService, nameof(queueService));
 
             queueService.QueueCreated += (sender, args) =>
             {
-                args.Queue.MessageAcknowledged += QueueOnMessageAcknowledged;
-                args.Queue.MessageEnqueued += QueueOnMessageEnqueued;
-                args.Queue.MessageReceived += QueueOnMessageReceived;
-                args.Queue.MessageReleased += QueueOnMessageReleased;
-                args.Queue.OperationCompleted += QueueOnOperationCompleted;
+                args.Queue.MessageAcknowledged += (o, e) =>
+                {
+                    var queue = (IQueue)sender;
+
+                    logger.LogInformation($"[{queue.Uri.Uri.Scheme}.MessageAcknowledged] : queue = '{queue.Uri.QueueName}'");
+                };
+
+                args.Queue.MessageEnqueued += (o, e) =>
+                {
+                    var queue = (IQueue)sender;
+
+                    logger.LogInformation($"[{queue.Uri.Uri.Scheme}.MessageEnqueued] : queue = '{queue.Uri.QueueName}' / type = '{e.TransportMessage.MessageType}'");
+                };
+
+                args.Queue.MessageReceived += (o, e) =>
+                {
+                    var queue = (IQueue)sender;
+
+                    logger.LogInformation($"[{queue.Uri.Uri.Scheme}.MessageReceived] : queue = '{queue.Uri.QueueName}'");
+                };
+
+                args.Queue.MessageReleased += (o, e) =>
+                {
+                    var queue = (IQueue)sender;
+
+                    logger.LogInformation($"[{queue.Uri.Uri.Scheme}.MessageReleased] : queue = '{queue.Uri.QueueName}'");
+                };
+
+                args.Queue.OperationCompleted += (o, e) =>
+                {
+                    var queue = (IQueue)o;
+
+                    logger.LogInformation($"[{queue.Uri.Uri.Scheme}.OperationCompleted] : queue = '{queue.Uri.QueueName}' / operation name = '{e.Name}'");
+                };
             };
 
             return queueService;
         }
-
-        private static void QueueOnOperationCompleted(object sender, OperationCompletedEventArgs e)
-        {
-            var queue = (IQueue)sender;
-
-            Console.WriteLine($"[{queue.Uri.Uri.Scheme}.OperationCompleted] : queue = '{queue.Uri.QueueName}' / operation name = '{e.Name}'");
-        }
-
-        private static void QueueOnMessageReleased(object sender, MessageReleasedEventArgs e)
-        {
-            var queue = (IQueue)sender;
-
-            Console.WriteLine($"[{queue.Uri.Uri.Scheme}.MessageReleased] : queue = '{queue.Uri.QueueName}'");
-        }
-
-        private static void QueueOnMessageReceived(object sender, MessageReceivedEventArgs e)
-        {
-            var queue = (IQueue)sender;
-
-            Console.WriteLine($"[{queue.Uri.Uri.Scheme}.MessageReceived] : queue = '{queue.Uri.QueueName}'");
-        }
-
-        private static void QueueOnMessageEnqueued(object sender, MessageEnqueuedEventArgs e)
-        {
-            var queue = (IQueue)sender;
-
-            Console.WriteLine($"[{queue.Uri.Uri.Scheme}.MessageEnqueued] : queue = '{queue.Uri.QueueName}' / type = '{e.TransportMessage.MessageType}'");
-        }
-
-        private static void QueueOnMessageAcknowledged(object sender, MessageAcknowledgedEventArgs e)
-        {
-            var queue = (IQueue)sender;
-
-            Console.WriteLine($"[{queue.Uri.Uri.Scheme}.MessageAcknowledged] : queue = '{queue.Uri.QueueName}'");
-        }
-
     }
 }

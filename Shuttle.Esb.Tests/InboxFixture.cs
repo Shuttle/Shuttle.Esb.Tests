@@ -1,11 +1,14 @@
 using System;
 using System.Collections.Generic;
+using System.Data;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using NUnit.Framework;
+using NUnit.Framework.Internal;
 using Shuttle.Core.Contract;
 using Shuttle.Core.Pipelines;
 using Shuttle.Core.Reflection;
@@ -34,6 +37,13 @@ namespace Shuttle.Esb.Tests
 
     public class ProcessorThreadObserver : IPipelineObserver<OnStarted>
     {
+        private readonly ILogger<ProcessorThreadObserver> _logger;
+
+        public ProcessorThreadObserver(ILogger<ProcessorThreadObserver> logger)
+        {
+            _logger = Guard.AgainstNull(logger, nameof(logger));
+        }
+
         public async Task Execute(OnStarted pipelineEvent)
         {
             var executedThreads = new List<int>();
@@ -48,7 +58,7 @@ namespace Shuttle.Esb.Tests
                         return;
                     }
 
-                    Console.WriteLine($"[executing] : thread id = {args.ManagedThreadId} / name = '{args.Name}'");
+                    _logger.LogInformation($"[executing] : thread id = {args.ManagedThreadId} / name = '{args.Name}'");
 
                     executedThreads.Add(args.ManagedThreadId);
                 };
@@ -142,7 +152,7 @@ namespace Shuttle.Esb.Tests
             var serializer = serviceProvider.GetRequiredService<ISerializer>();
             var feature = serviceProvider.GetRequiredService<InboxConcurrencyFeature>();
 
-            var queueService = CreateQueueService(serviceProvider);
+            var queueService = serviceProvider.CreateQueueService();
 
             try
             {
@@ -187,7 +197,7 @@ namespace Shuttle.Esb.Tests
                     }
                 }
 
-                await TryDropQueues(queueService, queueUriFormat).ConfigureAwait(false);
+                await queueService.TryDropQueues(queueUriFormat).ConfigureAwait(false);
             }
             finally
             {
@@ -227,13 +237,14 @@ namespace Shuttle.Esb.Tests
 
             var serviceProvider = await services.BuildServiceProvider().StartHostedServices().ConfigureAwait(false);
 
+            var logger = serviceProvider.GetLogger<InboxFixture>();
             var serviceBusConfiguration = serviceProvider.GetRequiredService<IServiceBusConfiguration>();
 
             var messageType = typeof(ReceivePipelineCommand).FullName ??
                               throw new InvalidOperationException(
                                   "Could not get the full type name of the ReceivePipelineCommand");
 
-            var queueService = CreateQueueService(serviceProvider);
+            var queueService = serviceProvider.CreateQueueService();
 
             await ConfigureQueues(serviceProvider, serviceBusConfiguration, queueUriFormat, true).ConfigureAwait(false);
 
@@ -255,7 +266,7 @@ namespace Shuttle.Esb.Tests
                         }).ConfigureAwait(false);
 
                     Assert.IsNotNull(transportMessage);
-                    Console.WriteLine($"[SENT (thread {Thread.CurrentThread.ManagedThreadId})] : message id = {transportMessage.MessageId} / deferred to = '{ignoreTillDate:O}'");
+                    logger.LogInformation($"[SENT (thread {Thread.CurrentThread.ManagedThreadId})] : message id = {transportMessage.MessageId} / deferred to = '{ignoreTillDate:O}'");
 
                     var messageId = transportMessage.MessageId;
 
@@ -274,7 +285,7 @@ namespace Shuttle.Esb.Tests
                     Assert.That(feature.TransportMessage.MessageType, Is.EqualTo(messageType), "The InboxDeferredFeature.TransportMessage.MessageType is not the same as the one sent.");
                 }
 
-                await TryDropQueues(queueService, queueUriFormat).ConfigureAwait(false);
+                await queueService.TryDropQueues(queueUriFormat).ConfigureAwait(false);
             }
             finally
             {
@@ -307,7 +318,7 @@ namespace Shuttle.Esb.Tests
                 args.Pipeline.RegisterObserver(inboxMessagePipelineObserver);
             };
 
-            var queueService = CreateQueueService(serviceProvider);
+            var queueService = serviceProvider.CreateQueueService();
 
             try
             {
@@ -359,7 +370,7 @@ namespace Shuttle.Esb.Tests
                     }
                 }
 
-                await TryDropQueues(queueService, queueUriFormat).ConfigureAwait(false);
+                await queueService.TryDropQueues(queueUriFormat).ConfigureAwait(false);
             }
             finally
             {
@@ -386,7 +397,7 @@ namespace Shuttle.Esb.Tests
             var transportMessagePipeline = pipelineFactory.GetPipeline<TransportMessagePipeline>();
             var serializer = serviceProvider.GetRequiredService<ISerializer>();
 
-            var queueService = CreateQueueService(serviceProvider);
+            var queueService = serviceProvider.CreateQueueService();
 
             try
             {
@@ -462,7 +473,8 @@ namespace Shuttle.Esb.Tests
             var transportMessagePipeline = pipelineFactory.GetPipeline<TransportMessagePipeline>();
             var serviceBusConfiguration = serviceProvider.GetRequiredService<IServiceBusConfiguration>();
             var serializer = serviceProvider.GetRequiredService<ISerializer>();
-            var queueService = CreateQueueService(serviceProvider);
+            var logger = serviceProvider.GetLogger<InboxFixture>();
+            var queueService = serviceProvider.CreateQueueService();
 
             var sw = new Stopwatch();
             var timedOut = false;
@@ -471,7 +483,7 @@ namespace Shuttle.Esb.Tests
             {
                 await ConfigureQueues(serviceProvider, serviceBusConfiguration, queueUriFormat, true).ConfigureAwait(false);
 
-                Console.WriteLine(
+                logger.LogInformation(
                     $"Sending {messageCount} messages to input queue '{serviceBusConfiguration.Inbox.WorkQueue.Uri}'.");
 
                 sw.Start();
@@ -490,13 +502,13 @@ namespace Shuttle.Esb.Tests
 
                 sw.Stop();
 
-                Console.WriteLine("Took {0} ms to send {1} messages.  Starting processing.", sw.ElapsedMilliseconds, messageCount);
+                logger.LogInformation("Took {0} ms to send {1} messages.  Starting processing.", sw.ElapsedMilliseconds, messageCount);
 
                 sw.Reset();
 
                 await using (await serviceProvider.GetRequiredService<IServiceBus>().Start().ConfigureAwait(false))
                 {
-                    Console.WriteLine($"[starting] : {DateTime.Now:HH:mm:ss.fff}");
+                    logger.LogInformation($"[starting] : {DateTime.Now:HH:mm:ss.fff}");
 
                     var timeout = DateTime.Now.AddSeconds(500);
 
@@ -511,10 +523,10 @@ namespace Shuttle.Esb.Tests
 
                     sw.Stop();
 
-                    Console.WriteLine($"[stopped] : {DateTime.Now:HH:mm:ss.fff}");
+                    logger.LogInformation($"[stopped] : {DateTime.Now:HH:mm:ss.fff}");
                 }
 
-                await TryDropQueues(queueService, queueUriFormat).ConfigureAwait(false);
+                await queueService.TryDropQueues(queueUriFormat).ConfigureAwait(false);
             }
             finally
             {
@@ -529,7 +541,7 @@ namespace Shuttle.Esb.Tests
 
             if (!timedOut)
             {
-                Console.WriteLine($"Processed {messageCount} messages in {ms} ms");
+                logger.LogInformation($"Processed {messageCount} messages in {ms} ms");
 
                 Assert.IsTrue(ms < timeoutMilliseconds,
                     $"Should be able to process at least {messageCount} messages in {timeoutMilliseconds} ms but it took {ms} ms.");

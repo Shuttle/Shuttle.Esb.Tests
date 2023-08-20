@@ -2,6 +2,8 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using Microsoft.Extensions.Logging;
+using NUnit.Framework.Internal;
 using Shuttle.Core.Contract;
 using Shuttle.Core.Pipelines;
 
@@ -10,13 +12,16 @@ namespace Shuttle.Esb.Tests
     public class InboxConcurrencyFeature :
         IPipelineObserver<OnAfterGetMessage>
     {
+        private readonly ILogger<InboxConcurrencyFeature> _logger;
         private readonly List<DateTime> _datesAfterGetMessage = new List<DateTime>();
         private readonly object _lock = new object();
         private DateTime _firstDateAfterGetMessage = DateTime.MinValue;
 
-        public InboxConcurrencyFeature(IPipelineFactory pipelineFactory)
+        public InboxConcurrencyFeature(ILogger<InboxConcurrencyFeature> logger, IPipelineFactory pipelineFactory)
         {
             Guard.AgainstNull(pipelineFactory, nameof(pipelineFactory)).PipelineCreated += PipelineCreated;
+            
+            _logger = Guard.AgainstNull(logger, nameof(logger));
         }
 
         public int OnAfterGetMessageCount => _datesAfterGetMessage.Count;
@@ -31,12 +36,12 @@ namespace Shuttle.Esb.Tests
                 {
                     _firstDateAfterGetMessage = DateTime.Now;
 
-                    Console.WriteLine("Offset date: {0:yyyy-MM-dd HH:mm:ss.fff}", _firstDateAfterGetMessage);
+                    _logger.LogInformation("Offset date: {0:yyyy-MM-dd HH:mm:ss.fff}", _firstDateAfterGetMessage);
                 }
 
                 _datesAfterGetMessage.Add(dateTime);
 
-                Console.WriteLine("Dequeued date: {0:yyyy-MM-dd HH:mm:ss.fff}", dateTime);
+                _logger.LogInformation("Dequeued date: {0:yyyy-MM-dd HH:mm:ss.fff}", dateTime);
             }
 
             await Task.CompletedTask.ConfigureAwait(false);

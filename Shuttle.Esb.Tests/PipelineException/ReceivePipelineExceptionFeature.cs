@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
+using Microsoft.Extensions.Logging;
 using NUnit.Framework;
 using Shuttle.Core.Contract;
 using Shuttle.Core.Pipelines;
@@ -15,7 +16,8 @@ namespace Shuttle.Esb.Tests
 		IPipelineObserver<OnDeserializeTransportMessage>,
 		IPipelineObserver<OnAfterDeserializeTransportMessage>
 	{
-	    private readonly IServiceBusConfiguration _serviceBusConfiguration;
+		private readonly ILogger<ReceivePipelineExceptionFeature> _logger;
+		private readonly IServiceBusConfiguration _serviceBusConfiguration;
 	    private static readonly SemaphoreSlim Lock = new SemaphoreSlim(1,1);
 
 		private readonly List<ExceptionAssertion> _assertions = new List<ExceptionAssertion>();
@@ -23,7 +25,7 @@ namespace Shuttle.Esb.Tests
 		private volatile bool _failed;
 		private int _pipelineCount;
 
-		public ReceivePipelineExceptionFeature(IServiceBusConfiguration serviceBusConfiguration, IPipelineFactory pipelineFactory)
+		public ReceivePipelineExceptionFeature(ILogger<ReceivePipelineExceptionFeature> logger, IServiceBusConfiguration serviceBusConfiguration, IPipelineFactory pipelineFactory)
 		{
 		    Guard.AgainstNull(serviceBusConfiguration, nameof(serviceBusConfiguration));
 		    Guard.AgainstNull(pipelineFactory, nameof(pipelineFactory));
@@ -32,7 +34,8 @@ namespace Shuttle.Esb.Tests
 		    pipelineFactory.PipelineReleased += PipelineReleased;
 		    pipelineFactory.PipelineObtained += PipelineObtained;
 
-			_serviceBusConfiguration = serviceBusConfiguration;
+		    _logger = Guard.AgainstNull(logger, nameof(logger));
+		    _serviceBusConfiguration = serviceBusConfiguration;
 
             AddAssertion("OnGetMessage");
             AddAssertion("OnAfterGetMessage");
@@ -45,7 +48,7 @@ namespace Shuttle.Esb.Tests
 			_pipelineCount += 1;
 			_assertionName = string.Empty;
 
-			Console.WriteLine($"[ReceivePipelineExceptionModule:PipelineObtained] : count = {_pipelineCount}");
+			_logger.LogInformation($"[ReceivePipelineExceptionModule:PipelineObtained] : count = {_pipelineCount}");
 		}
 
 		private void PipelineCreated(object sender, PipelineEventArgs e)
@@ -91,7 +94,7 @@ namespace Shuttle.Esb.Tests
 			{
 				_assertions.Add(new ExceptionAssertion(name));
 
-				Console.WriteLine($"[ReceivePipelineExceptionModule:Added] : assertion = '{name}'.");
+				_logger.LogInformation($"[ReceivePipelineExceptionModule:Added] : assertion = '{name}'.");
 			}
 			finally
 			{
@@ -117,7 +120,7 @@ namespace Shuttle.Esb.Tests
 					return;
 				}
 
-				Console.WriteLine($"[ReceivePipelineExceptionModule:Invoking] : assertion = '{assertion.Name}'.");
+				_logger.LogInformation($"[ReceivePipelineExceptionModule:Invoking] : assertion = '{assertion.Name}'.");
 
 				try
 				{
@@ -130,14 +133,14 @@ namespace Shuttle.Esb.Tests
 				}
 				catch (Exception ex)
 				{
-					Console.WriteLine(ex.AllMessages());
+					_logger.LogInformation(ex.AllMessages());
 
 					_failed = true;
 				}
 
 				assertion.MarkAsRun();
 
-				Console.WriteLine($"[ReceivePipelineExceptionModule:Invoked] : assertion = '{assertion.Name}'.");
+				_logger.LogInformation($"[ReceivePipelineExceptionModule:Invoked] : assertion = '{assertion.Name}'.");
 			}
             finally
 			{

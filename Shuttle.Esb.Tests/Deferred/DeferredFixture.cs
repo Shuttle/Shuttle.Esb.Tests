@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using NUnit.Framework;
 using Shuttle.Core.Contract;
 using Shuttle.Core.Pipelines;
@@ -33,13 +34,14 @@ namespace Shuttle.Esb.Tests
 
             serviceProvider.GetRequiredService<DeferredMessageFeature>();
 
+            var logger = serviceProvider.GetLogger<DeferredFixture>();
             var pipelineFactory = serviceProvider.GetRequiredService<IPipelineFactory>();
             var transportMessagePipeline = pipelineFactory.GetPipeline<TransportMessagePipeline>();
             var serviceBusConfiguration = serviceProvider.GetRequiredService<IServiceBusConfiguration>();
             var serializer = serviceProvider.GetRequiredService<ISerializer>();
             var feature = serviceProvider.GetRequiredService<DeferredMessageFeature>();
 
-            var queueService = CreateQueueService(serviceProvider);
+            var queueService = serviceProvider.CreateQueueService();
 
             await ConfigureQueues(serviceProvider, serviceBusConfiguration, queueUriFormat).ConfigureAwait(false);
 
@@ -64,7 +66,7 @@ namespace Shuttle.Esb.Tests
                 await using (await serviceProvider.GetRequiredService<IServiceBus>().Start().ConfigureAwait(false))
                 {
                     // add the extra time else there is no time to process message being returned
-                    Console.WriteLine($"[start wait] : now = '{DateTime.Now}'");
+                    logger.LogInformation($"[start wait] : now = '{DateTime.Now}'");
 
                     // wait for the message to be returned from the deferred queue
                     while (!feature.AllMessagesHandled()
@@ -76,12 +78,12 @@ namespace Shuttle.Esb.Tests
                         timedOut = timeout < DateTime.Now;
                     }
 
-                    Console.WriteLine(
+                    logger.LogInformation(
                         $"[end wait] : now = '{DateTime.Now}' / timeout = '{timeout}' / timed out = '{timedOut}'");
 
-                    Console.WriteLine(
+                    logger.LogInformation(
                         $"{feature.NumberOfDeferredMessagesReturned} of {deferredMessageCount} deferred messages returned to the inbox.");
-                    Console.WriteLine(
+                    logger.LogInformation(
                         $"{feature.NumberOfMessagesHandled} of {deferredMessageCount} deferred messages handled.");
 
                     Assert.IsTrue(feature.AllMessagesHandled(), "All the deferred messages were not handled.");
@@ -91,7 +93,7 @@ namespace Shuttle.Esb.Tests
                     Assert.IsNull(await serviceBusConfiguration.Inbox.WorkQueue.GetMessage().ConfigureAwait(false));
                 }
 
-                await TryDropQueues(queueService, queueUriFormat).ConfigureAwait(false);
+                await queueService.TryDropQueues(queueUriFormat).ConfigureAwait(false);
             }
             finally
             {

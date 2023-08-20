@@ -20,7 +20,7 @@ namespace Shuttle.Esb.Tests
             ConfigureServices(services, nameof(TestSimpleEnqueueAndGetMessage), 1, false, queueUriFormat);
 
             var serviceProvider = services.BuildServiceProvider();
-            var queueService = CreateQueueService(serviceProvider);
+            var queueService = serviceProvider.CreateQueueService();
             var workQueue = await CreateWorkQueue(queueService, queueUriFormat).ConfigureAwait(false);
 
             try
@@ -60,7 +60,7 @@ namespace Shuttle.Esb.Tests
             ConfigureServices(services, nameof(TestReleaseMessage), 1, false, queueUriFormat);
 
             var serviceProvider = services.BuildServiceProvider();
-            var queueService = CreateQueueService(serviceProvider);
+            var queueService = serviceProvider.CreateQueueService();
             var workQueue = await CreateWorkQueue(queueService, queueUriFormat).ConfigureAwait(false);
 
             try
@@ -98,7 +98,7 @@ namespace Shuttle.Esb.Tests
 
             ConfigureServices(services, nameof(TestUnacknowledgedMessage), 1, false, queueUriFormat);
 
-            var queueService = CreateQueueService(services.BuildServiceProvider());
+            var queueService = services.BuildServiceProvider().CreateQueueService();
             var workQueue = await CreateWorkQueue(queueService, queueUriFormat).ConfigureAwait(false);
 
             await workQueue.Enqueue(new TransportMessage
@@ -110,7 +110,7 @@ namespace Shuttle.Esb.Tests
             Assert.IsNull(await workQueue.GetMessage().ConfigureAwait(false));
 
             queueService.TryDispose();
-            queueService = CreateQueueService(services.BuildServiceProvider());
+            queueService = services.BuildServiceProvider().CreateQueueService();
 
             workQueue = await CreateWorkQueue(queueService, queueUriFormat, false).ConfigureAwait(false);
 
