@@ -1,4 +1,5 @@
 ﻿using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging;
 using Shuttle.Core.Contract;
 using Shuttle.Core.Pipelines;
@@ -8,9 +9,11 @@ namespace Shuttle.Esb.Tests
 {
     public static class ServiceCollectionExtensions
     {
-        public static IServiceCollection ConfigureLogging(this IServiceCollection services)
+        public static IServiceCollection ConfigureLogging(this IServiceCollection services, string fixture)
         {
             Guard.AgainstNull(services, nameof(services));
+
+            services.TryAddEnumerable(ServiceDescriptor.Singleton<ILoggerProvider>(new FixtureFileLoggerProvider(Guard.AgainstNullOrEmptyString(fixture, nameof(fixture)))));
 
             services.AddServiceBusLogging(builder =>
             {

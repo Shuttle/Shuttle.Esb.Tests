@@ -25,7 +25,7 @@ namespace Shuttle.Esb.Tests
 
             var padlock = new object();
 
-            ConfigureServices(services, threadCount, isTransactional, queueUriFormat);
+            ConfigureServices(services, nameof(TestIdempotenceProcessing), threadCount, isTransactional, queueUriFormat);
 
             services.AddSingleton<IMessageRouteProvider>(new IdempotenceMessageRouteProvider());
             services.AddSingleton<IMessageHandlerInvoker, IdempotenceMessageHandlerInvoker>();
@@ -137,7 +137,7 @@ namespace Shuttle.Esb.Tests
             await errorQueue.TryPurge().ConfigureAwait(false);
         }
 
-        protected ServiceBusOptions ConfigureServices(IServiceCollection services, int threadCount, bool isTransactional, string queueUriFormat)
+        protected ServiceBusOptions ConfigureServices(IServiceCollection services, string fixture, int threadCount, bool isTransactional, string queueUriFormat)
         {
             Guard.AgainstNull(services, nameof(services));
 
@@ -163,7 +163,7 @@ namespace Shuttle.Esb.Tests
                 builder.Options = serviceBusOptions;
             });
 
-            services.ConfigureLogging();
+            services.ConfigureLogging(fixture);
 
             return serviceBusOptions;
         }

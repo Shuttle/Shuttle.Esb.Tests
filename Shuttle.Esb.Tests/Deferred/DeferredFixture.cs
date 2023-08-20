@@ -1,6 +1,5 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.DependencyInjection;
 using NUnit.Framework;
@@ -28,7 +27,7 @@ namespace Shuttle.Esb.Tests
 
             services.AddSingleton<DeferredMessageFeature>();
 
-            ConfigureServices(services, 1, isTransactional, queueUriFormat);
+            ConfigureServices(services, nameof(TestDeferredProcessing), 1, isTransactional, queueUriFormat);
 
             var serviceProvider = await services.BuildServiceProvider().StartHostedServices().ConfigureAwait(false);
 
@@ -141,7 +140,7 @@ namespace Shuttle.Esb.Tests
             await errorQueue.TryPurge().ConfigureAwait(false);
         }
 
-        protected void ConfigureServices(IServiceCollection services, int threadCount, bool isTransactional, string queueUriFormat)
+        protected void ConfigureServices(IServiceCollection services, string fixture, int threadCount, bool isTransactional, string queueUriFormat)
         {
             Guard.AgainstNull(services, nameof(services));
 
@@ -158,7 +157,7 @@ namespace Shuttle.Esb.Tests
                 builder.SuppressHostedService = true;
             });
 
-            services.ConfigureLogging();
+            services.ConfigureLogging(fixture);
         }
 
         private ServiceBusOptions GetServiceBusOptions(int threadCount, string queueUriFormat)

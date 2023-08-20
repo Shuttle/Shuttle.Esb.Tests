@@ -72,7 +72,7 @@ namespace Shuttle.Esb.Tests
 
     public abstract class InboxFixture : IntegrationFixture
     {
-        protected ServiceBusOptions ConfigureServices(IServiceCollection services, bool hasErrorQueue, int threadCount,
+        protected ServiceBusOptions ConfigureServices(IServiceCollection services, string fixture, bool hasErrorQueue, int threadCount,
             bool isTransactional, string queueUriFormat, TimeSpan durationToSleepWhenIdle)
         {
             Guard.AgainstNull(services, nameof(services));
@@ -101,7 +101,7 @@ namespace Shuttle.Esb.Tests
                 builder.SuppressHostedService = true;
             });
 
-            services.ConfigureLogging();
+            services.ConfigureLogging(fixture);
 
             return serviceBusOptions;
         }
@@ -129,7 +129,7 @@ namespace Shuttle.Esb.Tests
 
             var padlock = new object();
 
-            ConfigureServices(services, true, threadCount, isTransactional, queueUriFormat, TimeSpan.FromMilliseconds(25));
+            ConfigureServices(services, nameof(TestInboxConcurrency), true, threadCount, isTransactional, queueUriFormat, TimeSpan.FromMilliseconds(25));
 
             services.AddSingleton<InboxConcurrencyFeature>();
 
@@ -287,7 +287,7 @@ namespace Shuttle.Esb.Tests
         protected async Task TestInboxError(IServiceCollection services, string queueUriFormat, bool hasErrorQueue,
             bool isTransactional)
         {
-            ConfigureServices(services, hasErrorQueue, 1, isTransactional, queueUriFormat, TimeSpan.FromMilliseconds(25));
+            ConfigureServices(services, nameof(TestInboxError), hasErrorQueue, 1, isTransactional, queueUriFormat, TimeSpan.FromMilliseconds(25));
 
             var serviceProvider = await services.BuildServiceProvider().StartHostedServices().ConfigureAwait(false);
 
@@ -436,7 +436,7 @@ namespace Shuttle.Esb.Tests
                 threadCount = 1;
             }
 
-            ConfigureServices(services, true, threadCount, isTransactional, queueUriFormat, TimeSpan.FromMilliseconds(25));
+            ConfigureServices(services, nameof(TestInboxThroughput), true, threadCount, isTransactional, queueUriFormat, TimeSpan.FromMilliseconds(25));
 
             services.AddSingleton<ProcessorThreadObserver, ProcessorThreadObserver>();
 

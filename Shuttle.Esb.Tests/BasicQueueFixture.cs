@@ -17,7 +17,7 @@ namespace Shuttle.Esb.Tests
         {
             Guard.AgainstNull(services, nameof(services));
 
-            ConfigureServices(services, 1, false, queueUriFormat);
+            ConfigureServices(services, nameof(TestSimpleEnqueueAndGetMessage), 1, false, queueUriFormat);
 
             var serviceProvider = services.BuildServiceProvider();
             var queueService = CreateQueueService(serviceProvider);
@@ -57,7 +57,7 @@ namespace Shuttle.Esb.Tests
         {
             Guard.AgainstNull(services, nameof(services));
 
-            ConfigureServices(services, 1, false, queueUriFormat);
+            ConfigureServices(services, nameof(TestReleaseMessage), 1, false, queueUriFormat);
 
             var serviceProvider = services.BuildServiceProvider();
             var queueService = CreateQueueService(serviceProvider);
@@ -96,7 +96,7 @@ namespace Shuttle.Esb.Tests
         {
             Guard.AgainstNull(services, nameof(services));
 
-            ConfigureServices(services, 1, false, queueUriFormat);
+            ConfigureServices(services, nameof(TestUnacknowledgedMessage), 1, false, queueUriFormat);
 
             var queueService = CreateQueueService(services.BuildServiceProvider());
             var workQueue = await CreateWorkQueue(queueService, queueUriFormat).ConfigureAwait(false);
@@ -148,7 +148,7 @@ namespace Shuttle.Esb.Tests
             return workQueue;
         }
 
-        protected void ConfigureServices(IServiceCollection services, int threadCount, bool isTransactional, string queueUriFormat)
+        protected void ConfigureServices(IServiceCollection services, string fixture, int threadCount, bool isTransactional, string queueUriFormat)
         {
             Guard.AgainstNull(services, nameof(services));
 
@@ -172,7 +172,7 @@ namespace Shuttle.Esb.Tests
                 };
             });
 
-            services.ConfigureLogging();
+            services.ConfigureLogging(fixture);
         }
     }
 }
