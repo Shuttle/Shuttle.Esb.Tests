@@ -54,24 +54,28 @@ namespace Shuttle.Esb.Tests
 
         public async Task Create()
         {
+            OperationStarting.Invoke(this, new OperationEventArgs("Create"));
+
             if (!_queues.ContainsKey(Uri.ToString()))
             {
                 _queues.Add(Uri.ToString(), new Dictionary<int, MemoryQueueItem>());
             }
 
-            OperationCompleted.Invoke(this, new OperationCompletedEventArgs("Create"));
+            OperationCompleted.Invoke(this, new OperationEventArgs("Create"));
 
             await Task.CompletedTask.ConfigureAwait(false);
         }
 
         public async Task Purge()
         {
+            OperationStarting.Invoke(this, new OperationEventArgs("Purge"));
+
             lock (Lock)
             {
                 _queues[Uri.ToString()].Clear();
             }
 
-            OperationCompleted.Invoke(this, new OperationCompletedEventArgs("Create"));
+            OperationCompleted.Invoke(this, new OperationEventArgs("Purge"));
 
             await Task.CompletedTask.ConfigureAwait(false);
         }
@@ -201,7 +205,11 @@ namespace Shuttle.Esb.Tests
         {
         };
 
-        public event EventHandler<OperationCompletedEventArgs> OperationCompleted = delegate
+        public event EventHandler<OperationEventArgs> OperationStarting = delegate
+        {
+        };
+
+        public event EventHandler<OperationEventArgs> OperationCompleted = delegate
         {
         };
     }

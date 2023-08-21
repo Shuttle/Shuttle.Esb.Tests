@@ -70,11 +70,20 @@ namespace Shuttle.Esb.Tests
 
     public class InboxMessagePipelineObserver : IPipelineObserver<OnPipelineException>
     {
+        private readonly ILogger<InboxFixture> _logger;
+
+        public InboxMessagePipelineObserver(ILogger<InboxFixture> logger)
+        {
+            _logger = Guard.AgainstNull(logger, nameof(logger));
+        }
+
         public bool HasReceivedPipelineException { get; private set; }
 
         public async Task Execute(OnPipelineException pipelineEvent)
         {
             HasReceivedPipelineException = true;
+
+            _logger.LogInformation($"[OnPipelineException] : {nameof(HasReceivedPipelineException)} = 'true'");
 
             await Task.CompletedTask.ConfigureAwait(false);
         }
@@ -302,11 +311,12 @@ namespace Shuttle.Esb.Tests
 
             var serviceProvider = await services.BuildServiceProvider().StartHostedServices().ConfigureAwait(false);
 
+            var logger = serviceProvider.GetLogger<InboxFixture>();
             var pipelineFactory = serviceProvider.GetRequiredService<IPipelineFactory>();
             var transportMessagePipeline = pipelineFactory.GetPipeline<TransportMessagePipeline>();
             var serviceBusConfiguration = serviceProvider.GetRequiredService<IServiceBusConfiguration>();
             var serializer = serviceProvider.GetRequiredService<ISerializer>();
-            var inboxMessagePipelineObserver = new InboxMessagePipelineObserver();
+            var inboxMessagePipelineObserver = new InboxMessagePipelineObserver(logger);
 
             pipelineFactory.PipelineCreated += (sender, args) =>
             {
@@ -374,9 +384,9 @@ namespace Shuttle.Esb.Tests
             }
             finally
             {
-                queueService.TryDispose();
-
                 await serviceProvider.StopHostedServices().ConfigureAwait(false);
+
+                queueService.TryDispose();
             }
         }
 

@@ -14,9 +14,17 @@ namespace Shuttle.Esb.Tests
         {
             Guard.AgainstNull(serviceProvider, nameof(serviceProvider));
 
+            var logger = serviceProvider.GetLogger();
+
+            logger.LogInformation($"[StartHostedServices]");
+
             foreach (var hostedService in serviceProvider.GetServices<IHostedService>())
             {
+                logger.LogInformation($"[HostedService-starting] : {hostedService.GetType().Name}");
+
                 await hostedService.StartAsync(CancellationToken.None).ConfigureAwait(false);
+
+                logger.LogInformation($"[HostedService-started] : {hostedService.GetType().Name}");
             }
 
             return serviceProvider;
@@ -26,9 +34,17 @@ namespace Shuttle.Esb.Tests
         {
             Guard.AgainstNull(serviceProvider, nameof(serviceProvider));
 
+            var logger = serviceProvider.GetLogger();
+
+            logger.LogInformation($"[StopHostedServices]");
+            
             foreach (var hostedService in serviceProvider.GetServices<IHostedService>())
             {
+                logger.LogInformation($"[HostedService-stopping] : {hostedService.GetType().Name}");
+
                 await hostedService.StopAsync(CancellationToken.None).ConfigureAwait(false);
+
+                logger.LogInformation($"[HostedService-stopped] : {hostedService.GetType().Name}");
             }
 
             return serviceProvider;
@@ -44,7 +60,12 @@ namespace Shuttle.Esb.Tests
 
         public static ILogger<T> GetLogger<T>(this IServiceProvider serviceProvider)
         {
-            return (ILogger<T>)Guard.AgainstNull(serviceProvider, nameof(serviceProvider)).GetRequiredService<ILoggerFactory>().CreateLogger(typeof(T));
+            return Guard.AgainstNull(serviceProvider, nameof(serviceProvider)).GetRequiredService<ILoggerFactory>().CreateLogger<T>();
+        }
+
+        public static ILogger GetLogger(this IServiceProvider serviceProvider)
+        {
+            return Guard.AgainstNull(serviceProvider, nameof(serviceProvider)).GetRequiredService<ILoggerFactory>().CreateLogger("Fixture");
         }
     }
 }
