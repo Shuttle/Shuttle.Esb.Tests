@@ -141,6 +141,7 @@ namespace Shuttle.Esb.Tests
             await errorQueue.TryPurge().ConfigureAwait(false);
         }
 
+        // NOT APPLICABLE TO STREAMS
         protected async Task TestInboxConcurrency(IServiceCollection services, string queueUriFormat, int msToComplete,
             bool isTransactional)
         {
@@ -166,6 +167,8 @@ namespace Shuttle.Esb.Tests
             try
             {
                 await ConfigureQueues(serviceProvider, serviceBusConfiguration, queueUriFormat, true).ConfigureAwait(false);
+
+                Assert.That(serviceBusConfiguration.Inbox.WorkQueue.IsStream, Is.False, "This test cannot be applied to streams.");
 
                 var serviceBus = serviceProvider.GetRequiredService<IServiceBus>();
 
@@ -345,9 +348,15 @@ namespace Shuttle.Esb.Tests
                         builder.WithRecipient(serviceBusConfiguration.Inbox.WorkQueue);
                     }).ConfigureAwait(false);
 
+                    var transportMessage = transportMessagePipeline.State.GetTransportMessage();
+
+                    logger.LogInformation($"[enqueuing] : message id = '{transportMessage.MessageId}'");
+
                     await serviceBusConfiguration.Inbox.WorkQueue.Enqueue(
-                        transportMessagePipeline.State.GetTransportMessage(),
-                        await serializer.Serialize(transportMessagePipeline.State.GetTransportMessage()).ConfigureAwait(false)).ConfigureAwait(false);
+                        transportMessage,
+                        await serializer.Serialize(transportMessage).ConfigureAwait(false)).ConfigureAwait(false);
+
+                    logger.LogInformation($"[enqueued] : message id = '{transportMessage.MessageId}'");
 
                     await serviceBus.Start().ConfigureAwait(false);
 
