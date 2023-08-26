@@ -56,6 +56,8 @@ namespace Shuttle.Esb.Tests
                 builder.SuppressHostedService = true;
             });
 
+            distributorServices.ConfigureLogging($"{nameof(TestDistributor)}-distributor");
+
             var distributorServiceProvider = await distributorServices.BuildServiceProvider().StartHostedServices().ConfigureAwait(false);
             var logger = distributorServiceProvider.GetLogger<DistributorFixture>();
 
@@ -100,6 +102,8 @@ namespace Shuttle.Esb.Tests
                 builder.Options = workerServiceBusOptions;
                 builder.SuppressHostedService = true;
             });
+
+            workerServices.ConfigureLogging($"{nameof(TestDistributor)}-worker");
 
             var workerServiceProvider = await workerServices.BuildServiceProvider().StartHostedServices().ConfigureAwait(false);
             var workerServiceBusConfiguration = workerServiceProvider.GetRequiredService<IServiceBusConfiguration>();

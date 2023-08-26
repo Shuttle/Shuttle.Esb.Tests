@@ -148,7 +148,7 @@ namespace Shuttle.Esb.Tests
             return workQueue;
         }
 
-        protected void ConfigureServices(IServiceCollection services, string fixture, int threadCount, bool isTransactional, string queueUriFormat)
+        protected void ConfigureServices(IServiceCollection services, string test, int threadCount, bool isTransactional, string queueUriFormat)
         {
             Guard.AgainstNull(services, nameof(services));
 
@@ -172,7 +172,7 @@ namespace Shuttle.Esb.Tests
                 };
             });
 
-            services.ConfigureLogging(fixture);
+            services.ConfigureLogging(test);
         }
     }
 }

@@ -142,7 +142,7 @@ namespace Shuttle.Esb.Tests
             await errorQueue.TryPurge().ConfigureAwait(false);
         }
 
-        protected void ConfigureServices(IServiceCollection services, string fixture, int threadCount, bool isTransactional, string queueUriFormat)
+        protected void ConfigureServices(IServiceCollection services, string test, int threadCount, bool isTransactional, string queueUriFormat)
         {
             Guard.AgainstNull(services, nameof(services));
 
@@ -159,7 +159,7 @@ namespace Shuttle.Esb.Tests
                 builder.SuppressHostedService = true;
             });
 
-            services.ConfigureLogging(fixture);
+            services.ConfigureLogging(test);
         }
 
         private ServiceBusOptions GetServiceBusOptions(int threadCount, string queueUriFormat)

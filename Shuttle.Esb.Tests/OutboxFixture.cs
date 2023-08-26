@@ -100,6 +100,7 @@ namespace Shuttle.Esb.Tests
             messageRouteProvider.Setup(m => m.GetRouteUris(It.IsAny<string>())).Returns(new[] { receiverWorkQueueUri });
 
             services.AddSingleton(messageRouteProvider.Object);
+            services.ConfigureLogging(nameof(TestOutboxSending));
 
             var serviceProvider = await services.BuildServiceProvider().StartHostedServices().ConfigureAwait(false);
 

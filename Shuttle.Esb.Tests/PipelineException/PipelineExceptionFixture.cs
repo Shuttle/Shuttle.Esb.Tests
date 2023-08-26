@@ -15,7 +15,17 @@ namespace Shuttle.Esb.Tests
     {
         protected async Task TestExceptionHandling(IServiceCollection services, string queueUriFormat)
         {
-            var serviceBusOptions = GetServiceBusOptions(1, queueUriFormat);
+            var serviceBusOptions = new ServiceBusOptions
+            {
+                Inbox = new InboxOptions
+                {
+                    WorkQueueUri = string.Format(queueUriFormat, "test-inbox-work"),
+                    DurationToSleepWhenIdle = new List<TimeSpan> { TimeSpan.FromMilliseconds(5) },
+                    DurationToIgnoreOnFailure = new List<TimeSpan> { TimeSpan.FromMilliseconds(5) },
+                    MaximumFailureCount = 100,
+                    ThreadCount = 1
+                }
+            };
 
             services.AddServiceBus(builder =>
             {
@@ -23,18 +33,11 @@ namespace Shuttle.Esb.Tests
                 builder.SuppressHostedService = true;
             });
 
+            services.ConfigureLogging(nameof(TestExceptionHandling));
+
             services.AddSingleton<ReceivePipelineExceptionFeature>();
 
             var serviceProvider = await services.BuildServiceProvider().StartHostedServices().ConfigureAwait(false);
-
-            serviceBusOptions.Inbox = new InboxOptions
-            {
-                WorkQueueUri = string.Format(queueUriFormat, "test-inbox-work"),
-                DurationToSleepWhenIdle = new List<TimeSpan> { TimeSpan.FromMilliseconds(5) },
-                DurationToIgnoreOnFailure = new List<TimeSpan> { TimeSpan.FromMilliseconds(5) },
-                MaximumFailureCount = 100,
-                ThreadCount = 1
-            };
 
             var serviceBusConfiguration = serviceProvider.GetRequiredService<IServiceBusConfiguration>();
 
@@ -80,21 +83,6 @@ namespace Shuttle.Esb.Tests
             }
 
             await serviceProvider.StopHostedServices().ConfigureAwait(false);
-        }
-
-        private ServiceBusOptions GetServiceBusOptions(int threadCount, string queueUriFormat)
-        {
-            return new ServiceBusOptions
-            {
-                Inbox = new InboxOptions
-                {
-                    WorkQueueUri = string.Format(queueUriFormat, "test-inbox-work"),
-                    ErrorQueueUri = string.Format(queueUriFormat, "test-error"),
-                    DurationToSleepWhenIdle = new List<TimeSpan> { TimeSpan.FromMilliseconds(25) },
-                    DurationToIgnoreOnFailure = new List<TimeSpan> { TimeSpan.FromMilliseconds(25) },
-                    ThreadCount = threadCount
-                }
-            };
         }
     }
 }

@@ -91,7 +91,7 @@ namespace Shuttle.Esb.Tests
 
     public abstract class InboxFixture : IntegrationFixture
     {
-        protected ServiceBusOptions ConfigureServices(IServiceCollection services, string fixture, bool hasErrorQueue, int threadCount,
+        protected ServiceBusOptions ConfigureServices(IServiceCollection services, string test, bool hasErrorQueue, int threadCount,
             bool isTransactional, string queueUriFormat, TimeSpan durationToSleepWhenIdle)
         {
             Guard.AgainstNull(services, nameof(services));
@@ -120,7 +120,7 @@ namespace Shuttle.Esb.Tests
                 builder.SuppressHostedService = true;
             });
 
-            services.ConfigureLogging(fixture);
+            services.ConfigureLogging(test);
 
             return serviceBusOptions;
         }
@@ -243,6 +243,8 @@ namespace Shuttle.Esb.Tests
                 builder.Options = serviceBusOptions;
                 builder.SuppressHostedService = true;
             });
+
+            services.ConfigureLogging(nameof(TestInboxDeferred));
 
             var serviceProvider = await services.BuildServiceProvider().StartHostedServices().ConfigureAwait(false);
 

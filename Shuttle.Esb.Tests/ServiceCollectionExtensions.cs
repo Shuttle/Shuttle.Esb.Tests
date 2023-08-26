@@ -9,11 +9,11 @@ namespace Shuttle.Esb.Tests
 {
     public static class ServiceCollectionExtensions
     {
-        public static IServiceCollection ConfigureLogging(this IServiceCollection services, string fixture)
+        public static IServiceCollection ConfigureLogging(this IServiceCollection services, string test)
         {
             Guard.AgainstNull(services, nameof(services));
 
-            services.TryAddEnumerable(ServiceDescriptor.Singleton<ILoggerProvider>(new FixtureFileLoggerProvider(Guard.AgainstNullOrEmptyString(fixture, nameof(fixture)))));
+            services.TryAddEnumerable(ServiceDescriptor.Singleton<ILoggerProvider>(new FixtureFileLoggerProvider(Guard.AgainstNullOrEmptyString(test, nameof(test)))));
 
             services.AddServiceBusLogging(builder =>
             {
