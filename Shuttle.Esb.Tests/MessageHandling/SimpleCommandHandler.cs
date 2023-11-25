@@ -6,7 +6,9 @@ using Shuttle.Core.Contract;
 
 namespace Shuttle.Esb.Tests
 {
-	public class SimpleCommandHandler : IMessageHandler<SimpleCommand>
+	public class SimpleCommandHandler : 
+		IMessageHandler<SimpleCommand>,
+		IAsyncMessageHandler<SimpleCommand>
 	{
 		private readonly ILogger<SimpleCommandHandler> _logger;
 
@@ -15,11 +17,16 @@ namespace Shuttle.Esb.Tests
 			_logger = Guard.AgainstNull(logger, nameof(logger));
 		}
 
-		public Task ProcessMessage(IHandlerContext<SimpleCommand> context)
+		public void ProcessMessage(IHandlerContext<SimpleCommand> context)
 		{
 			_logger.LogInformation($"[SimpleCommandHandler:SimpleCommand (thread {Thread.CurrentThread.ManagedThreadId})] : name = '{context.Message.Name}' / context = '{context.Message.Context}'");
+		}
+
+		public Task ProcessMessageAsync(IHandlerContext<SimpleCommand> context)
+		{
+			ProcessMessage(context);
 
 			return Task.CompletedTask;
-		}
-	}
+        }
+    }
 }

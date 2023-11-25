@@ -13,142 +13,7 @@ namespace Shuttle.Esb.Tests
 {
     public class BasicQueueFixture : IntegrationFixture
     {
-        protected async Task TestSimpleEnqueueAndGetMessage(IServiceCollection services, string queueUriFormat)
-        {
-            Guard.AgainstNull(services, nameof(services));
-
-            ConfigureServices(services, nameof(TestSimpleEnqueueAndGetMessage), 1, false, queueUriFormat);
-
-            var serviceProvider = services.BuildServiceProvider();
-            var queueService = serviceProvider.CreateQueueService();
-            var workQueue = await CreateWorkQueue(queueService, queueUriFormat).ConfigureAwait(false);
-
-            try
-            {
-                var stream = new MemoryStream();
-
-                stream.WriteByte(100);
-
-                await workQueue.Enqueue(new TransportMessage
-                {
-                    MessageId = Guid.NewGuid()
-                }, stream).ConfigureAwait(false);
-
-                var receivedMessage = await workQueue.GetMessage().ConfigureAwait(false);
-
-                Assert.IsNotNull(receivedMessage, "It appears as though the test transport message was not enqueued or was somehow removed before it could be dequeued.");
-                Assert.AreEqual(100, receivedMessage.Stream.ReadByte());
-                Assert.IsNull(await workQueue.GetMessage().ConfigureAwait(false));
-
-                await workQueue.Acknowledge(receivedMessage.AcknowledgementToken).ConfigureAwait(false);
-
-                Assert.IsNull(await workQueue.GetMessage().ConfigureAwait(false));
-
-                await workQueue.TryDrop().ConfigureAwait(false);
-            }
-            finally
-            {
-                workQueue.TryDispose();
-                queueService.TryDispose();
-            }
-        }
-
-        protected async Task TestReleaseMessage(IServiceCollection services, string queueUriFormat)
-        {
-            Guard.AgainstNull(services, nameof(services));
-
-            ConfigureServices(services, nameof(TestReleaseMessage), 1, false, queueUriFormat);
-
-            var serviceProvider = services.BuildServiceProvider();
-            var queueService = serviceProvider.CreateQueueService();
-            var workQueue = await CreateWorkQueue(queueService, queueUriFormat).ConfigureAwait(false);
-
-            try
-            {
-                await workQueue.Enqueue(new TransportMessage { MessageId = Guid.NewGuid() }, new MemoryStream(Encoding.ASCII.GetBytes("message-body"))).ConfigureAwait(false);
-
-                var receivedMessage = await workQueue.GetMessage().ConfigureAwait(false);
-
-                Assert.IsNotNull(receivedMessage);
-                Assert.IsNull(await workQueue.GetMessage().ConfigureAwait(false));
-
-                await workQueue.Release(receivedMessage.AcknowledgementToken).ConfigureAwait(false);
-
-                receivedMessage = await workQueue.GetMessage().ConfigureAwait(false);
-
-                Assert.IsNotNull(receivedMessage);
-                Assert.IsNull(await workQueue.GetMessage().ConfigureAwait(false));
-
-                await workQueue.Acknowledge(receivedMessage.AcknowledgementToken).ConfigureAwait(false);
-
-                Assert.IsNull(await workQueue.GetMessage().ConfigureAwait(false));
-
-                await workQueue.TryDrop().ConfigureAwait(false);
-            }
-            finally
-            {
-                workQueue.TryDispose();
-                queueService.TryDispose();
-            }
-        }
-
-        protected async Task TestUnacknowledgedMessage(IServiceCollection services, string queueUriFormat)
-        {
-            Guard.AgainstNull(services, nameof(services));
-
-            ConfigureServices(services, nameof(TestUnacknowledgedMessage), 1, false, queueUriFormat);
-
-            var queueService = services.BuildServiceProvider().CreateQueueService();
-            var workQueue = await CreateWorkQueue(queueService, queueUriFormat).ConfigureAwait(false);
-
-            await workQueue.Enqueue(new TransportMessage
-            {
-                MessageId = Guid.NewGuid()
-            }, new MemoryStream(Encoding.ASCII.GetBytes("message-body"))).ConfigureAwait(false);
-
-            Assert.IsNotNull(await workQueue.GetMessage().ConfigureAwait(false));
-            Assert.IsNull(await workQueue.GetMessage().ConfigureAwait(false));
-
-            queueService.TryDispose();
-            queueService = services.BuildServiceProvider().CreateQueueService();
-
-            workQueue = await CreateWorkQueue(queueService, queueUriFormat, false).ConfigureAwait(false);
-
-            var receivedMessage = await workQueue.GetMessage().ConfigureAwait(false);
-
-            Assert.IsNotNull(receivedMessage);
-            Assert.IsNull(await workQueue.GetMessage().ConfigureAwait(false));
-
-            await workQueue.Acknowledge(receivedMessage.AcknowledgementToken).ConfigureAwait(false);
-            workQueue.TryDispose();
-
-            workQueue = await CreateWorkQueue(queueService, queueUriFormat, false).ConfigureAwait(false);
-
-            Assert.IsNull(await workQueue.GetMessage().ConfigureAwait(false));
-
-            await workQueue.TryDrop().ConfigureAwait(false);
-            
-            workQueue.TryDispose();
-            queueService.TryDispose();
-        }
-
-        private async Task<IQueue> CreateWorkQueue(IQueueService queueService, string workQueueUriFormat, bool refresh = true)
-        {
-            Guard.AgainstNull(queueService, nameof(queueService));
-
-            var workQueue = queueService.Get(string.Format(workQueueUriFormat, "test-work"));
-
-            if (refresh)
-            {
-                await workQueue.TryDrop().ConfigureAwait(false);
-                await workQueue.TryCreate().ConfigureAwait(false);
-                await workQueue.TryPurge().ConfigureAwait(false);
-            }
-
-            return workQueue;
-        }
-
-        protected void ConfigureServices(IServiceCollection services, string test, int threadCount, bool isTransactional, string queueUriFormat)
+        private void ConfigureServices(IServiceCollection services, string test, int threadCount, bool isTransactional, string queueUriFormat)
         {
             Guard.AgainstNull(services, nameof(services));
 
@@ -173,6 +38,277 @@ namespace Shuttle.Esb.Tests
             });
 
             services.ConfigureLogging(test);
+        }
+
+        private async Task<IQueue> CreateWorkQueue(IQueueService queueService, string workQueueUriFormat, bool sync, bool refresh = true)
+        {
+            Guard.AgainstNull(queueService, nameof(queueService));
+
+            var workQueue = queueService.Get(string.Format(workQueueUriFormat, "test-work"));
+
+            if (refresh)
+            {
+                if (sync)
+                {
+                    workQueue.TryDrop();
+                    workQueue.TryCreate();
+                    workQueue.TryPurge();
+                }
+                else
+                {
+                    await workQueue.TryDropAsync().ConfigureAwait(false);
+                    await workQueue.TryCreateAsync().ConfigureAwait(false);
+                    await workQueue.TryPurgeAsync().ConfigureAwait(false);
+                }
+            }
+
+            return workQueue;
+        }
+
+        protected void TestReleaseMessage(IServiceCollection services, string queueUriFormat)
+        {
+            TestReleaseMessageAsync(services, queueUriFormat).GetAwaiter().GetResult();
+        }
+
+        protected async Task TestReleaseMessageAsync(IServiceCollection services, string queueUriFormat)
+        {
+            await TestReleaseMessageAsync(services, queueUriFormat).ConfigureAwait(false);
+        }
+
+        private async Task TestReleaseMessageAsync(IServiceCollection services, string queueUriFormat, bool sync)
+        {
+            Guard.AgainstNull(services, nameof(services));
+
+            ConfigureServices(services, nameof(TestReleaseMessageAsync), 1, false, queueUriFormat);
+
+            var serviceProvider = services.BuildServiceProvider();
+            var queueService = serviceProvider.CreateQueueService();
+            var workQueue = await CreateWorkQueue(queueService, queueUriFormat, sync).ConfigureAwait(false);
+
+            try
+            {
+                if (sync)
+                {
+                    workQueue.Enqueue(new TransportMessage { MessageId = Guid.NewGuid() }, new MemoryStream(Encoding.ASCII.GetBytes("message-body")));
+
+                    var receivedMessage = workQueue.GetMessage();
+
+                    Assert.IsNotNull(receivedMessage);
+                    Assert.IsNull(workQueue.GetMessage());
+
+                    workQueue.Release(receivedMessage.AcknowledgementToken);
+
+                    receivedMessage = workQueue.GetMessage();
+
+                    Assert.IsNotNull(receivedMessage);
+                    Assert.IsNull(workQueue.GetMessage());
+
+                    workQueue.Acknowledge(receivedMessage.AcknowledgementToken);
+
+                    Assert.IsNull(workQueue.GetMessage());
+
+                    workQueue.TryDrop();
+                }
+                else
+                {
+                    await workQueue.EnqueueAsync(new TransportMessage { MessageId = Guid.NewGuid() }, new MemoryStream(Encoding.ASCII.GetBytes("message-body"))).ConfigureAwait(false);
+
+                    var receivedMessage = await workQueue.GetMessageAsync().ConfigureAwait(false);
+
+                    Assert.IsNotNull(receivedMessage);
+                    Assert.IsNull(await workQueue.GetMessageAsync().ConfigureAwait(false));
+
+                    await workQueue.ReleaseAsync(receivedMessage.AcknowledgementToken).ConfigureAwait(false);
+
+                    receivedMessage = await workQueue.GetMessageAsync().ConfigureAwait(false);
+
+                    Assert.IsNotNull(receivedMessage);
+                    Assert.IsNull(await workQueue.GetMessageAsync().ConfigureAwait(false));
+
+                    await workQueue.AcknowledgeAsync(receivedMessage.AcknowledgementToken).ConfigureAwait(false);
+
+                    Assert.IsNull(await workQueue.GetMessageAsync().ConfigureAwait(false));
+
+                    await workQueue.TryDropAsync().ConfigureAwait(false);
+                }
+            }
+            finally
+            {
+                workQueue.TryDispose();
+                queueService.TryDispose();
+            }
+        }
+
+        protected void TestSimpleEnqueueAndGetMessage(IServiceCollection services, string queueUriFormat)
+        {
+            TestSimpleEnqueueAndGetMessageAsync(services, queueUriFormat, true).GetAwaiter().GetResult();
+        }
+
+        protected async Task TestSimpleEnqueueAndGetMessageAsync(IServiceCollection services, string queueUriFormat)
+        {
+            await TestSimpleEnqueueAndGetMessageAsync(services, queueUriFormat, false).ConfigureAwait(false);
+        }
+
+        private async Task TestSimpleEnqueueAndGetMessageAsync(IServiceCollection services, string queueUriFormat, bool sync)
+        {
+            Guard.AgainstNull(services, nameof(services));
+
+            ConfigureServices(services, nameof(TestSimpleEnqueueAndGetMessageAsync), 1, false, queueUriFormat);
+
+            var serviceProvider = services.BuildServiceProvider();
+            var queueService = serviceProvider.CreateQueueService();
+            var workQueue = await CreateWorkQueue(queueService, queueUriFormat, sync).ConfigureAwait(false);
+
+            try
+            {
+                var stream = new MemoryStream();
+
+                stream.WriteByte(100);
+
+                if (sync)
+                {
+                    workQueue.Enqueue(new TransportMessage
+                    {
+                        MessageId = Guid.NewGuid()
+                    }, stream);
+                }
+                else
+                {
+                    await workQueue.EnqueueAsync(new TransportMessage
+                    {
+                        MessageId = Guid.NewGuid()
+                    }, stream).ConfigureAwait(false);
+                }
+
+                var receivedMessage = sync
+                    ? workQueue.GetMessage()
+                    : await workQueue.GetMessageAsync().ConfigureAwait(false);
+
+                Assert.That(receivedMessage, Is.Not.Null, "It appears as though the test transport message was not enqueued or was somehow removed before it could be dequeued.");
+                Assert.That(receivedMessage.Stream.ReadByte(), Is.EqualTo(100));
+                Assert.That(sync ? workQueue.GetMessage() : await workQueue.GetMessageAsync().ConfigureAwait(false), Is.Null);
+
+                if (sync)
+                {
+                    workQueue.Acknowledge(receivedMessage.AcknowledgementToken);
+                }
+                else
+                {
+                    await workQueue.AcknowledgeAsync(receivedMessage.AcknowledgementToken).ConfigureAwait(false);
+                }
+
+                Assert.That(sync ? workQueue.GetMessage() : await workQueue.GetMessageAsync().ConfigureAwait(false), Is.Null);
+
+                if (sync)
+                {
+                    workQueue.TryDrop();
+                }
+                else
+                {
+                    await workQueue.TryDropAsync().ConfigureAwait(false);
+                }
+            }
+            finally
+            {
+                if (sync)
+                {
+                    workQueue.TryDispose();
+                    queueService.TryDispose();
+                }
+                else
+                {
+                    await workQueue.TryDisposeAsync();
+                    await queueService.TryDisposeAsync();
+                }
+            }
+        }
+
+        protected void TestUnacknowledgedMessage(IServiceCollection services, string queueUriFormat)
+        {
+            TestUnacknowledgedMessageAsync(services, queueUriFormat, true).GetAwaiter().GetResult();
+        }
+
+        protected async Task TestUnacknowledgedMessageAsync(IServiceCollection services, string queueUriFormat)
+        {
+            await TestUnacknowledgedMessageAsync(services, queueUriFormat, false).ConfigureAwait(false);
+        }
+
+        private async Task TestUnacknowledgedMessageAsync(IServiceCollection services, string queueUriFormat, bool sync)
+        {
+            Guard.AgainstNull(services, nameof(services));
+
+            ConfigureServices(services, nameof(TestUnacknowledgedMessageAsync), 1, false, queueUriFormat);
+
+            var queueService = services.BuildServiceProvider().CreateQueueService();
+
+            if (sync)
+            {
+                var workQueue = CreateWorkQueue(queueService, queueUriFormat, sync).GetAwaiter().GetResult();
+
+                workQueue.Enqueue(new TransportMessage
+                {
+                    MessageId = Guid.NewGuid()
+                }, new MemoryStream(Encoding.ASCII.GetBytes("message-body")));
+
+                Assert.IsNotNull(workQueue.GetMessage());
+                Assert.IsNull(workQueue.GetMessage());
+
+                queueService.TryDispose();
+                queueService = services.BuildServiceProvider().CreateQueueService();
+
+                workQueue = CreateWorkQueue(queueService, queueUriFormat, sync, false).GetAwaiter().GetResult();
+
+                var receivedMessage = workQueue.GetMessage();
+
+                Assert.IsNotNull(receivedMessage);
+                Assert.IsNull(workQueue.GetMessage());
+
+                workQueue.Acknowledge(receivedMessage.AcknowledgementToken);
+                workQueue.TryDispose();
+
+                workQueue = CreateWorkQueue(queueService, queueUriFormat, sync, false).GetAwaiter().GetResult();
+
+                Assert.IsNull(workQueue.GetMessage());
+
+                workQueue.TryDrop();
+
+                workQueue.TryDispose();
+                queueService.TryDispose();
+            }
+            else
+            {
+                var workQueue = await CreateWorkQueue(queueService, queueUriFormat, sync).ConfigureAwait(false);
+
+                await workQueue.EnqueueAsync(new TransportMessage
+                {
+                    MessageId = Guid.NewGuid()
+                }, new MemoryStream(Encoding.ASCII.GetBytes("message-body"))).ConfigureAwait(false);
+
+                Assert.IsNotNull(await workQueue.GetMessageAsync().ConfigureAwait(false));
+                Assert.IsNull(await workQueue.GetMessageAsync().ConfigureAwait(false));
+
+                await queueService.TryDisposeAsync().ConfigureAwait(false);
+                queueService = services.BuildServiceProvider().CreateQueueService();
+
+                workQueue = await CreateWorkQueue(queueService, queueUriFormat, sync, false).ConfigureAwait(false);
+
+                var receivedMessage = await workQueue.GetMessageAsync().ConfigureAwait(false);
+
+                Assert.IsNotNull(receivedMessage);
+                Assert.IsNull(await workQueue.GetMessageAsync().ConfigureAwait(false));
+
+                await workQueue.AcknowledgeAsync(receivedMessage.AcknowledgementToken).ConfigureAwait(false);
+                await workQueue.TryDisposeAsync().ConfigureAwait(false);
+
+                workQueue = await CreateWorkQueue(queueService, queueUriFormat, sync, false).ConfigureAwait(false);
+
+                Assert.IsNull(await workQueue.GetMessageAsync().ConfigureAwait(false));
+
+                await workQueue.TryDropAsync().ConfigureAwait(false);
+
+                await workQueue.TryDisposeAsync().ConfigureAwait(false);
+                await queueService.TryDisposeAsync().ConfigureAwait(false);
+            }
         }
     }
 }

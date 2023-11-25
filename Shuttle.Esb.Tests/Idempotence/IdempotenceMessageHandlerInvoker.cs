@@ -12,12 +12,10 @@ namespace Shuttle.Esb.Tests
 
         public int ProcessedCount => _counter.ProcessedCount;
 
-        public async Task<MessageHandlerInvokeResult> Invoke(IPipelineEvent pipelineEvent)
+        public MessageHandlerInvokeResult Invoke(IPipelineEvent pipelineEvent)
         {
-            Guard.AgainstNull(pipelineEvent, nameof(pipelineEvent));
-
-            var state = pipelineEvent.Pipeline.State;
-            var message = state.GetMessage();
+            var state = Guard.AgainstNull(pipelineEvent, nameof(pipelineEvent)).Pipeline.State;
+            var message = Guard.AgainstNull(state.GetMessage(), StateKeys.Message);
 
             if (message.GetType() != _type)
             {
@@ -26,7 +24,12 @@ namespace Shuttle.Esb.Tests
 
             _counter.Processed();
 
-            return await Task.FromResult(MessageHandlerInvokeResult.InvokedHandler(null)).ConfigureAwait(false);
+            return MessageHandlerInvokeResult.InvokedHandler(null);
+        }
+
+        public async Task<MessageHandlerInvokeResult> InvokeAsync(IPipelineEvent pipelineEvent)
+        {
+            return await Task.FromResult(Invoke(pipelineEvent)).ConfigureAwait(false);
         }
     }
 }

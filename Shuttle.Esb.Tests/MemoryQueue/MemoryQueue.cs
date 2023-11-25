@@ -14,8 +14,7 @@ namespace Shuttle.Esb.Tests
 
         private static readonly object Lock = new object();
 
-        private static readonly Dictionary<string, Dictionary<int, MemoryQueueItem>> _queues =
-            new Dictionary<string, Dictionary<int, MemoryQueueItem>>();
+        private static readonly Dictionary<string, Dictionary<int, MemoryQueueItem>> Queues = new Dictionary<string, Dictionary<int, MemoryQueueItem>>();
 
         private readonly List<int> _unacknowledgedMessageIds = new List<int>();
         private int _itemId;
@@ -49,33 +48,43 @@ namespace Shuttle.Esb.Tests
                     $"memory://{{.|{Environment.MachineName.ToLower()}}}/{{name}}", uri));
             }
 
-            Create().GetAwaiter().GetResult();
+            Create();
         }
 
-        public async Task Create()
+        public void Create()
         {
             OperationStarting.Invoke(this, new OperationEventArgs("Create"));
 
-            if (!_queues.ContainsKey(Uri.ToString()))
+            if (!Queues.ContainsKey(Uri.ToString()))
             {
-                _queues.Add(Uri.ToString(), new Dictionary<int, MemoryQueueItem>());
+                Queues.Add(Uri.ToString(), new Dictionary<int, MemoryQueueItem>());
             }
 
             OperationCompleted.Invoke(this, new OperationEventArgs("Create"));
+        }
+
+        public async Task CreateAsync()
+        {
+            Create();
 
             await Task.CompletedTask.ConfigureAwait(false);
         }
 
-        public async Task Purge()
+        public void Purge()
         {
             OperationStarting.Invoke(this, new OperationEventArgs("Purge"));
 
             lock (Lock)
             {
-                _queues[Uri.ToString()].Clear();
+                Queues[Uri.ToString()].Clear();
             }
 
             OperationCompleted.Invoke(this, new OperationEventArgs("Purge"));
+        }
+
+        public async Task PurgeAsync()
+        {
+            Purge();
 
             await Task.CompletedTask.ConfigureAwait(false);
         }
@@ -83,37 +92,43 @@ namespace Shuttle.Esb.Tests
         public QueueUri Uri { get; }
         public bool IsStream => false;
 
-        public async ValueTask<bool> IsEmpty()
+        public bool IsEmpty()
         {
-            bool result;
-
             lock (Lock)
             {
-                result = _queues[Uri.ToString()].Count == 0;
+                return Queues[Uri.ToString()].Count == 0;
             }
-
-            return await new ValueTask<bool>(result).ConfigureAwait(false);
         }
 
-        public async Task Enqueue(TransportMessage transportMessage, Stream stream)
+        public async ValueTask<bool> IsEmptyAsync()
+        {
+            return await new ValueTask<bool>(IsEmpty()).ConfigureAwait(false);
+        }
+
+        public void Enqueue(TransportMessage transportMessage, Stream stream)
         {
             lock (Lock)
             {
                 _itemId++;
 
-                _queues[Uri.ToString()].Add(_itemId, new MemoryQueueItem(_itemId, transportMessage.MessageId, stream.Copy()));
+                Queues[Uri.ToString()].Add(_itemId, new MemoryQueueItem(_itemId, transportMessage.MessageId, stream.Copy()));
             }
+        }
+
+        public async Task EnqueueAsync(TransportMessage transportMessage, Stream stream)
+        {
+            Enqueue(transportMessage, stream);
 
             await Task.CompletedTask.ConfigureAwait(false);
         }
 
-        public async Task<ReceivedMessage> GetMessage()
+        public ReceivedMessage GetMessage()
         {
             ReceivedMessage result = null;
 
             lock (Lock)
             {
-                var queue = _queues[Uri.ToString()];
+                var queue = Queues[Uri.ToString()];
 
                 var index = 0;
 
@@ -134,16 +149,21 @@ namespace Shuttle.Esb.Tests
                 }
             }
 
-            return await Task.FromResult(result).ConfigureAwait(false);
+            return result;
         }
 
-        public async Task Acknowledge(object acknowledgementToken)
+        public async Task<ReceivedMessage> GetMessageAsync()
+        {
+            return await Task.FromResult(GetMessage()).ConfigureAwait(false);
+        }
+
+        public void Acknowledge(object acknowledgementToken)
         {
             var itemId = (int)acknowledgementToken;
 
             lock (Lock)
             {
-                var queue = _queues[Uri.ToString()];
+                var queue = Queues[Uri.ToString()];
 
                 if (!queue.ContainsKey(itemId) || !_unacknowledgedMessageIds.Contains(itemId))
                 {
@@ -157,17 +177,22 @@ namespace Shuttle.Esb.Tests
 
                 _unacknowledgedMessageIds.Remove(itemId);
             }
+        }
+
+        public async Task AcknowledgeAsync(object acknowledgementToken)
+        {
+            Acknowledge(acknowledgementToken);
 
             await Task.CompletedTask.ConfigureAwait(false);
         }
 
-        public async Task Release(object acknowledgementToken)
+        public void Release(object acknowledgementToken)
         {
             var itemId = (int)acknowledgementToken;
 
             lock (Lock)
             {
-                var queue = _queues[Uri.ToString()];
+                var queue = Queues[Uri.ToString()];
 
                 if (!queue.ContainsKey(itemId) || !_unacknowledgedMessageIds.Contains(itemId))
                 {
@@ -185,6 +210,11 @@ namespace Shuttle.Esb.Tests
 
                 _unacknowledgedMessageIds.Remove(itemId);
             }
+        }
+
+        public async Task ReleaseAsync(object acknowledgementToken)
+        {
+            Release(acknowledgementToken);
 
             await Task.CompletedTask.ConfigureAwait(false);
         }

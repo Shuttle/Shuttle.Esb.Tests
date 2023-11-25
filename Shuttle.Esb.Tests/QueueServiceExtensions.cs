@@ -19,7 +19,7 @@ namespace Shuttle.Esb.Tests
             "test-error"
         };
 
-        public static async Task TryDropQueues(this IQueueService queueService, string queueUriFormat)
+        public static async Task TryDropQueuesAsync(this IQueueService queueService, string queueUriFormat)
         {
             Guard.AgainstNull(queueService, nameof(queueService));
             Guard.AgainstNullOrEmptyString(queueUriFormat, nameof(queueUriFormat));
@@ -33,7 +33,7 @@ namespace Shuttle.Esb.Tests
                     continue;
                 }
 
-                await queueService.Get(uri).TryDrop().ConfigureAwait(false);
+                await queueService.Get(uri).TryDropAsync().ConfigureAwait(false);
             }
         }
 

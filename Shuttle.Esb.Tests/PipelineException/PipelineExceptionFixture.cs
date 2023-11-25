@@ -1,19 +1,27 @@
 using System;
 using System.Collections.Generic;
-using System.IO;
-using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Hosting;
 using NUnit.Framework;
 using Shuttle.Core.Pipelines;
+using Shuttle.Core.Reflection;
 using Shuttle.Core.Serialization;
 
 namespace Shuttle.Esb.Tests
 {
     public class PipelineExceptionFixture : IntegrationFixture
     {
-        protected async Task TestExceptionHandling(IServiceCollection services, string queueUriFormat)
+        protected void TestExceptionHandling(IServiceCollection services, string queueUriFormat)
+        {
+            TestExceptionHandlingAsync(services, queueUriFormat).GetAwaiter().GetResult();
+        }
+
+        protected async Task TestExceptionHandlingAsync(IServiceCollection services, string queueUriFormat)
+        {
+            await TestExceptionHandlingAsync(services, queueUriFormat).ConfigureAwait(false);
+        }
+
+        protected async Task TestExceptionHandlingAsync(IServiceCollection services, string queueUriFormat, bool sync)
         {
             var serviceBusOptions = new ServiceBusOptions
             {
@@ -37,22 +45,45 @@ namespace Shuttle.Esb.Tests
 
             services.AddSingleton<ReceivePipelineExceptionFeature>();
 
-            var serviceProvider = await services.BuildServiceProvider().StartHostedServices().ConfigureAwait(false);
+            var serviceProvider = sync
+                ? services.BuildServiceProvider().StartHostedServices()
+                : await services.BuildServiceProvider().StartHostedServicesAsync().ConfigureAwait(false);
 
             var serviceBusConfiguration = serviceProvider.GetRequiredService<IServiceBusConfiguration>();
 
-            try
+            var drop = serviceBusConfiguration.Inbox.WorkQueue as IDropQueue;
+
+            if (drop != null)
             {
-                await serviceBusConfiguration.Inbox.WorkQueue.TryDrop().ConfigureAwait(false);
-                // if drop not supported, then purge
-                await serviceBusConfiguration.Inbox.WorkQueue.TryPurge().ConfigureAwait(false);
+                if (sync)
+                {
+                    drop.Drop();
+                }
+                else
+                {
+                    await drop.DropAsync().ConfigureAwait(false);
+                }
             }
-            catch 
+            else
             {
-                // if dropped, purge will cause exception, ignore
+                if (sync)
+                {
+                    serviceBusConfiguration.Inbox.WorkQueue.TryPurge();
+                }
+                else
+                {
+                    await serviceBusConfiguration.Inbox.WorkQueue.TryPurgeAsync().ConfigureAwait(false);
+                }
             }
 
-            await serviceBusConfiguration.CreatePhysicalQueues().ConfigureAwait(false);
+            if (sync)
+            {
+                serviceBusConfiguration.CreatePhysicalQueues();
+            }
+            else
+            {
+                await serviceBusConfiguration.CreatePhysicalQueuesAsync().ConfigureAwait(false);
+            }
 
             var pipelineFactory = serviceProvider.GetRequiredService<IPipelineFactory>();
             var transportMessagePipeline = pipelineFactory.GetPipeline<TransportMessagePipeline>();
@@ -60,29 +91,58 @@ namespace Shuttle.Esb.Tests
             var serializer = serviceProvider.GetRequiredService<ISerializer>();
 
             var serviceBus = serviceProvider.GetRequiredService<IServiceBus>();
-            
-            await using (serviceBus.ConfigureAwait(false))
+
+            try
             {
-                await transportMessagePipeline.Execute(new ReceivePipelineCommand(), null, builder =>
+                if (sync)
                 {
-                    builder.WithRecipient(serviceBusConfiguration.Inbox.WorkQueue);
-                }).ConfigureAwait(false);
+                    transportMessagePipeline.Execute(new ReceivePipelineCommand(), null, builder =>
+                    {
+                        builder.WithRecipient(serviceBusConfiguration.Inbox.WorkQueue);
+                    });
 
-                await serviceBusConfiguration.Inbox.WorkQueue.Enqueue(
-                    transportMessagePipeline.State.GetTransportMessage(),
-                    await serializer.Serialize(transportMessagePipeline.State.GetTransportMessage()).ConfigureAwait(false)).ConfigureAwait(false);
+                    serviceBusConfiguration.Inbox.WorkQueue.Enqueue(
+                        transportMessagePipeline.State.GetTransportMessage(),
+                        serializer.Serialize(transportMessagePipeline.State.GetTransportMessage()));
 
-                Assert.IsFalse(await serviceBusConfiguration.Inbox.WorkQueue.IsEmpty().ConfigureAwait(false));
+                    Assert.That(serviceBusConfiguration.Inbox.WorkQueue.IsEmpty(), Is.False);
 
-                await serviceBus.Start().ConfigureAwait(false);
+                    serviceBus.Start();
+                }
+                else
+                {
+                    await transportMessagePipeline.ExecuteAsync(new ReceivePipelineCommand(), null, builder =>
+                    {
+                        builder.WithRecipient(serviceBusConfiguration.Inbox.WorkQueue);
+                    }).ConfigureAwait(false);
+
+                    await serviceBusConfiguration.Inbox.WorkQueue.EnqueueAsync(
+                        transportMessagePipeline.State.GetTransportMessage(),
+                        await serializer.SerializeAsync(transportMessagePipeline.State.GetTransportMessage()).ConfigureAwait(false)).ConfigureAwait(false);
+
+                    Assert.That(await serviceBusConfiguration.Inbox.WorkQueue.IsEmptyAsync().ConfigureAwait(false), Is.False);
+
+                    await serviceBus.StartAsync().ConfigureAwait(false);
+                }
 
                 while (feature.ShouldWait())
                 {
                     await Task.Delay(10).ConfigureAwait(false);
                 }
             }
+            finally
+            {
+                if (sync)
+                {
+                    serviceBus.TryDispose();
+                }
+                else
+                {
+                    await serviceBus.TryDisposeAsync().ConfigureAwait(false);
+                }
+            }
 
-            await serviceProvider.StopHostedServices().ConfigureAwait(false);
+            await serviceProvider.StopHostedServicesAsync().ConfigureAwait(false);
         }
     }
 }

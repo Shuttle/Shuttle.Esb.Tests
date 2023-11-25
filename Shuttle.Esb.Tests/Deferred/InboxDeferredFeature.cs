@@ -9,9 +9,14 @@ namespace Shuttle.Esb.Tests
     {
         public TransportMessage TransportMessage { get; private set; }
 
-        public async Task Execute(OnAfterDeserializeTransportMessage pipelineEvent)
+        public void Execute(OnAfterDeserializeTransportMessage pipelineEvent)
         {
-            TransportMessage = pipelineEvent.Pipeline.State.GetTransportMessage();
+            TransportMessage = Guard.AgainstNull(pipelineEvent, nameof(pipelineEvent)).Pipeline.State.GetTransportMessage();
+        }
+
+        public async Task ExecuteAsync(OnAfterDeserializeTransportMessage pipelineEvent)
+        {
+            Execute(pipelineEvent);
 
             await Task.CompletedTask.ConfigureAwait(false);
         }

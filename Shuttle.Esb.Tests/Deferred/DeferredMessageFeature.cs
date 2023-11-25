@@ -37,7 +37,7 @@ namespace Shuttle.Esb.Tests
 			e.Pipeline.RegisterObserver(this);
 		}
 
-		public async Task Execute(OnAfterHandleMessage pipelineEvent)
+		public void Execute(OnAfterHandleMessage pipelineEvent)
 		{
 			_logger.LogInformation("[OnAfterHandleMessage]");
 
@@ -45,22 +45,33 @@ namespace Shuttle.Esb.Tests
 			{
 				NumberOfMessagesHandled++;
 			}
+		}
+
+        public async Task ExecuteAsync(OnAfterHandleMessage pipelineEvent)
+		{
+			Execute(pipelineEvent);
 
 			await Task.CompletedTask.ConfigureAwait(false);
 		}
 
-		public async Task Execute(OnAfterProcessDeferredMessage pipelineEvent)
+		public void Execute(OnAfterProcessDeferredMessage pipelineEvent)
 		{
-			_logger.LogInformation(
-				$"[OnAfterProcessDeferredMessage] : deferred message returned = '{pipelineEvent.Pipeline.State.GetDeferredMessageReturned()}'");
+			_logger.LogInformation($"[OnAfterProcessDeferredMessage] : deferred message returned = '{pipelineEvent.Pipeline.State.GetDeferredMessageReturned()}'");
 
-			if (pipelineEvent.Pipeline.State.GetDeferredMessageReturned())
+			if (!pipelineEvent.Pipeline.State.GetDeferredMessageReturned())
 			{
-				lock (_lock)
-				{
-					NumberOfDeferredMessagesReturned++;
-				}
+				return;
 			}
+
+			lock (_lock)
+			{
+				NumberOfDeferredMessagesReturned++;
+			}
+		}
+
+        public async Task ExecuteAsync(OnAfterProcessDeferredMessage pipelineEvent)
+		{
+			Execute(pipelineEvent);
 
 			await Task.CompletedTask.ConfigureAwait(false);
 		}

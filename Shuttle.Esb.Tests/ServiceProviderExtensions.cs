@@ -10,7 +10,27 @@ namespace Shuttle.Esb.Tests
 {
     public static class ServiceProviderExtensions
     {
-        public static async Task<IServiceProvider> StartHostedServices(this IServiceProvider serviceProvider)
+        public static IServiceProvider StartHostedServices(this IServiceProvider serviceProvider)
+        {
+            return StartHostedServicesAsync(serviceProvider, true).GetAwaiter().GetResult();
+        }
+
+        public static IServiceProvider StopHostedServices(this IServiceProvider serviceProvider)
+        {
+            return StopHostedServicesAsync(serviceProvider, true).GetAwaiter().GetResult();
+        }
+
+        public static async Task<IServiceProvider> StartHostedServicesAsync(this IServiceProvider serviceProvider)
+        {
+            return await StartHostedServicesAsync(serviceProvider, false).ConfigureAwait(false);
+        }
+
+        public static async Task<IServiceProvider> StopHostedServicesAsync(this IServiceProvider serviceProvider)
+        {
+            return await StopHostedServicesAsync(serviceProvider, false).ConfigureAwait(false);
+        }
+
+        private static async Task<IServiceProvider> StartHostedServicesAsync(IServiceProvider serviceProvider, bool sync)
         {
             Guard.AgainstNull(serviceProvider, nameof(serviceProvider));
 
@@ -22,7 +42,14 @@ namespace Shuttle.Esb.Tests
             {
                 logger.LogInformation($"[HostedService-starting] : {hostedService.GetType().Name}");
 
-                await hostedService.StartAsync(CancellationToken.None).ConfigureAwait(false);
+                if (sync)
+                {
+                    hostedService.StartAsync(CancellationToken.None).GetAwaiter().GetResult();
+                }
+                else
+                {
+                    await hostedService.StartAsync(CancellationToken.None).ConfigureAwait(false);
+                }
 
                 logger.LogInformation($"[HostedService-started] : {hostedService.GetType().Name}");
             }
@@ -30,7 +57,7 @@ namespace Shuttle.Esb.Tests
             return serviceProvider;
         }
 
-        public static async Task<IServiceProvider> StopHostedServices(this IServiceProvider serviceProvider)
+        private static async Task<IServiceProvider> StopHostedServicesAsync(IServiceProvider serviceProvider, bool sync)
         {
             Guard.AgainstNull(serviceProvider, nameof(serviceProvider));
 
@@ -42,7 +69,14 @@ namespace Shuttle.Esb.Tests
             {
                 logger.LogInformation($"[HostedService-stopping] : {hostedService.GetType().Name}");
 
-                await hostedService.StopAsync(CancellationToken.None).ConfigureAwait(false);
+                if (sync)
+                {
+                    hostedService.StopAsync(CancellationToken.None).GetAwaiter().GetResult();
+                }
+                else
+                {
+                    await hostedService.StopAsync(CancellationToken.None).ConfigureAwait(false);
+                }
 
                 logger.LogInformation($"[HostedService-stopped] : {hostedService.GetType().Name}");
             }
