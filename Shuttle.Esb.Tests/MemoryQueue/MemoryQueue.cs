@@ -10,7 +10,7 @@ namespace Shuttle.Esb.Tests
 {
     public class MemoryQueue : IQueue, ICreateQueue, IPurgeQueue
     {
-        internal const string Scheme = "memory";
+        internal const string Scheme = "memory-queue";
 
         private static readonly object Lock = new object();
 

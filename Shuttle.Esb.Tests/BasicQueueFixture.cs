@@ -67,12 +67,12 @@ namespace Shuttle.Esb.Tests
 
         protected void TestReleaseMessage(IServiceCollection services, string queueUriFormat)
         {
-            TestReleaseMessageAsync(services, queueUriFormat).GetAwaiter().GetResult();
+            TestReleaseMessageAsync(services, queueUriFormat, true).GetAwaiter().GetResult();
         }
 
         protected async Task TestReleaseMessageAsync(IServiceCollection services, string queueUriFormat)
         {
-            await TestReleaseMessageAsync(services, queueUriFormat).ConfigureAwait(false);
+            await TestReleaseMessageAsync(services, queueUriFormat, false).ConfigureAwait(false);
         }
 
         private async Task TestReleaseMessageAsync(IServiceCollection services, string queueUriFormat, bool sync)

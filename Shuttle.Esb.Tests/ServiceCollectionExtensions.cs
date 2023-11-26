@@ -1,14 +1,25 @@
 ﻿using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using Shuttle.Core.Contract;
 using Shuttle.Core.Pipelines;
 using Shuttle.Esb.Logging;
+using System;
 
 namespace Shuttle.Esb.Tests
 {
     public static class ServiceCollectionExtensions
     {
+        public static IServiceCollection AddMemoryQueues(this IServiceCollection services)
+        {
+            Guard.AgainstNull(services, nameof(services));
+
+            services.TryAddSingleton<IQueueFactory, MemoryQueueFactory>();
+
+            return services;
+        }
+
         public static IServiceCollection ConfigureLogging(this IServiceCollection services, string test)
         {
             Guard.AgainstNull(services, nameof(services));
