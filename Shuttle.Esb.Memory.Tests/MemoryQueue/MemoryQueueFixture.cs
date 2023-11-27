@@ -27,7 +27,7 @@ namespace Shuttle.Esb.Memory.Tests
         [Test]
         public void Should_throw_exception_when_trying_to_create_a_queue_with_incorrect_format()
         {
-            Assert.Throws<UriFormatException>(() => _ = new MemoryQueue(new Uri("memory-queue://notthismachinee")));
+            Assert.Throws<UriFormatException>(() => _ = new MemoryQueue(new Uri("memory-queue://notthismachine")));
         }
 
         [Test]
