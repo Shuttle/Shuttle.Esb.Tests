@@ -15,8 +15,8 @@
 		<copyright>Copyright (c) 2023, Eben Roux</copyright>
 		<tags></tags>
 		<dependencies>
-      <dependency id="Moq" version="4.18.4" />
-      <dependency id="NUnit" version="3.13.3" />
+      <dependency id="Moq" version="4.20.69" />
+      <dependency id="NUnit" version="3.14.0" />
       <dependency id="Shuttle.Esb" version="14.0.0" />
       <dependency id="Shuttle.Esb.Logging" version="14.0.0" />
 		</dependencies>

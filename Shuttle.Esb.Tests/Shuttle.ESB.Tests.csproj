@@ -23,5 +23,9 @@
   <ItemGroup>
     <Compile Remove="PerformanceCounterValue.cs;ResourceUsageFixture.cs" />
   </ItemGroup>
+
+  <ItemGroup>
+    <Folder Include="MemoryStream\" />
+  </ItemGroup>
   
 </Project>
