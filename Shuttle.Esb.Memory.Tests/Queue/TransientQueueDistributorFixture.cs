@@ -3,14 +3,14 @@ using Shuttle.Esb.Tests;
 
 namespace Shuttle.Esb.Memory.Tests
 {
-    public class MemoryQueueDistributorFixture : DistributorFixture
+    public class TransientQueueDistributorFixture : DistributorFixture
     {
         [Test]
         [TestCase(false)]
         [TestCase(true)]
         public void Should_be_able_to_distribute_messages(bool isTransactionalEndpoint)
         {
-            TestDistributor(MemoryQueueConfiguration.GetServiceCollection(), MemoryQueueConfiguration.GetServiceCollection(), @"memory-queue://./{0}", isTransactionalEndpoint);
+            TestDistributor(TransientQueueConfiguration.GetServiceCollection(), TransientQueueConfiguration.GetServiceCollection(), @"transient-queue://./{0}", isTransactionalEndpoint);
         }
 
         [Test]
@@ -18,7 +18,7 @@ namespace Shuttle.Esb.Memory.Tests
         [TestCase(true)]
         public async Task Should_be_able_to_distribute_messages_async(bool isTransactionalEndpoint)
         {
-            await TestDistributorAsync(MemoryQueueConfiguration.GetServiceCollection(), MemoryQueueConfiguration.GetServiceCollection(), @"memory-queue://./{0}", isTransactionalEndpoint);
+            await TestDistributorAsync(TransientQueueConfiguration.GetServiceCollection(), TransientQueueConfiguration.GetServiceCollection(), @"transient-queue://./{0}", isTransactionalEndpoint);
         }
     }
 }

@@ -68,41 +68,6 @@ namespace Shuttle.Esb.Tests
             services.ConfigureLogging(test);
         }
 
-        private async Task EnqueueDeferredMessage(IServiceBusConfiguration serviceBusConfiguration,
-            TransportMessagePipeline transportMessagePipeline, ISerializer serializer, DateTime ignoreTillDate, bool sync)
-        {
-            var command = new SimpleCommand
-            {
-                Name = Guid.NewGuid().ToString(),
-                Context = "EnqueueDeferredMessage"
-            };
-
-            if (sync)
-            {
-                transportMessagePipeline.Execute(command, null, builder =>
-                {
-                    builder.Defer(ignoreTillDate);
-                    builder.WithRecipient(serviceBusConfiguration.Inbox.WorkQueue);
-                });
-
-                serviceBusConfiguration.Inbox.WorkQueue.Enqueue(
-                    transportMessagePipeline.State.GetTransportMessage(),
-                    serializer.Serialize(transportMessagePipeline.State.GetTransportMessage()));
-            }
-            else
-            {
-                await transportMessagePipeline.ExecuteAsync(command, null, builder =>
-                {
-                    builder.Defer(ignoreTillDate);
-                    builder.WithRecipient(serviceBusConfiguration.Inbox.WorkQueue);
-                }).ConfigureAwait(false);
-
-                await serviceBusConfiguration.Inbox.WorkQueue.EnqueueAsync(
-                    transportMessagePipeline.State.GetTransportMessage(),
-                    await serializer.SerializeAsync(transportMessagePipeline.State.GetTransportMessage()).ConfigureAwait(false)).ConfigureAwait(false);
-            }
-        }
-
         private ServiceBusOptions GetServiceBusOptions(int threadCount, string queueUriFormat)
         {
             return new ServiceBusOptions
@@ -114,7 +79,9 @@ namespace Shuttle.Esb.Tests
                     ErrorQueueUri = string.Format(queueUriFormat, "test-error"),
                     DurationToSleepWhenIdle = new List<TimeSpan> { TimeSpan.FromMilliseconds(25) },
                     DurationToIgnoreOnFailure = new List<TimeSpan> { TimeSpan.FromMilliseconds(25) },
-                    ThreadCount = threadCount
+                    ThreadCount = threadCount,
+                    DeferredMessageProcessorResetInterval = TimeSpan.FromMilliseconds(25),
+                    DeferredMessageProcessorWaitInterval = TimeSpan.FromMilliseconds(25)
                 }
             };
         }
@@ -134,7 +101,7 @@ namespace Shuttle.Esb.Tests
             Guard.AgainstNull(services, nameof(services));
 
             const int deferredMessageCount = 10;
-            const int millisecondsToDefer = 250;
+            const int millisecondsToDefer = 100;
 
             services.AddOptions<MessageCountOptions>().Configure(options =>
             {
@@ -156,96 +123,110 @@ namespace Shuttle.Esb.Tests
             var transportMessagePipeline = pipelineFactory.GetPipeline<TransportMessagePipeline>();
             var serviceBusConfiguration = serviceProvider.GetRequiredService<IServiceBusConfiguration>();
             var serializer = serviceProvider.GetRequiredService<ISerializer>();
+            var deferredMessageProcessor = serviceProvider.GetRequiredService<IDeferredMessageProcessor>();
             var feature = serviceProvider.GetRequiredService<DeferredMessageFeature>();
-
+            var serviceBus = serviceProvider.GetRequiredService<IServiceBus>();
             var queueService = serviceProvider.CreateQueueService();
 
             await ConfigureQueues(serviceProvider, serviceBusConfiguration, queueUriFormat, sync).ConfigureAwait(false);
 
+            deferredMessageProcessor.DeferredMessageProcessingHalted += (sender, args) =>
+            {
+                logger.LogDebug($"[DeferredMessageProcessingHalted] : restart date/time = '{args.RestartDateTime}'");
+            };
+
+            deferredMessageProcessor.DeferredMessageProcessingAdjusted += (sender, args) =>
+            {
+                logger.LogDebug($"[DeferredMessageProcessingAdjusted] : next processing date/time = '{args.NextProcessingDateTime}'");
+            };
+
             try
             {
-                //var ignoreTillDate = DateTime.Now.AddSeconds(2);
-                var ignoreTillDate = DateTime.Now.AddSeconds(30);
+                var ignoreTillDate = DateTime.UtcNow.AddSeconds(1);
+
+                if (sync)
+                {
+                    serviceBus.Start();
+                }
+                else
+                {
+                    await serviceBus.StartAsync().ConfigureAwait(false);
+                }
 
                 for (var i = 0; i < deferredMessageCount; i++)
                 {
-                    await EnqueueDeferredMessage(serviceBusConfiguration, transportMessagePipeline, serializer, ignoreTillDate, sync).ConfigureAwait(false);
+                    var command = new SimpleCommand
+                    {
+                        Name = Guid.NewGuid().ToString(),
+                        Context = "EnqueueDeferredMessage"
+                    };
+
+                    var date = ignoreTillDate;
+
+                    if (sync)
+                    {
+                        serviceBus.Send(command, builder => builder.Defer(date).WithRecipient(serviceBusConfiguration.Inbox.WorkQueue));
+                    }
+                    else
+                    {
+                        await serviceBus.SendAsync(command, builder => builder.Defer(date).WithRecipient(serviceBusConfiguration.Inbox.WorkQueue)).ConfigureAwait(false);
+                    }
 
                     ignoreTillDate = ignoreTillDate.AddMilliseconds(millisecondsToDefer);
                 }
 
-                var timeout =
-                    ignoreTillDate.AddMilliseconds(deferredMessageCount * millisecondsToDefer +
-                                                   millisecondsToDefer * 2);
+                logger.LogInformation($"[start wait] : now = '{DateTime.Now}'");
+
+                var timeout = ignoreTillDate.AddMilliseconds(deferredMessageCount * millisecondsToDefer + millisecondsToDefer * 2 + 3000);
                 var timedOut = false;
 
-                var serviceBus = serviceProvider.GetRequiredService<IServiceBus>();
-
-                try
+                // wait for the message to be returned from the deferred queue
+                while (!feature.AllMessagesHandled() && !timedOut)
                 {
-                    if (sync)
-                    {
-                        serviceBus.Start();
-                    }
-                    else
-                    {
-                        await serviceBus.StartAsync().ConfigureAwait(false);
-                    }
+                    await Task.Delay(millisecondsToDefer).ConfigureAwait(false);
 
-                    logger.LogInformation($"[start wait] : now = '{DateTime.Now}'");
-
-                    // wait for the message to be returned from the deferred queue
-                    while (!feature.AllMessagesHandled()
-                           &&
-                           !timedOut)
-                    {
-                        await Task.Delay(millisecondsToDefer).ConfigureAwait(false);
-
-                        timedOut = timeout < DateTime.Now;
-                    }
-
-                    logger.LogInformation(
-                        $"[end wait] : now = '{DateTime.Now}' / timeout = '{timeout}' / timed out = '{timedOut}'");
-
-                    logger.LogInformation(
-                        $"{feature.NumberOfDeferredMessagesReturned} of {deferredMessageCount} deferred messages returned to the inbox.");
-                    logger.LogInformation(
-                        $"{feature.NumberOfMessagesHandled} of {deferredMessageCount} deferred messages handled.");
-
-                    Assert.IsTrue(feature.AllMessagesHandled(), "All the deferred messages were not handled.");
-
-                    if (sync)
-                    {
-                        Assert.That(serviceBusConfiguration.Inbox.ErrorQueue.IsEmpty(), Is.True);
-                        Assert.That(serviceBusConfiguration.Inbox.DeferredQueue.GetMessage(), Is.Null);
-                        Assert.That(serviceBusConfiguration.Inbox.WorkQueue.GetMessage(), Is.Null);
-                    }
-                    else
-                    {
-                        Assert.That(await serviceBusConfiguration.Inbox.ErrorQueue.IsEmptyAsync().ConfigureAwait(false), Is.True);
-                        Assert.That(await serviceBusConfiguration.Inbox.DeferredQueue.GetMessageAsync().ConfigureAwait(false), Is.Null);
-                        Assert.That(await serviceBusConfiguration.Inbox.WorkQueue.GetMessageAsync().ConfigureAwait(false), Is.Null);
-                    }
-                }
-                finally
-                {
-                    if (sync)
-                    {
-                        serviceBus.Dispose();
-                    }
-                    else
-                    {
-                        await serviceBus.DisposeAsync().ConfigureAwait(false);
-                    }
+                    timedOut = timeout < DateTime.UtcNow;
                 }
 
-                await queueService.TryDropQueuesAsync(queueUriFormat).ConfigureAwait(false);
+                logger.LogInformation(
+                    $"[end wait] : now = '{DateTime.Now}' / timeout = '{timeout.ToLocalTime()}' / timed out = '{timedOut}'");
+
+                logger.LogInformation(
+                    $"{feature.NumberOfDeferredMessagesReturned} of {deferredMessageCount} deferred messages returned to the inbox.");
+                logger.LogInformation(
+                    $"{feature.NumberOfMessagesHandled} of {deferredMessageCount} deferred messages handled.");
+
+                Assert.IsTrue(feature.AllMessagesHandled(), "All the deferred messages were not handled.");
+
+                if (sync)
+                {
+                    Assert.That(serviceBusConfiguration.Inbox.ErrorQueue.IsEmpty(), Is.True);
+                    Assert.That(serviceBusConfiguration.Inbox.DeferredQueue.GetMessage(), Is.Null);
+                    Assert.That(serviceBusConfiguration.Inbox.WorkQueue.GetMessage(), Is.Null);
+                }
+                else
+                {
+                    Assert.That(await serviceBusConfiguration.Inbox.ErrorQueue.IsEmptyAsync().ConfigureAwait(false), Is.True);
+                    Assert.That(await serviceBusConfiguration.Inbox.DeferredQueue.GetMessageAsync().ConfigureAwait(false), Is.Null);
+                    Assert.That(await serviceBusConfiguration.Inbox.WorkQueue.GetMessageAsync().ConfigureAwait(false), Is.Null);
+                }
             }
             finally
             {
-                queueService.TryDispose();
-
-                await serviceProvider.StopHostedServicesAsync().ConfigureAwait(false);
+                if (sync)
+                {
+                    serviceBus.Dispose();
+                    queueService.TryDropQueues(queueUriFormat);
+                    queueService.TryDispose();
+                    serviceProvider.StopHostedServices();
+                }
+                else
+                {
+                    await serviceBus.DisposeAsync().ConfigureAwait(false);
+                    await queueService.TryDropQueuesAsync(queueUriFormat).ConfigureAwait(false);
+                    await queueService.TryDisposeAsync().ConfigureAwait(false);
+                    await serviceProvider.StopHostedServicesAsync().ConfigureAwait(false);
+                }
             }
         }
     }

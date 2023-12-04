@@ -253,7 +253,7 @@ namespace Shuttle.Esb.Tests
                     else
                     {
                         await distributorBus.TryDisposeAsync().ConfigureAwait(false);
-                        await workQueue.TryDisposeAsync().ConfigureAwait(false);
+                        await workerBus.TryDisposeAsync().ConfigureAwait(false);
                     }
                 }
             }
@@ -261,9 +261,8 @@ namespace Shuttle.Esb.Tests
             {
                 if (sync)
                 {
-                    distributorQueueService.TryDropQueuesAsync(queueUriFormat).GetAwaiter().GetResult();
+                    distributorQueueService.TryDropQueues(queueUriFormat);
                     distributorQueueService.TryDispose();
-
                     workerServiceProvider.StopHostedServices();
                     distributorServiceProvider.StopHostedServices();
                 }
@@ -271,7 +270,6 @@ namespace Shuttle.Esb.Tests
                 {
                     await distributorQueueService.TryDropQueuesAsync(queueUriFormat).ConfigureAwait(false);
                     await distributorQueueService.TryDisposeAsync().ConfigureAwait(false);
-
                     await workerServiceProvider.StopHostedServicesAsync().ConfigureAwait(false);
                     await distributorServiceProvider.StopHostedServicesAsync().ConfigureAwait(false);
                 }

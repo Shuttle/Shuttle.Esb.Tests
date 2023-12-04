@@ -4,7 +4,7 @@ using Shuttle.Esb.Tests;
 
 namespace Shuttle.Esb.Memory.Tests
 {
-    public static class MemoryQueueConfiguration
+    public static class TransientQueueConfiguration
     {
         public static IServiceCollection GetServiceCollection()
         {
@@ -12,7 +12,7 @@ namespace Shuttle.Esb.Memory.Tests
 
             services.AddSingleton<IConfiguration>(new ConfigurationBuilder().Build());
 
-            services.AddMemoryQueues();
+            services.AddTransientQueues();
 
             return services;
         }

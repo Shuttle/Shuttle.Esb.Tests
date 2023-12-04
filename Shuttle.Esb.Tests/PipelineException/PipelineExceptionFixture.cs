@@ -13,12 +13,12 @@ namespace Shuttle.Esb.Tests
     {
         protected void TestExceptionHandling(IServiceCollection services, string queueUriFormat)
         {
-            TestExceptionHandlingAsync(services, queueUriFormat).GetAwaiter().GetResult();
+            TestExceptionHandlingAsync(services, queueUriFormat, true).GetAwaiter().GetResult();
         }
 
         protected async Task TestExceptionHandlingAsync(IServiceCollection services, string queueUriFormat)
         {
-            await TestExceptionHandlingAsync(services, queueUriFormat).ConfigureAwait(false);
+            await TestExceptionHandlingAsync(services, queueUriFormat, false).ConfigureAwait(false);
         }
 
         protected async Task TestExceptionHandlingAsync(IServiceCollection services, string queueUriFormat, bool sync)

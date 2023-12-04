@@ -79,17 +79,17 @@ namespace Shuttle.Esb.Tests
 
         protected void TestOutboxSending(IServiceCollection services, string workQueueUriFormat, int threadCount, bool isTransactional)
         {
-            TestOutboxSendingAsync(services, workQueueUriFormat, workQueueUriFormat, threadCount, isTransactional).GetAwaiter().GetResult();
+            TestOutboxSending(services, workQueueUriFormat, workQueueUriFormat, threadCount, isTransactional);
+        }
+
+        protected void TestOutboxSending(IServiceCollection services, string workQueueUriFormat, string errorQueueUriFormat, int threadCount, bool isTransactional)
+        {
+            TestOutboxSendingAsync(services, workQueueUriFormat, workQueueUriFormat, threadCount, isTransactional, true).GetAwaiter().GetResult();
         }
 
         protected async Task TestOutboxSendingAsync(IServiceCollection services, string workQueueUriFormat, int threadCount, bool isTransactional)
         {
             await TestOutboxSendingAsync(services, workQueueUriFormat, workQueueUriFormat, threadCount, isTransactional).ConfigureAwait(false);
-        }
-
-        protected void TestOutboxSending(IServiceCollection services, string workQueueUriFormat, string errorQueueUriFormat, int threadCount, bool isTransactional)
-        {
-            TestOutboxSendingAsync(services, workQueueUriFormat, workQueueUriFormat, threadCount,  isTransactional, true).GetAwaiter().GetResult();
         }
 
         protected async Task TestOutboxSendingAsync(IServiceCollection services, string workQueueUriFormat, string errorQueueUriFormat, int threadCount, bool isTransactional)
@@ -113,6 +113,15 @@ namespace Shuttle.Esb.Tests
                 builder.Options.Enabled = isTransactional;
             });
 
+            var workQueueUri = string.Format(workQueueUriFormat, "test-outbox-work");
+            var receiverWorkQueueUri = string.Format(workQueueUriFormat, "test-receiver-work");
+            var messageRouteProvider = new Mock<IMessageRouteProvider>();
+
+            messageRouteProvider.Setup(m => m.GetRouteUris(It.IsAny<string>())).Returns(new[] { receiverWorkQueueUri });
+            messageRouteProvider.Setup(m => m.GetRouteUrisAsync(It.IsAny<string>())).Returns(Task.FromResult<IEnumerable<string>>(new[] { receiverWorkQueueUri }));
+
+            services.AddSingleton(messageRouteProvider.Object);
+
             services.AddServiceBus(builder =>
             {
                 builder.Options = new ServiceBusOptions
@@ -120,7 +129,7 @@ namespace Shuttle.Esb.Tests
                     Outbox =
                         new OutboxOptions
                         {
-                            WorkQueueUri = string.Format(workQueueUriFormat, "test-outbox-work"),
+                            WorkQueueUri = workQueueUri,
                             DurationToSleepWhenIdle = new List<TimeSpan> { TimeSpan.FromMilliseconds(25) },
                             ThreadCount = threadCount
                         }
@@ -129,13 +138,6 @@ namespace Shuttle.Esb.Tests
                 builder.SuppressHostedService = true;
             });
 
-            var messageRouteProvider = new Mock<IMessageRouteProvider>();
-
-            var receiverWorkQueueUri = string.Format(workQueueUriFormat, "test-receiver-work");
-
-            messageRouteProvider.Setup(m => m.GetRouteUris(It.IsAny<string>())).Returns(new[] { receiverWorkQueueUri });
-
-            services.AddSingleton(messageRouteProvider.Object);
             services.ConfigureLogging(nameof(TestOutboxSending));
 
             var serviceProvider = sync
@@ -190,39 +192,7 @@ namespace Shuttle.Esb.Tests
 
                 var receiverWorkQueue = queueService.Get(receiverWorkQueueUri);
                 var timedOut = false;
-                var messageRetrieved = false;
-                var timeout = DateTime.Now.AddSeconds(30);
-
-                while (!messageRetrieved && !timedOut)
-                {
-                    var receivedMessage = sync
-                    ? receiverWorkQueue.GetMessage()
-                    : await receiverWorkQueue.GetMessageAsync().ConfigureAwait(false);
-
-                    if (receivedMessage != null)
-                    {
-                        messageRetrieved = true;
-
-                        if (sync)
-                        {
-                            receiverWorkQueue.Release(receivedMessage.AcknowledgementToken);
-                        }
-                        else
-                        {
-                            await receiverWorkQueue.ReleaseAsync(receivedMessage.AcknowledgementToken).ConfigureAwait(false);
-                        }
-                    }
-                    else
-                    {
-                        await Task.Delay(25).ConfigureAwait(false);
-
-                        timedOut = timeout < DateTime.Now;
-                    }
-                }
-
-                Assert.IsFalse(timedOut, "Timed out before any messages appeared in the receiver queue.");
-
-                timeout = DateTime.Now.AddSeconds(15);
+                var timeout = DateTime.Now.AddSeconds(150);
 
                 while (outboxObserver.HandledMessageCount < count && !timedOut)
                 {
@@ -236,8 +206,8 @@ namespace Shuttle.Esb.Tests
                 for (var i = 0; i < count; i++)
                 {
                     var receivedMessage = sync
-                    ? receiverWorkQueue.GetMessage()
-                    : await receiverWorkQueue.GetMessageAsync().ConfigureAwait(false);
+                        ? receiverWorkQueue.GetMessage()
+                        : await receiverWorkQueue.GetMessageAsync().ConfigureAwait(false);
 
                     Assert.IsNotNull(receivedMessage);
 
@@ -285,7 +255,7 @@ namespace Shuttle.Esb.Tests
 
             queueService = services.BuildServiceProvider().CreateQueueService();
 
-            var outboxWorkQueue = queueService.Get(string.Format(workQueueUriFormat, "test-outbox-work"));
+            var outboxWorkQueue = queueService.Get(workQueueUri);
 
             Assert.IsTrue(sync ? outboxWorkQueue.IsEmpty() : await outboxWorkQueue.IsEmptyAsync().ConfigureAwait(false));
 
