@@ -52,14 +52,14 @@ namespace Shuttle.Esb.Tests
 
         public void Create()
         {
-            OperationStarting.Invoke(this, new OperationEventArgs("Create"));
+            Operation.Invoke(this, new OperationEventArgs("[starting] : Create"));
 
             if (!Queues.ContainsKey(Uri.ToString()))
             {
                 Queues.Add(Uri.ToString(), new Dictionary<int, TransientMessage>());
             }
 
-            OperationCompleted.Invoke(this, new OperationEventArgs("Create"));
+            Operation.Invoke(this, new OperationEventArgs("[completed] : Create"));
         }
 
         public async Task CreateAsync()
@@ -71,14 +71,14 @@ namespace Shuttle.Esb.Tests
 
         public void Purge()
         {
-            OperationStarting.Invoke(this, new OperationEventArgs("Purge"));
+            Operation.Invoke(this, new OperationEventArgs("[starting] : Purge"));
 
             lock (Lock)
             {
                 Queues[Uri.ToString()].Clear();
             }
 
-            OperationCompleted.Invoke(this, new OperationEventArgs("Purge"));
+            Operation.Invoke(this, new OperationEventArgs("[completed] : Purge"));
         }
 
         public async Task PurgeAsync()
@@ -225,11 +225,7 @@ namespace Shuttle.Esb.Tests
         {
         };
 
-        public event EventHandler<OperationEventArgs> OperationStarting = delegate
-        {
-        };
-
-        public event EventHandler<OperationEventArgs> OperationCompleted = delegate
+        public event EventHandler<OperationEventArgs> Operation = delegate
         {
         };
     }

@@ -522,24 +522,24 @@ namespace Shuttle.Esb.Tests
                 {
                     if (hasErrorQueue)
                     {
-                        Assert.Null(queueService.Get(string.Format(queueUriFormat, "test-inbox-work")).GetMessage());
-                        Assert.NotNull(queueService.Get(string.Format(queueUriFormat, "test-error")).GetMessage());
+                        Assert.Null(queueService.Get(string.Format(queueUriFormat, "test-inbox-work")).GetMessage(), "Should not have a message in queue 'test-inbox-work'.");
+                        Assert.NotNull(queueService.Get(string.Format(queueUriFormat, "test-error")).GetMessage(), "Should have a message in queue 'test-error'.");
                     }
                     else
                     {
-                        Assert.NotNull(queueService.Get(string.Format(queueUriFormat, "test-inbox-work")).GetMessage());
+                        Assert.NotNull(queueService.Get(string.Format(queueUriFormat, "test-inbox-work")).GetMessage(), "Should have a message in queue 'test-inbox-work'.");
                     }
                 }
                 else
                 {
                     if (hasErrorQueue)
                     {
-                        Assert.Null(await queueService.Get(string.Format(queueUriFormat, "test-inbox-work")).GetMessageAsync().ConfigureAwait(false));
-                        Assert.NotNull(await queueService.Get(string.Format(queueUriFormat, "test-error")).GetMessageAsync().ConfigureAwait(false));
+                        Assert.Null(await queueService.Get(string.Format(queueUriFormat, "test-inbox-work")).GetMessageAsync().ConfigureAwait(false), "Should not have a message in queue 'test-inbox-work'.");
+                        Assert.NotNull(await queueService.Get(string.Format(queueUriFormat, "test-error")).GetMessageAsync().ConfigureAwait(false), "Should have a message in queue 'test-error'.");
                     }
                     else
                     {
-                        Assert.NotNull(await queueService.Get(string.Format(queueUriFormat, "test-inbox-work")).GetMessageAsync().ConfigureAwait(false));
+                        Assert.NotNull(await queueService.Get(string.Format(queueUriFormat, "test-inbox-work")).GetMessageAsync().ConfigureAwait(false), "Should have a message in queue 'test-inbox-work'.");
                     }
                 }
             }

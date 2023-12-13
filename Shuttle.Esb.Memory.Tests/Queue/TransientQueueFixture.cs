@@ -9,25 +9,25 @@ namespace Shuttle.Esb.Memory.Tests
         [Test]
         public void Should_be_able_to_create_a_new_queue_from_a_given_uri()
         {
-            Assert.AreEqual($"transient-queue://{Environment.MachineName.ToLower()}/inputqueue", new TransientQueue(new Uri("transient-queue://./inputqueue")).Uri.ToString());
+            Assert.AreEqual($"transient-queue://{Environment.MachineName.ToLower()}/inputqueue", new TransientQueue(new Uri("transient-queue://./inputqueue"), CancellationToken.None).Uri.ToString());
         }
 
         [Test]
         public void Should_use_default_queue_name_for_empty_localpath()
         {
-            Assert.AreEqual($"transient-queue://{Environment.MachineName.ToLower()}/default", new TransientQueue(new Uri("transient-queue://.")).Uri.ToString());
+            Assert.AreEqual($"transient-queue://{Environment.MachineName.ToLower()}/default", new TransientQueue(new Uri("transient-queue://."), CancellationToken.None).Uri.ToString());
         }
 
         [Test]
         public void Should_throw_exception_when_trying_to_create_a_queue_with_incorrect_scheme()
         {
-            Assert.Throws<InvalidSchemeException>(() => _ = new TransientQueue(new Uri("sql://./inputqueue")));
+            Assert.Throws<InvalidSchemeException>(() => _ = new TransientQueue(new Uri("sql://./inputqueue"), CancellationToken.None));
         }
 
         [Test]
         public void Should_throw_exception_when_trying_to_create_a_queue_with_incorrect_format()
         {
-            Assert.Throws<UriFormatException>(() => _ = new TransientQueue(new Uri("transient-queue://notthismachine")));
+            Assert.Throws<UriFormatException>(() => _ = new TransientQueue(new Uri("transient-queue://notthismachine"), CancellationToken.None));
         }
 
         [Test]

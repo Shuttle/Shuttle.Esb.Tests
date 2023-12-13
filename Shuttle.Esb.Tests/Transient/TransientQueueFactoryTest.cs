@@ -1,5 +1,6 @@
 using System;
 using NUnit.Framework;
+using Shuttle.Core.Threading;
 
 namespace Shuttle.Esb.Tests
 {
@@ -9,7 +10,7 @@ namespace Shuttle.Esb.Tests
 		[Test]
 		public void Should_be_able_to_create_a_new_queue_from_a_given_uri()
 		{
-			Assert.NotNull(new TransientQueueFactory().Create(new Uri("transient-queue://./inputqueue")));
+			Assert.NotNull(new TransientQueueFactory(new DefaultCancellationTokenSource()).Create(new Uri("transient-queue://./inputqueue")));
 		}
 	}
 }

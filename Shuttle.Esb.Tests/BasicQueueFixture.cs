@@ -255,7 +255,7 @@ namespace Shuttle.Esb.Tests
 
             if (sync)
             {
-                var workQueue = CreateWorkQueueAsync(queueService, queueUriFormat, true, sync).GetAwaiter().GetResult();
+                var workQueue = CreateWorkQueueAsync(queueService, queueUriFormat, true, true).GetAwaiter().GetResult();
 
                 workQueue.Enqueue(new TransportMessage
                 {
@@ -268,7 +268,7 @@ namespace Shuttle.Esb.Tests
                 queueService.TryDispose();
                 queueService = services.BuildServiceProvider().CreateQueueService();
 
-                workQueue = CreateWorkQueueAsync(queueService, queueUriFormat, false, sync).GetAwaiter().GetResult();
+                workQueue = CreateWorkQueueAsync(queueService, queueUriFormat, false, true).GetAwaiter().GetResult();
 
                 var receivedMessage = workQueue.GetMessage();
 
@@ -278,7 +278,7 @@ namespace Shuttle.Esb.Tests
                 workQueue.Acknowledge(receivedMessage.AcknowledgementToken);
                 workQueue.TryDispose();
 
-                workQueue = CreateWorkQueueAsync(queueService, queueUriFormat, false, sync).GetAwaiter().GetResult();
+                workQueue = CreateWorkQueueAsync(queueService, queueUriFormat, false, true).GetAwaiter().GetResult();
 
                 Assert.IsNull(workQueue.GetMessage());
 
@@ -289,7 +289,7 @@ namespace Shuttle.Esb.Tests
             }
             else
             {
-                var workQueue = await CreateWorkQueueAsync(queueService, queueUriFormat, true, sync).ConfigureAwait(false);
+                var workQueue = await CreateWorkQueueAsync(queueService, queueUriFormat, true, false).ConfigureAwait(false);
 
                 await workQueue.EnqueueAsync(new TransportMessage
                 {
@@ -302,7 +302,7 @@ namespace Shuttle.Esb.Tests
                 await queueService.TryDisposeAsync().ConfigureAwait(false);
                 queueService = services.BuildServiceProvider().CreateQueueService();
 
-                workQueue = await CreateWorkQueueAsync(queueService, queueUriFormat, false, sync).ConfigureAwait(false);
+                workQueue = await CreateWorkQueueAsync(queueService, queueUriFormat, false, false).ConfigureAwait(false);
 
                 var receivedMessage = await workQueue.GetMessageAsync().ConfigureAwait(false);
 
@@ -312,7 +312,7 @@ namespace Shuttle.Esb.Tests
                 await workQueue.AcknowledgeAsync(receivedMessage.AcknowledgementToken).ConfigureAwait(false);
                 await workQueue.TryDisposeAsync().ConfigureAwait(false);
 
-                workQueue = await CreateWorkQueueAsync(queueService, queueUriFormat, false, sync).ConfigureAwait(false);
+                workQueue = await CreateWorkQueueAsync(queueService, queueUriFormat, false, false).ConfigureAwait(false);
 
                 Assert.IsNull(await workQueue.GetMessageAsync().ConfigureAwait(false));
 

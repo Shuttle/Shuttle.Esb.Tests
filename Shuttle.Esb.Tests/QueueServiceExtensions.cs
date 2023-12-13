@@ -81,18 +81,11 @@ namespace Shuttle.Esb.Tests
                     logger.LogInformation($"[{queue.Uri.Uri.Scheme}.MessageReleased] : queue = '{queue.Uri.QueueName}'");
                 };
 
-                args.Queue.OperationStarting += (o, e) =>
+                args.Queue.Operation += (o, e) =>
                 {
                     var queue = (IQueue)o;
 
-                    logger.LogInformation($"[{queue.Uri.Uri.Scheme}.OperationStarting] : queue = '{queue.Uri.QueueName}' / operation name = '{e.Name}'");
-                };
-
-                args.Queue.OperationCompleted += (o, e) =>
-                {
-                    var queue = (IQueue)o;
-
-                    logger.LogInformation($"[{queue.Uri.Uri.Scheme}.OperationCompleted] : queue = '{queue.Uri.QueueName}' / operation name = '{e.Name}'");
+                    logger.LogInformation($"[{queue.Uri.Uri.Scheme}.Operation] : queue = '{queue.Uri.QueueName}' / operation name = '{e.Name}'");
                 };
 
                 logger.LogInformation($"[QueueCreated] : queue = '{args.Queue.Uri.QueueName}'");
