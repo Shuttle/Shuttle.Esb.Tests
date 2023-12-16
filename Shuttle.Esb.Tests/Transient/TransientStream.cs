@@ -58,18 +58,18 @@ namespace Shuttle.Esb.Tests
         {
             if (_cancellationToken.IsCancellationRequested)
             {
-                Operation.Invoke(this, new OperationEventArgs("[create/cancelled]"));
+                Operation?.Invoke(this, new OperationEventArgs("[create/cancelled]"));
                 return;
             }
 
-            Operation.Invoke(this, new OperationEventArgs("[create/starting]"));
+            Operation?.Invoke(this, new OperationEventArgs("[create/starting]"));
 
             if (!Queues.ContainsKey(Uri.ToString()))
             {
                 Queues.Add(Uri.ToString(), new Dictionary<int, TransientMessage>());
             }
 
-            Operation.Invoke(this, new OperationEventArgs("[create/completed]"));
+            Operation?.Invoke(this, new OperationEventArgs("[create/completed]"));
         }
 
         public async Task CreateAsync()
@@ -83,18 +83,18 @@ namespace Shuttle.Esb.Tests
         {
             if (_cancellationToken.IsCancellationRequested)
             {
-                Operation.Invoke(this, new OperationEventArgs("[purge/cancelled]"));
+                Operation?.Invoke(this, new OperationEventArgs("[purge/cancelled]"));
                 return;
             }
 
-            Operation.Invoke(this, new OperationEventArgs("[purge/starting]"));
+            Operation?.Invoke(this, new OperationEventArgs("[purge/starting]"));
 
             lock (Lock)
             {
                 Queues[Uri.ToString()].Clear();
             }
 
-            Operation.Invoke(this, new OperationEventArgs("[purge/completed]"));
+            Operation?.Invoke(this, new OperationEventArgs("[purge/completed]"));
         }
 
         public async Task PurgeAsync()
@@ -111,7 +111,7 @@ namespace Shuttle.Esb.Tests
         {
             if (_cancellationToken.IsCancellationRequested)
             {
-                Operation.Invoke(this, new OperationEventArgs("[is-empty/cancelled]"));
+                Operation?.Invoke(this, new OperationEventArgs("[is-empty/cancelled]"));
                 return true;
             }
 
@@ -130,7 +130,7 @@ namespace Shuttle.Esb.Tests
         {
             if (_cancellationToken.IsCancellationRequested)
             {
-                Operation.Invoke(this, new OperationEventArgs("[enqueue/cancelled]"));
+                Operation?.Invoke(this, new OperationEventArgs("[enqueue/cancelled]"));
                 return;
             }
 
@@ -140,6 +140,8 @@ namespace Shuttle.Esb.Tests
 
                 Queues[Uri.ToString()].Add(_itemId, new TransientMessage(_itemId, transportMessage, stream.Copy()));
             }
+
+            MessageEnqueued?.Invoke(this, new MessageEnqueuedEventArgs(transportMessage, stream));
         }
 
         public async Task EnqueueAsync(TransportMessage transportMessage, Stream stream)
@@ -153,7 +155,7 @@ namespace Shuttle.Esb.Tests
         {
             if (_cancellationToken.IsCancellationRequested)
             {
-                Operation.Invoke(this, new OperationEventArgs("[get-message/cancelled]"));
+                Operation?.Invoke(this, new OperationEventArgs("[get-message/cancelled]"));
                 return null;
             }
 
@@ -182,6 +184,11 @@ namespace Shuttle.Esb.Tests
                 }
             }
 
+            if (result != null)
+            {
+                MessageReceived?.Invoke(this, new MessageReceivedEventArgs(result));
+            }
+
             return result;
         }
 
@@ -194,7 +201,7 @@ namespace Shuttle.Esb.Tests
         {
             if (_cancellationToken.IsCancellationRequested)
             {
-                Operation.Invoke(this, new OperationEventArgs("[acknowledge/cancelled]"));
+                Operation?.Invoke(this, new OperationEventArgs("[acknowledge/cancelled]"));
                 return;
             }
 
@@ -216,6 +223,8 @@ namespace Shuttle.Esb.Tests
 
                 _unacknowledgedMessageIds.Remove(itemId);
             }
+
+            MessageAcknowledged?.Invoke(this, new MessageAcknowledgedEventArgs(acknowledgementToken));
         }
 
         public async Task AcknowledgeAsync(object acknowledgementToken)
@@ -229,7 +238,7 @@ namespace Shuttle.Esb.Tests
         {
             if (_cancellationToken.IsCancellationRequested)
             {
-                Operation.Invoke(this, new OperationEventArgs("[release/cancelled]"));
+                Operation?.Invoke(this, new OperationEventArgs("[release/cancelled]"));
                 return;
             }
 
@@ -246,6 +255,8 @@ namespace Shuttle.Esb.Tests
 
                 _unacknowledgedMessageIds.Remove(itemId);
             }
+
+            MessageReleased?.Invoke(this, new MessageReleasedEventArgs(acknowledgementToken));
         }
 
         public async Task ReleaseAsync(object acknowledgementToken)
@@ -255,24 +266,10 @@ namespace Shuttle.Esb.Tests
             await Task.CompletedTask.ConfigureAwait(false);
         }
 
-        public event EventHandler<MessageEnqueuedEventArgs> MessageEnqueued = delegate
-        {
-        };
-
-        public event EventHandler<MessageAcknowledgedEventArgs> MessageAcknowledged = delegate
-        {
-        };
-
-        public event EventHandler<MessageReleasedEventArgs> MessageReleased = delegate
-        {
-        };
-
-        public event EventHandler<MessageReceivedEventArgs> MessageReceived = delegate
-        {
-        };
-
-        public event EventHandler<OperationEventArgs> Operation = delegate
-        {
-        };
+        public event EventHandler<MessageEnqueuedEventArgs> MessageEnqueued;
+        public event EventHandler<MessageAcknowledgedEventArgs> MessageAcknowledged;
+        public event EventHandler<MessageReleasedEventArgs> MessageReleased;
+        public event EventHandler<MessageReceivedEventArgs> MessageReceived;
+        public event EventHandler<OperationEventArgs> Operation;
     }
 }
