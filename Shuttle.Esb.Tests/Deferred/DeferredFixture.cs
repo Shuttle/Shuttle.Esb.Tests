@@ -200,12 +200,16 @@ namespace Shuttle.Esb.Tests
 
                 if (sync)
                 {
+                    serviceBus.Stop();
+
                     Assert.That(serviceBusConfiguration.Inbox.ErrorQueue.IsEmpty(), Is.True);
                     Assert.That(serviceBusConfiguration.Inbox.DeferredQueue.GetMessage(), Is.Null);
                     Assert.That(serviceBusConfiguration.Inbox.WorkQueue.GetMessage(), Is.Null);
                 }
                 else
                 {
+                    await serviceBus.StopAsync().ConfigureAwait(false);
+
                     Assert.That(await serviceBusConfiguration.Inbox.ErrorQueue.IsEmptyAsync().ConfigureAwait(false), Is.True);
                     Assert.That(await serviceBusConfiguration.Inbox.DeferredQueue.GetMessageAsync().ConfigureAwait(false), Is.Null);
                     Assert.That(await serviceBusConfiguration.Inbox.WorkQueue.GetMessageAsync().ConfigureAwait(false), Is.Null);

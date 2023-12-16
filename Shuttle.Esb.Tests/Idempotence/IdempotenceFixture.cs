@@ -216,6 +216,15 @@ namespace Shuttle.Esb.Tests
                     await Task.Delay(5).ConfigureAwait(false);
                 }
 
+                if (sync)
+                {
+                    serviceBus.Stop();
+                }
+                else
+                {
+                    await serviceBus.StopAsync().ConfigureAwait(false);
+                }
+
                 Assert.IsNull(serviceBusConfiguration.Inbox.ErrorQueue.GetMessage());
                 Assert.IsNull(serviceBusConfiguration.Inbox.WorkQueue.GetMessage());
 

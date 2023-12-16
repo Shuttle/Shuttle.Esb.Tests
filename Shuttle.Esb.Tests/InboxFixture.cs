@@ -520,6 +520,8 @@ namespace Shuttle.Esb.Tests
 
                 if (sync)
                 {
+                    serviceBus.Stop();
+
                     if (hasErrorQueue)
                     {
                         Assert.Null(queueService.Get(string.Format(queueUriFormat, "test-inbox-work")).GetMessage(), "Should not have a message in queue 'test-inbox-work'.");
@@ -532,6 +534,8 @@ namespace Shuttle.Esb.Tests
                 }
                 else
                 {
+                    await serviceBus.StopAsync().ConfigureAwait(false);
+
                     if (hasErrorQueue)
                     {
                         Assert.Null(await queueService.Get(string.Format(queueUriFormat, "test-inbox-work")).GetMessageAsync().ConfigureAwait(false), "Should not have a message in queue 'test-inbox-work'.");
