@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using Shuttle.Core.Contract;
 using Shuttle.Core.Streams;
@@ -10,6 +11,7 @@ namespace Shuttle.Esb.Tests
 {
     public class TransientStream : IQueue, ICreateQueue, IPurgeQueue
     {
+        private readonly CancellationToken _cancellationToken;
         internal const string Scheme = "transient-stream";
 
         private static readonly object Lock = new object();
@@ -18,7 +20,7 @@ namespace Shuttle.Esb.Tests
 
         private readonly List<int> _unacknowledgedMessageIds = new List<int>();
 
-        public TransientStream(Uri uri)
+        public TransientStream(Uri uri, CancellationToken cancellationToken)
         {
             Guard.AgainstNull(uri, nameof(uri));
 
@@ -26,6 +28,8 @@ namespace Shuttle.Esb.Tests
             {
                 throw new InvalidSchemeException(Scheme, uri.ToString());
             }
+
+            _cancellationToken = cancellationToken;
 
             var builder = new UriBuilder(uri);
 
@@ -52,14 +56,20 @@ namespace Shuttle.Esb.Tests
 
         public void Create()
         {
-            Operation.Invoke(this, new OperationEventArgs("[starting] : Create"));
+            if (_cancellationToken.IsCancellationRequested)
+            {
+                Operation.Invoke(this, new OperationEventArgs("[create/cancelled]"));
+                return;
+            }
+
+            Operation.Invoke(this, new OperationEventArgs("[create/starting]"));
 
             if (!Queues.ContainsKey(Uri.ToString()))
             {
                 Queues.Add(Uri.ToString(), new Dictionary<int, TransientMessage>());
             }
 
-            Operation.Invoke(this, new OperationEventArgs("[completed] : Create"));
+            Operation.Invoke(this, new OperationEventArgs("[create/completed]"));
         }
 
         public async Task CreateAsync()
@@ -71,14 +81,20 @@ namespace Shuttle.Esb.Tests
 
         public void Purge()
         {
-            Operation.Invoke(this, new OperationEventArgs("[starting] : Purge"));
+            if (_cancellationToken.IsCancellationRequested)
+            {
+                Operation.Invoke(this, new OperationEventArgs("[purge/cancelled]"));
+                return;
+            }
+
+            Operation.Invoke(this, new OperationEventArgs("[purge/starting]"));
 
             lock (Lock)
             {
                 Queues[Uri.ToString()].Clear();
             }
 
-            Operation.Invoke(this, new OperationEventArgs("[completed] : Purge"));
+            Operation.Invoke(this, new OperationEventArgs("[purge/completed]"));
         }
 
         public async Task PurgeAsync()
@@ -93,6 +109,12 @@ namespace Shuttle.Esb.Tests
 
         public bool IsEmpty()
         {
+            if (_cancellationToken.IsCancellationRequested)
+            {
+                Operation.Invoke(this, new OperationEventArgs("[is-empty/cancelled]"));
+                return true;
+            }
+
             lock (Lock)
             {
                 return Queues[Uri.ToString()].Count == 0;
@@ -106,6 +128,12 @@ namespace Shuttle.Esb.Tests
 
         public void Enqueue(TransportMessage transportMessage, Stream stream)
         {
+            if (_cancellationToken.IsCancellationRequested)
+            {
+                Operation.Invoke(this, new OperationEventArgs("[enqueue/cancelled]"));
+                return;
+            }
+
             lock (Lock)
             {
                 _itemId++;
@@ -123,6 +151,12 @@ namespace Shuttle.Esb.Tests
 
         public ReceivedMessage GetMessage()
         {
+            if (_cancellationToken.IsCancellationRequested)
+            {
+                Operation.Invoke(this, new OperationEventArgs("[get-message/cancelled]"));
+                return null;
+            }
+
             ReceivedMessage result = null;
 
             lock (Lock)
@@ -158,6 +192,12 @@ namespace Shuttle.Esb.Tests
 
         public void Acknowledge(object acknowledgementToken)
         {
+            if (_cancellationToken.IsCancellationRequested)
+            {
+                Operation.Invoke(this, new OperationEventArgs("[acknowledge/cancelled]"));
+                return;
+            }
+
             var itemId = (int)acknowledgementToken;
 
             lock (Lock)
@@ -187,6 +227,12 @@ namespace Shuttle.Esb.Tests
 
         public void Release(object acknowledgementToken)
         {
+            if (_cancellationToken.IsCancellationRequested)
+            {
+                Operation.Invoke(this, new OperationEventArgs("[release/cancelled]"));
+                return;
+            }
+
             var itemId = (int)acknowledgementToken;
 
             lock (Lock)

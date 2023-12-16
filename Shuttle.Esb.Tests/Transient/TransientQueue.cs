@@ -58,10 +58,11 @@ namespace Shuttle.Esb.Tests
         {
             if (_cancellationToken.IsCancellationRequested)
             {
+                Operation.Invoke(this, new OperationEventArgs("[create/cancelled]"));
                 return;
             }
 
-            Operation.Invoke(this, new OperationEventArgs("[starting] : Create"));
+            Operation.Invoke(this, new OperationEventArgs("[create/starting]"));
 
             lock (Lock)
             {
@@ -71,7 +72,7 @@ namespace Shuttle.Esb.Tests
                 }
             }
 
-            Operation.Invoke(this, new OperationEventArgs("[completed] : Create"));
+            Operation.Invoke(this, new OperationEventArgs("[create/completed]"));
         }
 
         public async Task CreateAsync()
@@ -85,17 +86,18 @@ namespace Shuttle.Esb.Tests
         {
             if (_cancellationToken.IsCancellationRequested)
             {
+                Operation.Invoke(this, new OperationEventArgs("[purge/cancelled]"));
                 return;
             }
 
-            Operation.Invoke(this, new OperationEventArgs("[starting] : Purge"));
+            Operation.Invoke(this, new OperationEventArgs("[purge/starting]"));
 
             lock (Lock)
             {
                 Queues[Uri.ToString()].Clear();
             }
 
-            Operation.Invoke(this, new OperationEventArgs("[completed] : Purge"));
+            Operation.Invoke(this, new OperationEventArgs("[purge/completed]"));
         }
 
         public async Task PurgeAsync()
@@ -112,6 +114,7 @@ namespace Shuttle.Esb.Tests
         {
             if (_cancellationToken.IsCancellationRequested)
             {
+                Operation.Invoke(this, new OperationEventArgs("[is-empty/cancelled]"));
                 return true;
             }
 
@@ -130,6 +133,7 @@ namespace Shuttle.Esb.Tests
         {
             if (_cancellationToken.IsCancellationRequested)
             {
+                Operation.Invoke(this, new OperationEventArgs("[enqueue/cancelled]"));
                 return;
             }
 
@@ -154,6 +158,7 @@ namespace Shuttle.Esb.Tests
 
             if (_cancellationToken.IsCancellationRequested)
             {
+                Operation.Invoke(this, new OperationEventArgs("[get-message/cancelled]"));
                 return result;
             }
             
@@ -200,6 +205,7 @@ namespace Shuttle.Esb.Tests
         {
             if (_cancellationToken.IsCancellationRequested)
             {
+                Operation.Invoke(this, new OperationEventArgs("[acknowledge/cancelled]"));
                 return;
             }
 
@@ -234,6 +240,7 @@ namespace Shuttle.Esb.Tests
         {
             if (_cancellationToken.IsCancellationRequested)
             {
+                Operation.Invoke(this, new OperationEventArgs("[release/cancelled]"));
                 return;
             }
 
