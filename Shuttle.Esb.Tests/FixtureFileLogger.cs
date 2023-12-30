@@ -6,6 +6,7 @@ namespace Shuttle.Esb.Tests
 {
     public class FixtureFileLogger : ILogger, IDisposable
     {
+        private static readonly object Lock = new object();
         private readonly StreamWriter _stream;
 
         public FixtureFileLogger(string name)
@@ -23,19 +24,28 @@ namespace Shuttle.Esb.Tests
             _stream = new StreamWriter(path);
         }
 
-        public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception exception, Func<TState, Exception, string> formatter)
-        {
-            _stream.WriteLine($"{DateTime.Now:O} - {formatter(state, exception)}");
-            _stream.Flush();
-        }
-
-        public bool IsEnabled(LogLevel logLevel) => true;
-
-        public IDisposable BeginScope<TState>(TState state) where TState : notnull => default!;
-
         public void Dispose()
         {
             _stream?.Dispose();
+        }
+
+        public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception exception, Func<TState, Exception, string> formatter)
+        {
+            lock (Lock)
+            {
+                _stream.WriteLine($"{DateTime.Now:O} - {formatter(state, exception)}");
+                _stream.Flush();
+            }
+        }
+
+        public bool IsEnabled(LogLevel logLevel)
+        {
+            return true;
+        }
+
+        public IDisposable BeginScope<TState>(TState state) where TState : notnull
+        {
+            return default!;
         }
     }
 }

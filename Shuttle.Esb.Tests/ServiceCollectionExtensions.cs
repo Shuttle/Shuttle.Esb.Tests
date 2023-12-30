@@ -32,6 +32,7 @@ namespace Shuttle.Esb.Tests
             Guard.AgainstNull(services, nameof(services));
 
             services.TryAddEnumerable(ServiceDescriptor.Singleton<ILoggerProvider>(new FixtureFileLoggerProvider(Guard.AgainstNullOrEmptyString(test, nameof(test)))));
+            services.TryAddEnumerable(ServiceDescriptor.Singleton<ILoggerProvider, ConsoleLoggerProvider>());
 
             services.AddServiceBusLogging(builder =>
             {
@@ -45,8 +46,6 @@ namespace Shuttle.Esb.Tests
                 builder.Options.TransportMessageDeferred = true;
                 builder.Options.Threading = true;
             });
-
-            services.TryAddEnumerable(ServiceDescriptor.Singleton<ILoggerProvider, ConsoleLoggerProvider>());
 
             services.AddLogging(builder =>
             {
