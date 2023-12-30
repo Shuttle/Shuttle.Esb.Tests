@@ -43,12 +43,14 @@ namespace Shuttle.Esb.Tests
                 builder.Options.AddPipelineEventType<OnAfterHandleMessage>();
                 builder.Options.QueueEvents = true;
                 builder.Options.TransportMessageDeferred = true;
+                builder.Options.Threading = true;
             });
+
+            services.TryAddEnumerable(ServiceDescriptor.Singleton<ILoggerProvider, ConsoleLoggerProvider>());
 
             services.AddLogging(builder =>
             {
                 builder.SetMinimumLevel(LogLevel.Trace);
-                builder.AddConsole();
             });
 
             return services;

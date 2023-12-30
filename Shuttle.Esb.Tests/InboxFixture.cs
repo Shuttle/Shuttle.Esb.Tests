@@ -192,9 +192,11 @@ namespace Shuttle.Esb.Tests
             var serviceBusConfiguration = serviceProvider.GetRequiredService<IServiceBusConfiguration>();
             var serializer = serviceProvider.GetRequiredService<ISerializer>();
             var feature = serviceProvider.GetRequiredService<InboxConcurrencyFeature>();
-
+            var logger = serviceProvider.GetLogger<InboxFixture>();
             var queueService = serviceProvider.CreateQueueService();
             var serviceBus = serviceProvider.GetRequiredService<IServiceBus>();
+
+            logger.LogInformation($"[TestInboxConcurrency] : thread count = '{threadCount}'");
 
             try
             {
@@ -208,6 +210,8 @@ namespace Shuttle.Esb.Tests
                 }
 
                 Assert.That(serviceBusConfiguration.Inbox.WorkQueue.IsStream, Is.False, "This test cannot be applied to streams.");
+
+                logger.LogInformation($"[TestInboxConcurrency] : enqueuing '{threadCount}' messages");
 
                 for (var i = 0; i < threadCount; i++)
                 {
@@ -237,6 +241,11 @@ namespace Shuttle.Esb.Tests
 
                 var idleThreads = new List<int>();
 
+                threadActivity.ThreadWorking += (sender, args) =>
+                {
+                    logger.LogInformation($"[TestInboxConcurrency] : pipeline = '{args.Pipeline.GetType().FullName}' / managed thread id '{Thread.CurrentThread.ManagedThreadId}' is performing work");
+                };
+
                 threadActivity.ThreadWaiting += (sender, args) =>
                 {
                     lock (padlock)
@@ -246,9 +255,13 @@ namespace Shuttle.Esb.Tests
                             return;
                         }
 
+                        logger.LogInformation($"[TestInboxConcurrency] : pipeline = '{args.Pipeline.GetType().FullName}' / managed thread id '{Thread.CurrentThread.ManagedThreadId}' is idle");
+
                         idleThreads.Add(Thread.CurrentThread.ManagedThreadId);
                     }
                 };
+
+                logger.LogInformation($"[TestInboxConcurrency] : starting service bus");
 
                 if (sync)
                 {
@@ -259,10 +272,18 @@ namespace Shuttle.Esb.Tests
                     await serviceBus.StartAsync().ConfigureAwait(false);
                 }
 
-                while (idleThreads.Count < threadCount)
+                var timeout = DateTime.Now.AddSeconds(5);
+                var timedOut = false;
+
+                logger.LogInformation($"[TestInboxConcurrency] : waiting till {timeout:O} for all threads to become idle");
+
+                while (idleThreads.Count < threadCount && !timedOut)
                 {
                     await Task.Delay(30).ConfigureAwait(false);
+                    timedOut = DateTime.Now >= timeout;
                 }
+
+                Assert.That(timedOut, Is.False, $"[TIMEOUT] : All threads did not become idle before {timeout:O} / idle threads = {idleThreads.Count}");
             }
             finally
             {

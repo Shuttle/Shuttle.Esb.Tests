@@ -32,7 +32,6 @@ namespace Shuttle.Esb.Tests
             if (sync)
             {
                 Task.Delay(500).GetAwaiter().GetResult();
-                ;
             }
             else
             {
