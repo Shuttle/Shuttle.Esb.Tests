@@ -36,12 +36,6 @@ namespace Shuttle.Esb.Tests
 
             services.AddServiceBusLogging(builder =>
             {
-                builder.Options.AddPipelineEventType<OnAbortPipeline>();
-                builder.Options.AddPipelineEventType<OnPipelineException>();
-                builder.Options.AddPipelineEventType<OnAfterGetMessage>();
-                builder.Options.AddPipelineEventType<OnAfterDeserializeTransportMessage>();
-                builder.Options.AddPipelineEventType<OnHandleMessage>();
-                builder.Options.AddPipelineEventType<OnAfterHandleMessage>();
                 builder.Options.QueueEvents = true;
                 builder.Options.TransportMessageDeferred = true;
                 builder.Options.Threading = true;
