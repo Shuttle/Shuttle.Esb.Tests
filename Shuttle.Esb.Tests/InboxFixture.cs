@@ -239,25 +239,25 @@ namespace Shuttle.Esb.Tests
                     }
                 }
 
-                var idleThreads = new List<int>();
+                var idlePipelines = new List<Guid>();
 
                 threadActivity.ThreadWorking += (sender, args) =>
                 {
-                    logger.LogInformation($"[TestInboxConcurrency] : pipeline = '{args.Pipeline.GetType().FullName}' / managed thread id '{Thread.CurrentThread.ManagedThreadId}' is performing work");
+                    logger.LogInformation($"[TestInboxConcurrency] : pipeline = '{args.Pipeline.GetType().FullName}' / pipeline id '{args.Pipeline.Id}' is performing work");
                 };
 
                 threadActivity.ThreadWaiting += (sender, args) =>
                 {
                     lock (padlock)
                     {
-                        if (idleThreads.Contains(Thread.CurrentThread.ManagedThreadId))
+                        if (idlePipelines.Contains(args.Pipeline.Id))
                         {
                             return;
                         }
 
-                        logger.LogInformation($"[TestInboxConcurrency] : pipeline = '{args.Pipeline.GetType().FullName}' / managed thread id '{Thread.CurrentThread.ManagedThreadId}' is idle");
+                        logger.LogInformation($"[TestInboxConcurrency] : pipeline = '{args.Pipeline.GetType().FullName}' / pipeline id '{args.Pipeline.Id}' is idle");
 
-                        idleThreads.Add(Thread.CurrentThread.ManagedThreadId);
+                        idlePipelines.Add(args.Pipeline.Id);
                     }
                 };
 
@@ -275,15 +275,15 @@ namespace Shuttle.Esb.Tests
                 var timeout = DateTime.Now.AddSeconds(5);
                 var timedOut = false;
 
-                logger.LogInformation($"[TestInboxConcurrency] : waiting till {timeout:O} for all threads to become idle");
+                logger.LogInformation($"[TestInboxConcurrency] : waiting till {timeout:O} for all pipelines to become idle");
 
-                while (idleThreads.Count < threadCount && !timedOut)
+                while (idlePipelines.Count < threadCount && !timedOut)
                 {
                     await Task.Delay(30).ConfigureAwait(false);
                     timedOut = DateTime.Now >= timeout;
                 }
 
-                Assert.That(timedOut, Is.False, $"[TIMEOUT] : All threads did not become idle before {timeout:O} / idle threads = {idleThreads.Count}");
+                Assert.That(timedOut, Is.False, $"[TIMEOUT] : All pipelines did not become idle before {timeout:O} / idle threads = {idlePipelines.Count}");
             }
             finally
             {
