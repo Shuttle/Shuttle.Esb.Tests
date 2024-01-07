@@ -6,6 +6,7 @@ namespace Shuttle.Esb.Tests
     public class ConsoleLogger : ILogger
     {
         private static readonly object Lock = new object();
+        private DateTime _previousLogDateTime = DateTime.MinValue;
 
         public IDisposable BeginScope<TState>(TState state)
         {
@@ -21,7 +22,11 @@ namespace Shuttle.Esb.Tests
         {
             lock (Lock)
             {
-                Console.WriteLine($"{DateTime.Now:O} : {formatter(state, exception)}");
+                var now = DateTime.Now;
+
+                Console.WriteLine($"{now:HH:mm:ss.fffffff} / {(_previousLogDateTime > DateTime.MinValue ? $"{(now - _previousLogDateTime):fffffff}" : "0000000")} - {formatter(state, exception)}");
+
+                _previousLogDateTime = now;
             }
         }
     }

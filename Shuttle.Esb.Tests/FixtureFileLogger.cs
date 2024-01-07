@@ -8,6 +8,7 @@ namespace Shuttle.Esb.Tests
     {
         private static readonly object Lock = new object();
         private readonly StreamWriter _stream;
+        private DateTime _previousLogDateTime = DateTime.MinValue;
 
         public FixtureFileLogger(string name)
         {
@@ -33,8 +34,12 @@ namespace Shuttle.Esb.Tests
         {
             lock (Lock)
             {
-                _stream.WriteLine($"{DateTime.Now:O} - {formatter(state, exception)}");
+                var now = DateTime.Now;
+
+                _stream.WriteLine($"{now:HH:mm:ss.fffffff} / {(_previousLogDateTime > DateTime.MinValue ? $"{(now - _previousLogDateTime):fffffff}" : "0000000")} - {formatter(state, exception)}");
                 _stream.Flush();
+
+                _previousLogDateTime = now;
             }
         }
 
