@@ -22,11 +22,11 @@ namespace Shuttle.Esb.Tests
 			_logger.LogInformation($"[SimpleCommandHandler:SimpleCommand (thread {Thread.CurrentThread.ManagedThreadId})] : name = '{context.Message.Name}' / context = '{context.Message.Context}'");
 		}
 
-		public Task ProcessMessageAsync(IHandlerContext<SimpleCommand> context)
+		public async Task ProcessMessageAsync(IHandlerContext<SimpleCommand> context)
 		{
 			ProcessMessage(context);
 
-			return Task.CompletedTask;
+			await Task.CompletedTask.ConfigureAwait(false);
         }
     }
 }

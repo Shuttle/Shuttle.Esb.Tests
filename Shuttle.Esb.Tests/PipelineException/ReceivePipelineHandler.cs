@@ -4,9 +4,9 @@ namespace Shuttle.Esb.Tests
 {
 	public class ReceivePipelineHandler : IMessageHandler<ReceivePipelineCommand>
 	{
-		public Task ProcessMessageAsync(IHandlerContext<ReceivePipelineCommand> context)
+		public async Task ProcessMessageAsync(IHandlerContext<ReceivePipelineCommand> context)
 		{
-			return Task.CompletedTask;
+			await Task.CompletedTask.ConfigureAwait(false);
 		}
 
 		public void ProcessMessage(IHandlerContext<ReceivePipelineCommand> context)

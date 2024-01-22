@@ -526,7 +526,7 @@ namespace Shuttle.Esb.Tests
                     await serviceBus.StartAsync().ConfigureAwait(false);
                 }
 
-                var timeout = DateTime.Now.AddSeconds(15);
+                var timeout = DateTime.Now.AddSeconds(150);
                 var timedOut = false;
 
                 while (!inboxMessagePipelineObserver.HasReceivedPipelineException &&

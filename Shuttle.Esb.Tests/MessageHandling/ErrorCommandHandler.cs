@@ -7,11 +7,11 @@ namespace Shuttle.Esb.Tests
 		IMessageHandler<ErrorCommand>,
 		IAsyncMessageHandler<ErrorCommand>
 	{
-		public Task ProcessMessageAsync(IHandlerContext<ErrorCommand> context)
+		public async Task ProcessMessageAsync(IHandlerContext<ErrorCommand> context)
 		{
 			ProcessMessage(context);
 
-			return Task.CompletedTask;
+			await Task.CompletedTask.ConfigureAwait(false);
 		}
 
 		public void ProcessMessage(IHandlerContext<ErrorCommand> context)
