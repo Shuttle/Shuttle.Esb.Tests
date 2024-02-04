@@ -41,7 +41,7 @@ namespace Shuttle.Esb.Tests
             }
         }
 
-        private ServiceBusOptions ConfigureServices(IServiceCollection services, string test, int threadCount, bool isTransactional, string queueUriFormat)
+        private void ConfigureServices(IServiceCollection services, string test, int threadCount, bool isTransactional, string queueUriFormat)
         {
             Guard.AgainstNull(services, nameof(services));
 
@@ -65,11 +65,10 @@ namespace Shuttle.Esb.Tests
             services.AddServiceBus(builder =>
             {
                 builder.Options = serviceBusOptions;
+                builder.SuppressHostedService = true;
             });
 
             services.ConfigureLogging(test);
-
-            return serviceBusOptions;
         }
 
         protected void TestIdempotenceProcessing(IServiceCollection services, string queueUriFormat, bool isTransactional, bool enqueueUniqueMessages)
