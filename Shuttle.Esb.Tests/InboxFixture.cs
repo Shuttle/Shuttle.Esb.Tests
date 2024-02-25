@@ -128,7 +128,7 @@ namespace Shuttle.Esb.Tests
             }
         }
 
-        private ServiceBusOptions ConfigureServices(IServiceCollection services, string test, bool hasErrorQueue, int threadCount, bool isTransactional, string queueUriFormat, TimeSpan durationToSleepWhenIdle)
+        private ServiceBusOptions ConfigureServices(IServiceCollection services, string test, bool hasErrorQueue, int threadCount, bool isTransactional, string queueUriFormat, TimeSpan durationToSleepWhenIdle, bool sync)
         {
             Guard.AgainstNull(services, nameof(services));
 
@@ -139,6 +139,7 @@ namespace Shuttle.Esb.Tests
 
             var serviceBusOptions = new ServiceBusOptions
             {
+                Asynchronous = !sync,
                 Inbox = new InboxOptions
                 {
                     WorkQueueUri = string.Format(queueUriFormat, "test-inbox-work"),
@@ -178,7 +179,7 @@ namespace Shuttle.Esb.Tests
 
             var padlock = new object();
 
-            ConfigureServices(services, nameof(TestInboxConcurrencyAsync), true, threadCount, isTransactional, queueUriFormat, TimeSpan.FromMilliseconds(25));
+            ConfigureServices(services, nameof(TestInboxConcurrencyAsync), true, threadCount, isTransactional, queueUriFormat, TimeSpan.FromMilliseconds(25), sync);
 
             services.AddSingleton<InboxConcurrencyFeature>();
 
@@ -324,6 +325,7 @@ namespace Shuttle.Esb.Tests
         {
             var serviceBusOptions = new ServiceBusOptions
             {
+                Asynchronous = !sync,
                 Inbox = new InboxOptions
                 {
                     WorkQueueUri = string.Format(queueUriFormat, "test-inbox-work"),
@@ -450,7 +452,7 @@ namespace Shuttle.Esb.Tests
 
         private async Task TestInboxErrorAsync(IServiceCollection services, string queueUriFormat, bool hasErrorQueue, bool isTransactional, bool sync)
         {
-            ConfigureServices(services, nameof(TestInboxErrorAsync), hasErrorQueue, 1, isTransactional, queueUriFormat, TimeSpan.FromMilliseconds(25));
+            ConfigureServices(services, nameof(TestInboxErrorAsync), hasErrorQueue, 1, isTransactional, queueUriFormat, TimeSpan.FromMilliseconds(25), sync);
 
             var serviceProvider = sync
                 ? services.BuildServiceProvider().StartHostedServices()
@@ -715,7 +717,7 @@ namespace Shuttle.Esb.Tests
                 threadCount = 1;
             }
 
-            ConfigureServices(services, nameof(TestInboxThroughputAsync), true, threadCount, isTransactional, queueUriFormat, TimeSpan.FromMilliseconds(25));
+            ConfigureServices(services, nameof(TestInboxThroughputAsync), true, threadCount, isTransactional, queueUriFormat, TimeSpan.FromMilliseconds(25), sync);
 
             services.AddSingleton<ProcessorThreadObserver, ProcessorThreadObserver>();
 

@@ -126,6 +126,7 @@ namespace Shuttle.Esb.Tests
             {
                 builder.Options = new ServiceBusOptions
                 {
+                    Asynchronous = !sync,
                     Outbox =
                         new OutboxOptions
                         {

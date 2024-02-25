@@ -48,7 +48,7 @@ namespace Shuttle.Esb.Tests
             }
         }
 
-        private void ConfigureServices(IServiceCollection services, string test, int threadCount, bool isTransactional, string queueUriFormat)
+        private void ConfigureServices(IServiceCollection services, string test, int threadCount, bool isTransactional, string queueUriFormat, bool sync)
         {
             Guard.AgainstNull(services, nameof(services));
 
@@ -57,33 +57,27 @@ namespace Shuttle.Esb.Tests
                 builder.Options.Enabled = isTransactional;
             });
 
-            var serviceBusOptions = GetServiceBusOptions(threadCount, queueUriFormat);
-
             services.AddServiceBus(builder =>
             {
-                builder.Options = serviceBusOptions;
+                builder.Options = new ServiceBusOptions
+                {
+                    Asynchronous = !sync,
+                    Inbox = new InboxOptions
+                    {
+                        WorkQueueUri = string.Format(queueUriFormat, "test-inbox-work"),
+                        DeferredQueueUri = string.Format(queueUriFormat, "test-inbox-deferred"),
+                        ErrorQueueUri = string.Format(queueUriFormat, "test-error"),
+                        DurationToSleepWhenIdle = new List<TimeSpan> { TimeSpan.FromMilliseconds(25) },
+                        DurationToIgnoreOnFailure = new List<TimeSpan> { TimeSpan.FromMilliseconds(25) },
+                        ThreadCount = threadCount,
+                        DeferredMessageProcessorResetInterval = TimeSpan.FromMilliseconds(25),
+                        DeferredMessageProcessorWaitInterval = TimeSpan.FromMilliseconds(25)
+                    }
+                };
                 builder.SuppressHostedService = true;
             });
 
             services.ConfigureLogging(test);
-        }
-
-        private ServiceBusOptions GetServiceBusOptions(int threadCount, string queueUriFormat)
-        {
-            return new ServiceBusOptions
-            {
-                Inbox = new InboxOptions
-                {
-                    WorkQueueUri = string.Format(queueUriFormat, "test-inbox-work"),
-                    DeferredQueueUri = string.Format(queueUriFormat, "test-inbox-deferred"),
-                    ErrorQueueUri = string.Format(queueUriFormat, "test-error"),
-                    DurationToSleepWhenIdle = new List<TimeSpan> { TimeSpan.FromMilliseconds(25) },
-                    DurationToIgnoreOnFailure = new List<TimeSpan> { TimeSpan.FromMilliseconds(25) },
-                    ThreadCount = threadCount,
-                    DeferredMessageProcessorResetInterval = TimeSpan.FromMilliseconds(25),
-                    DeferredMessageProcessorWaitInterval = TimeSpan.FromMilliseconds(25)
-                }
-            };
         }
 
         protected void TestDeferredProcessing(IServiceCollection services, string queueUriFormat, bool isTransactional)
@@ -110,7 +104,7 @@ namespace Shuttle.Esb.Tests
 
             services.AddSingleton<DeferredMessageFeature>();
 
-            ConfigureServices(services, nameof(TestDeferredProcessingAsync), 1, isTransactional, queueUriFormat);
+            ConfigureServices(services, nameof(TestDeferredProcessingAsync), 1, isTransactional, queueUriFormat, sync);
 
             var serviceProvider = sync
                 ? services.BuildServiceProvider().StartHostedServices()

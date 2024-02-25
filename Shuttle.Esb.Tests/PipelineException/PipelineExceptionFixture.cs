@@ -25,6 +25,7 @@ namespace Shuttle.Esb.Tests
         {
             var serviceBusOptions = new ServiceBusOptions
             {
+                Asynchronous = !sync,
                 Inbox = new InboxOptions
                 {
                     WorkQueueUri = string.Format(queueUriFormat, "test-inbox-work"),

@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.IO;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.DependencyInjection;
 using NUnit.Framework;
@@ -13,7 +14,7 @@ namespace Shuttle.Esb.Tests
 {
     public class BasicQueueFixture : IntegrationFixture
     {
-        private void ConfigureServices(IServiceCollection services, string test, int threadCount, bool isTransactional, string queueUriFormat)
+        private void ConfigureServices(IServiceCollection services, string test, int threadCount, bool isTransactional, string queueUriFormat, bool sync)
         {
             Guard.AgainstNull(services, nameof(services));
 
@@ -26,6 +27,7 @@ namespace Shuttle.Esb.Tests
             {
                 builder.Options = new ServiceBusOptions
                 {
+                    Asynchronous = !sync,
                     Inbox = new InboxOptions
                     {
                         WorkQueueUri = string.Format(queueUriFormat, "test-inbox-work"),
@@ -79,7 +81,7 @@ namespace Shuttle.Esb.Tests
         {
             Guard.AgainstNull(services, nameof(services));
 
-            ConfigureServices(services, nameof(TestReleaseMessageAsync), 1, false, queueUriFormat);
+            ConfigureServices(services, nameof(TestReleaseMessageAsync), 1, false, queueUriFormat, sync);
 
             var serviceProvider = services.BuildServiceProvider();
             var queueService = serviceProvider.CreateQueueService();
@@ -163,7 +165,7 @@ namespace Shuttle.Esb.Tests
         {
             Guard.AgainstNull(services, nameof(services));
 
-            ConfigureServices(services, nameof(TestSimpleEnqueueAndGetMessageAsync), 1, false, queueUriFormat);
+            ConfigureServices(services, nameof(TestSimpleEnqueueAndGetMessageAsync), 1, false, queueUriFormat, sync);
 
             var serviceProvider = services.BuildServiceProvider();
             var queueService = serviceProvider.CreateQueueService();
@@ -249,7 +251,7 @@ namespace Shuttle.Esb.Tests
         {
             Guard.AgainstNull(services, nameof(services));
 
-            ConfigureServices(services, nameof(TestUnacknowledgedMessageAsync), 1, false, queueUriFormat);
+            ConfigureServices(services, nameof(TestUnacknowledgedMessageAsync), 1, false, queueUriFormat, sync);
 
             var queueService = services.BuildServiceProvider().CreateQueueService();
 

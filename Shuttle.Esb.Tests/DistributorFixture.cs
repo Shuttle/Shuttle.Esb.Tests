@@ -85,6 +85,7 @@ namespace Shuttle.Esb.Tests
 
             var distributorServiceBusOptions = new ServiceBusOptions
             {
+                Asynchronous = !sync,
                 Inbox = new InboxOptions
                 {
                     Distribute = true,
@@ -138,6 +139,7 @@ namespace Shuttle.Esb.Tests
 
             var workerServiceBusOptions = new ServiceBusOptions
             {
+                Asynchronous = !sync,
                 Inbox = new InboxOptions
                 {
                     WorkQueueUri = string.Format(queueUriFormat, "test-worker-work"),
