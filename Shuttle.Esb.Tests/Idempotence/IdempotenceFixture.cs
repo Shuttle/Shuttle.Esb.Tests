@@ -41,7 +41,7 @@ namespace Shuttle.Esb.Tests
             }
         }
 
-        private void ConfigureServices(IServiceCollection services, string test, int threadCount, bool isTransactional, string queueUriFormat)
+        private void ConfigureServices(IServiceCollection services, string test, int threadCount, bool isTransactional, string queueUriFormat, bool sync)
         {
             Guard.AgainstNull(services, nameof(services));
 
@@ -52,6 +52,7 @@ namespace Shuttle.Esb.Tests
 
             var serviceBusOptions = new ServiceBusOptions
             {
+                Asynchronous = !sync,
                 Inbox = new InboxOptions
                 {
                     WorkQueueUri = string.Format(queueUriFormat, "test-inbox-work"),
@@ -90,7 +91,7 @@ namespace Shuttle.Esb.Tests
 
             var padlock = new object();
 
-            ConfigureServices(services, nameof(TestIdempotenceProcessingAsync), threadCount, isTransactional, queueUriFormat);
+            ConfigureServices(services, nameof(TestIdempotenceProcessingAsync), threadCount, isTransactional, queueUriFormat, sync);
 
             services.AddSingleton<IMessageRouteProvider>(new IdempotenceMessageRouteProvider());
             services.AddSingleton<IMessageHandlerInvoker, IdempotenceMessageHandlerInvoker>();
