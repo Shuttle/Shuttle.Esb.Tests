@@ -3,7 +3,7 @@
 <package>
 	<metadata>
 		<id>Shuttle.Esb.Tests</id>
-		<version>13.2.2</version>
+		<version>14.0.0</version>
 		<authors>Eben Roux</authors>
 		<owners>Eben Roux</owners>
 		<license type="expression">BSD-3-Clause</license>
@@ -12,12 +12,13 @@
 		<repository type="git" url="https://github.com/Shuttle/Shuttle.Esb.Tests.git" />
 		<projectUrl>https://github.com/Shuttle/Shuttle.Esb.Tests</projectUrl>
 		<description>Test fixtures to facilitate testing of components, such as queues, that relate to Shuttle.Esb.</description>
-		<copyright>Copyright (c) 2022, Eben Roux</copyright>
+		<copyright>Copyright (c) 2024, Eben Roux</copyright>
 		<tags></tags>
 		<dependencies>
-      <dependency id="Moq" version="4.18.2" />
-      <dependency id="NUnit" version="3.13.3" />
-      <dependency id="Shuttle.Esb" version="13.2.1" />
+      <dependency id="Moq" version="4.20.69" />
+      <dependency id="NUnit" version="3.14.0" />
+      <dependency id="Shuttle.Esb" version="14.0.0" />
+      <dependency id="Shuttle.Esb.Logging" version="14.0.0" />
 		</dependencies>
 	</metadata>
 	<files>

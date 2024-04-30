@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.IO;
 using System.Threading;
+using System.Threading.Tasks;
 using Microsoft.Extensions.DependencyInjection;
 using NUnit.Framework;
 using Shuttle.Core.Contract;
@@ -14,132 +14,34 @@ namespace Shuttle.Esb.Tests
 {
     public class IdempotenceFixture : IntegrationFixture
     {
-        protected void TestIdempotenceProcessing(IServiceCollection services, string queueUriFormat,
-            bool isTransactional, bool enqueueUniqueMessages)
-        {
-            Guard.AgainstNull(services, nameof(services));
-
-            const int threadCount = 1;
-            const int messageCount = 5;
-
-            var padlock = new object();
-
-            var serviceBusOptions = AddServiceBus(services, threadCount, isTransactional, queueUriFormat);
-
-            services.AddSingleton<IMessageRouteProvider>(new IdempotenceMessageRouteProvider());
-            services.AddSingleton<IMessageHandlerInvoker, IdempotenceMessageHandlerInvoker>();
-
-            var serviceProvider = services.BuildServiceProvider();
-
-            var queueService = CreateQueueService(serviceProvider);
-            var handleMessageObserver = serviceProvider.GetRequiredService<IHandleMessageObserver>();
-
-            var pipelineFactory = serviceProvider.GetRequiredService<IPipelineFactory>();
-            var transportMessagePipeline = pipelineFactory.GetPipeline<TransportMessagePipeline>();
-            var serviceBusConfiguration = serviceProvider.GetRequiredService<IServiceBusConfiguration>();
-            var serializer = serviceProvider.GetRequiredService<ISerializer>();
-
-            serviceBusConfiguration.Configure(serviceBusOptions);
-
-            ConfigureQueues(serviceProvider, serviceBusConfiguration, queueUriFormat);
-
-            try
-            {
-                var threadActivity = serviceProvider.GetRequiredService<IPipelineThreadActivity>();
-
-                var messageHandlerInvoker =
-                    (IdempotenceMessageHandlerInvoker)serviceProvider.GetRequiredService<IMessageHandlerInvoker>();
-
-                using (var bus = serviceProvider.GetRequiredService<IServiceBus>())
-                {
-                    if (enqueueUniqueMessages)
-                    {
-                        for (var i = 0; i < messageCount; i++)
-                        {
-                            transportMessagePipeline.Execute(new IdempotenceCommand(), null, builder =>
-                            {
-                                builder.WithRecipient(serviceBusConfiguration.Inbox.WorkQueue);
-                            });
-
-                            serviceBusConfiguration.Inbox.WorkQueue.Enqueue(
-                                transportMessagePipeline.State.GetTransportMessage(),
-                                serializer.Serialize(transportMessagePipeline.State.GetTransportMessage()));
-                        }
-                    }
-                    else
-                    {
-                        transportMessagePipeline.Execute(new IdempotenceCommand(), null, builder =>
-                        {
-                            builder.WithRecipient(serviceBusConfiguration.Inbox.WorkQueue);
-                        });
-
-                        var transportMessage = transportMessagePipeline.State.GetTransportMessage();
-                        var messageStream = serializer.Serialize(transportMessage);
-                        
-                        for (var i = 0; i < messageCount; i++)
-                        {
-                            serviceBusConfiguration.Inbox.WorkQueue.Enqueue(transportMessage, messageStream);
-                        }
-                    }
-
-                    var idleThreads = new List<int>();
-                    var exception = false;
-
-                    handleMessageObserver.HandlerException += (sender, args) =>
-                    {
-                        exception = true;
-                    };
-
-                    threadActivity.ThreadWaiting += (sender, args) =>
-                    {
-                        lock (padlock)
-                        {
-                            if (idleThreads.Contains(Thread.CurrentThread.ManagedThreadId))
-                            {
-                                return;
-                            }
-
-                            idleThreads.Add(Thread.CurrentThread.ManagedThreadId);
-                        }
-                    };
-
-                    bus.Start();
-
-                    while (!exception && idleThreads.Count < threadCount)
-                    {
-                        Thread.Sleep(5);
-                    }
-
-                    Assert.IsNull(serviceBusConfiguration.Inbox.ErrorQueue.GetMessage());
-                    Assert.IsNull(serviceBusConfiguration.Inbox.WorkQueue.GetMessage());
-
-                    Assert.AreEqual(enqueueUniqueMessages ? messageCount : 1, messageHandlerInvoker.ProcessedCount);
-                }
-
-                AttemptDropQueues(queueService, queueUriFormat);
-            }
-            finally
-            {
-                queueService.AttemptDispose();
-            }
-        }
-
-        private void ConfigureQueues(IServiceProvider serviceProvider, IServiceBusConfiguration serviceBusConfiguration, string queueUriFormat)
+        private async Task ConfigureQueues(IServiceProvider serviceProvider, IServiceBusConfiguration serviceBusConfiguration, string queueUriFormat, bool sync)
         {
             var queueService = serviceProvider.GetRequiredService<IQueueService>();
+
             var inboxWorkQueue = queueService.Get(string.Format(queueUriFormat, "test-inbox-work"));
             var errorQueue = queueService.Get(string.Format(queueUriFormat, "test-error"));
 
-            inboxWorkQueue.AttemptDrop();
-            errorQueue.AttemptDrop();
+            if (sync)
+            {
+                inboxWorkQueue.TryDrop();
+                errorQueue.TryDrop();
+                serviceBusConfiguration.CreatePhysicalQueues();
+                inboxWorkQueue.TryPurge();
+                errorQueue.TryPurge();
+            }
+            else
+            {
+                await inboxWorkQueue.TryDropAsync().ConfigureAwait(false);
+                await errorQueue.TryDropAsync().ConfigureAwait(false);
 
-            serviceBusConfiguration.CreatePhysicalQueues();
+                await serviceBusConfiguration.CreatePhysicalQueuesAsync().ConfigureAwait(false);
 
-            inboxWorkQueue.AttemptPurge();
-            errorQueue.AttemptPurge();
+                await inboxWorkQueue.TryPurgeAsync().ConfigureAwait(false);
+                await errorQueue.TryPurgeAsync().ConfigureAwait(false);
+            }
         }
 
-        protected ServiceBusOptions AddServiceBus(IServiceCollection services, int threadCount, bool isTransactional, string queueUriFormat)
+        private void ConfigureServices(IServiceCollection services, string test, int threadCount, bool isTransactional, string queueUriFormat, bool sync)
         {
             Guard.AgainstNull(services, nameof(services));
 
@@ -150,6 +52,7 @@ namespace Shuttle.Esb.Tests
 
             var serviceBusOptions = new ServiceBusOptions
             {
+                Asynchronous = !sync,
                 Inbox = new InboxOptions
                 {
                     WorkQueueUri = string.Format(queueUriFormat, "test-inbox-work"),
@@ -163,9 +66,187 @@ namespace Shuttle.Esb.Tests
             services.AddServiceBus(builder =>
             {
                 builder.Options = serviceBusOptions;
+                builder.SuppressHostedService = true;
             });
 
-            return serviceBusOptions;
+            services.ConfigureLogging(test);
+        }
+
+        protected void TestIdempotenceProcessing(IServiceCollection services, string queueUriFormat, bool isTransactional, bool enqueueUniqueMessages)
+        {
+            TestIdempotenceProcessingAsync(services, queueUriFormat, isTransactional, enqueueUniqueMessages, false).GetAwaiter().GetResult();
+        }
+
+        protected async Task TestIdempotenceProcessingAsync(IServiceCollection services, string queueUriFormat, bool isTransactional, bool enqueueUniqueMessages)
+        {
+            await TestIdempotenceProcessingAsync(services, queueUriFormat, isTransactional, enqueueUniqueMessages, false).ConfigureAwait(false);
+        }
+
+        private async Task TestIdempotenceProcessingAsync(IServiceCollection services, string queueUriFormat, bool isTransactional, bool enqueueUniqueMessages, bool sync)
+        {
+            Guard.AgainstNull(services, nameof(services));
+
+            const int threadCount = 1;
+            const int messageCount = 5;
+
+            var padlock = new object();
+
+            ConfigureServices(services, nameof(TestIdempotenceProcessingAsync), threadCount, isTransactional, queueUriFormat, sync);
+
+            services.AddSingleton<IMessageRouteProvider>(new IdempotenceMessageRouteProvider());
+            services.AddSingleton<IMessageHandlerInvoker, IdempotenceMessageHandlerInvoker>();
+
+            var serviceProvider = sync
+                ? services.BuildServiceProvider().StartHostedServices()
+                : await services.BuildServiceProvider().StartHostedServicesAsync().ConfigureAwait(false);
+
+            var queueService = serviceProvider.CreateQueueService();
+            var handleMessageObserver = serviceProvider.GetRequiredService<IHandleMessageObserver>();
+
+            var pipelineFactory = serviceProvider.GetRequiredService<IPipelineFactory>();
+            var transportMessagePipeline = pipelineFactory.GetPipeline<TransportMessagePipeline>();
+            var serviceBusConfiguration = serviceProvider.GetRequiredService<IServiceBusConfiguration>();
+            var serializer = serviceProvider.GetRequiredService<ISerializer>();
+            var serviceBus = serviceProvider.GetRequiredService<IServiceBus>();
+
+            await ConfigureQueues(serviceProvider, serviceBusConfiguration, queueUriFormat, sync).ConfigureAwait(false);
+
+            try
+            {
+                var threadActivity = serviceProvider.GetRequiredService<IPipelineThreadActivity>();
+
+                var messageHandlerInvoker = (IdempotenceMessageHandlerInvoker)serviceProvider.GetRequiredService<IMessageHandlerInvoker>();
+                
+                if (enqueueUniqueMessages)
+                {
+                    for (var i = 0; i < messageCount; i++)
+                    {
+                        if (sync)
+                        {
+                            transportMessagePipeline.Execute(new IdempotenceCommand(), null, builder =>
+                            {
+                                builder.WithRecipient(serviceBusConfiguration.Inbox.WorkQueue);
+                            });
+
+                            serviceBusConfiguration.Inbox.WorkQueue.Enqueue(
+                                transportMessagePipeline.State.GetTransportMessage(),
+                                serializer.Serialize(transportMessagePipeline.State.GetTransportMessage()));
+                        }
+                        else
+                        {
+                            await transportMessagePipeline.ExecuteAsync(new IdempotenceCommand(), null, builder =>
+                            {
+                                builder.WithRecipient(serviceBusConfiguration.Inbox.WorkQueue);
+                            }).ConfigureAwait(false);
+
+                            await serviceBusConfiguration.Inbox.WorkQueue.EnqueueAsync(
+                                transportMessagePipeline.State.GetTransportMessage(),
+                                await serializer.SerializeAsync(transportMessagePipeline.State.GetTransportMessage()).ConfigureAwait(false)).ConfigureAwait(false);
+                        }
+                    }
+                }
+                else
+                {
+                    if (sync)
+                    {
+                        transportMessagePipeline.Execute(new IdempotenceCommand(), null, builder =>
+                        {
+                            builder.WithRecipient(serviceBusConfiguration.Inbox.WorkQueue);
+                        });
+                    }
+                    else
+                    {
+                        await transportMessagePipeline.ExecuteAsync(new IdempotenceCommand(), null, builder =>
+                        {
+                            builder.WithRecipient(serviceBusConfiguration.Inbox.WorkQueue);
+                        }).ConfigureAwait(false);
+                    }
+
+                    var transportMessage = transportMessagePipeline.State.GetTransportMessage();
+
+                    var messageStream = sync
+                        ? serializer.Serialize(transportMessage)
+                        : await serializer.SerializeAsync(transportMessage).ConfigureAwait(false);
+
+                    for (var i = 0; i < messageCount; i++)
+                    {
+                        if (sync)
+                        {
+                            serviceBusConfiguration.Inbox.WorkQueue.Enqueue(transportMessage, messageStream);
+                        }
+                        else
+                        {
+                            await serviceBusConfiguration.Inbox.WorkQueue.EnqueueAsync(transportMessage, messageStream).ConfigureAwait(false);
+                        }
+                    }
+                }
+
+                var idleThreads = new List<int>();
+                var exception = false;
+
+                handleMessageObserver.HandlerException += (sender, args) =>
+                {
+                    exception = true;
+                };
+
+                threadActivity.ThreadWaiting += (sender, args) =>
+                {
+                    lock (padlock)
+                    {
+                        if (idleThreads.Contains(Thread.CurrentThread.ManagedThreadId))
+                        {
+                            return;
+                        }
+
+                        idleThreads.Add(Thread.CurrentThread.ManagedThreadId);
+                    }
+                };
+
+                if (sync)
+                {
+                    serviceBus.Start();
+                }
+                else
+                {
+                    await serviceBus.StartAsync().ConfigureAwait(false);
+                }
+
+                while (!exception && idleThreads.Count < threadCount)
+                {
+                    await Task.Delay(5).ConfigureAwait(false);
+                }
+
+                if (sync)
+                {
+                    serviceBus.Stop();
+                }
+                else
+                {
+                    await serviceBus.StopAsync().ConfigureAwait(false);
+                }
+
+                Assert.IsNull(serviceBusConfiguration.Inbox.ErrorQueue.GetMessage());
+                Assert.IsNull(serviceBusConfiguration.Inbox.WorkQueue.GetMessage());
+
+                Assert.AreEqual(enqueueUniqueMessages ? messageCount : 1, messageHandlerInvoker.ProcessedCount);
+            }
+            finally
+            {
+                if (sync)
+                {
+                    serviceBus.Dispose();
+                    queueService.TryDropQueues(queueUriFormat);
+                    queueService.TryDispose();
+                    serviceProvider.StopHostedServices();
+                }
+                else
+                {
+                    await serviceBus.DisposeAsync().ConfigureAwait(false);
+                    await queueService.TryDropQueuesAsync(queueUriFormat).ConfigureAwait(false);
+                    await queueService.TryDisposeAsync().ConfigureAwait(false);
+                    await serviceProvider.StopHostedServicesAsync().ConfigureAwait(false);
+                }
+            }
         }
     }
 }

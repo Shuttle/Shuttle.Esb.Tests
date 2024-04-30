@@ -1,10 +1,10 @@
 using System;
 using System.Collections.Generic;
-using System.IO;
-using System.Threading;
+using System.Threading.Tasks;
 using Microsoft.Extensions.DependencyInjection;
 using NUnit.Framework;
 using Shuttle.Core.Pipelines;
+using Shuttle.Core.Reflection;
 using Shuttle.Core.Serialization;
 
 namespace Shuttle.Esb.Tests
@@ -13,83 +13,137 @@ namespace Shuttle.Esb.Tests
     {
         protected void TestExceptionHandling(IServiceCollection services, string queueUriFormat)
         {
-            var serviceBusOptions = GetServiceBusOptions(1, queueUriFormat);
+            TestExceptionHandlingAsync(services, queueUriFormat, true).GetAwaiter().GetResult();
+        }
+
+        protected async Task TestExceptionHandlingAsync(IServiceCollection services, string queueUriFormat)
+        {
+            await TestExceptionHandlingAsync(services, queueUriFormat, false).ConfigureAwait(false);
+        }
+
+        protected async Task TestExceptionHandlingAsync(IServiceCollection services, string queueUriFormat, bool sync)
+        {
+            var serviceBusOptions = new ServiceBusOptions
+            {
+                Asynchronous = !sync,
+                Inbox = new InboxOptions
+                {
+                    WorkQueueUri = string.Format(queueUriFormat, "test-inbox-work"),
+                    DurationToSleepWhenIdle = new List<TimeSpan> { TimeSpan.FromMilliseconds(5) },
+                    DurationToIgnoreOnFailure = new List<TimeSpan> { TimeSpan.FromMilliseconds(5) },
+                    MaximumFailureCount = 100,
+                    ThreadCount = 1
+                }
+            };
 
             services.AddServiceBus(builder =>
             {
                 builder.Options = serviceBusOptions;
+                builder.SuppressHostedService = true;
             });
 
-            services.AddSingleton<ReceivePipelineExceptionModule>();
+            services.ConfigureLogging(nameof(TestExceptionHandling));
 
-            var serviceProvider = services.BuildServiceProvider();
+            services.AddSingleton<ReceivePipelineExceptionFeature>();
 
-            serviceBusOptions.Inbox = new InboxOptions
-            {
-                WorkQueueUri = string.Format(queueUriFormat, "test-inbox-work"),
-                DurationToSleepWhenIdle = new List<TimeSpan> { TimeSpan.FromMilliseconds(5) },
-                DurationToIgnoreOnFailure = new List<TimeSpan> { TimeSpan.FromMilliseconds(5) },
-                MaximumFailureCount = 100,
-                ThreadCount = 1
-            };
+            var serviceProvider = sync
+                ? services.BuildServiceProvider().StartHostedServices()
+                : await services.BuildServiceProvider().StartHostedServicesAsync().ConfigureAwait(false);
 
             var serviceBusConfiguration = serviceProvider.GetRequiredService<IServiceBusConfiguration>();
 
-            serviceBusConfiguration.Configure(serviceBusOptions);
+            var drop = serviceBusConfiguration.Inbox.WorkQueue as IDropQueue;
 
-            try
+            if (drop != null)
             {
-                serviceBusConfiguration.Inbox.WorkQueue.AttemptDrop();
-                // if drop not supported, then purge
-                serviceBusConfiguration.Inbox.WorkQueue.AttemptPurge();
+                if (sync)
+                {
+                    drop.Drop();
+                }
+                else
+                {
+                    await drop.DropAsync().ConfigureAwait(false);
+                }
             }
-            catch 
+            else
             {
-                // if dropped, purge will cause exception, ignore
+                if (sync)
+                {
+                    serviceBusConfiguration.Inbox.WorkQueue.TryPurge();
+                }
+                else
+                {
+                    await serviceBusConfiguration.Inbox.WorkQueue.TryPurgeAsync().ConfigureAwait(false);
+                }
             }
 
-            serviceBusConfiguration.CreatePhysicalQueues();
+            if (sync)
+            {
+                serviceBusConfiguration.CreatePhysicalQueues();
+            }
+            else
+            {
+                await serviceBusConfiguration.CreatePhysicalQueuesAsync().ConfigureAwait(false);
+            }
 
             var pipelineFactory = serviceProvider.GetRequiredService<IPipelineFactory>();
             var transportMessagePipeline = pipelineFactory.GetPipeline<TransportMessagePipeline>();
-            var module = serviceProvider.GetRequiredService<ReceivePipelineExceptionModule>();
+            var feature = serviceProvider.GetRequiredService<ReceivePipelineExceptionFeature>();
             var serializer = serviceProvider.GetRequiredService<ISerializer>();
 
-            using (var bus = serviceProvider.GetRequiredService<IServiceBus>())
+            var serviceBus = serviceProvider.GetRequiredService<IServiceBus>();
+
+            try
             {
-                transportMessagePipeline.Execute(new ReceivePipelineCommand(), null, builder =>
+                if (sync)
                 {
-                    builder.WithRecipient(serviceBusConfiguration.Inbox.WorkQueue);
-                });
+                    transportMessagePipeline.Execute(new ReceivePipelineCommand(), null, builder =>
+                    {
+                        builder.WithRecipient(serviceBusConfiguration.Inbox.WorkQueue);
+                    });
 
-                serviceBusConfiguration.Inbox.WorkQueue.Enqueue(
-                    transportMessagePipeline.State.GetTransportMessage(),
-                    serializer.Serialize(transportMessagePipeline.State.GetTransportMessage()));
+                    serviceBusConfiguration.Inbox.WorkQueue.Enqueue(
+                        transportMessagePipeline.State.GetTransportMessage(),
+                        serializer.Serialize(transportMessagePipeline.State.GetTransportMessage()));
 
-                Assert.IsFalse(serviceBusConfiguration.Inbox.WorkQueue.IsEmpty());
+                    Assert.That(serviceBusConfiguration.Inbox.WorkQueue.IsEmpty(), Is.False);
 
-                bus.Start();
-
-                while (module.ShouldWait())
+                    serviceBus.Start();
+                }
+                else
                 {
-                    Thread.Sleep(10);
+                    await transportMessagePipeline.ExecuteAsync(new ReceivePipelineCommand(), null, builder =>
+                    {
+                        builder.WithRecipient(serviceBusConfiguration.Inbox.WorkQueue);
+                    }).ConfigureAwait(false);
+
+                    await serviceBusConfiguration.Inbox.WorkQueue.EnqueueAsync(
+                        transportMessagePipeline.State.GetTransportMessage(),
+                        await serializer.SerializeAsync(transportMessagePipeline.State.GetTransportMessage()).ConfigureAwait(false)).ConfigureAwait(false);
+
+                    Assert.That(await serviceBusConfiguration.Inbox.WorkQueue.IsEmptyAsync().ConfigureAwait(false), Is.False);
+
+                    await serviceBus.StartAsync().ConfigureAwait(false);
+                }
+
+                while (feature.ShouldWait())
+                {
+                    await Task.Delay(10).ConfigureAwait(false);
                 }
             }
-        }
-
-        private ServiceBusOptions GetServiceBusOptions(int threadCount, string queueUriFormat)
-        {
-            return new ServiceBusOptions
+            finally
             {
-                Inbox = new InboxOptions
+                if (sync)
                 {
-                    WorkQueueUri = string.Format(queueUriFormat, "test-inbox-work"),
-                    ErrorQueueUri = string.Format(queueUriFormat, "test-error"),
-                    DurationToSleepWhenIdle = new List<TimeSpan> { TimeSpan.FromMilliseconds(25) },
-                    DurationToIgnoreOnFailure = new List<TimeSpan> { TimeSpan.FromMilliseconds(25) },
-                    ThreadCount = threadCount
+                    serviceBus.TryDispose();
                 }
-            };
+                else
+                {
+                    await serviceBus.TryDisposeAsync().ConfigureAwait(false);
+                }
+            }
+
+            await serviceProvider.StopHostedServicesAsync().ConfigureAwait(false);
         }
     }
 }
