@@ -8,7 +8,7 @@ using NUnit.Framework;
 using Shuttle.Core.Contract;
 using Shuttle.Core.Pipelines;
 using Shuttle.Core.Reflection;
-using Shuttle.Core.Transactions;
+using Shuttle.Core.TransactionScope;
 
 namespace Shuttle.Esb.Tests
 {

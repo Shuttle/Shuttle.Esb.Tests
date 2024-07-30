@@ -11,7 +11,7 @@ using Shuttle.Core.Pipelines;
 using Shuttle.Core.Reflection;
 using Shuttle.Core.Serialization;
 using Shuttle.Core.Threading;
-using Shuttle.Core.Transactions;
+using Shuttle.Core.TransactionScope;
 
 namespace Shuttle.Esb.Tests
 {

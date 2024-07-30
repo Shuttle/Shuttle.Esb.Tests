@@ -14,10 +14,10 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="Moq" Version="4.20.69" />
+    <PackageReference Include="Moq" Version="4.20.70" />
     <PackageReference Include="NUnit" Version="3.14.0" />
-    <PackageReference Include="Shuttle.Esb" Version="14.0.1" />
-    <PackageReference Include="Shuttle.Esb.Logging" Version="14.0.1" />
+    <PackageReference Include="Shuttle.Esb" Version="15.0.0" />
+    <PackageReference Include="Shuttle.Esb.Logging" Version="15.0.0" />
   </ItemGroup>
 
   <ItemGroup>
