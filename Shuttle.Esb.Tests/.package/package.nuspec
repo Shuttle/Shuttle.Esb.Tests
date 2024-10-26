@@ -3,7 +3,7 @@
 <package>
 	<metadata>
 		<id>Shuttle.Esb.Tests</id>
-		<version>15.0.0</version>
+		<version>20.0.0</version>
 		<authors>Eben Roux</authors>
 		<owners>Eben Roux</owners>
 		<license type="expression">BSD-3-Clause</license>
@@ -15,10 +15,10 @@
 		<copyright>Copyright (c) 2024, Eben Roux</copyright>
 		<tags></tags>
 		<dependencies>
-      <dependency id="Moq" version="4.20.70" />
-      <dependency id="NUnit" version="3.14.0" />
-      <dependency id="Shuttle.Esb" version="15.0.0" />
-      <dependency id="Shuttle.Esb.Logging" version="15.0.0" />
+      <dependency id="Moq" version="4.20.72" />
+      <dependency id="NUnit" version="4.2.2" />
+      <dependency id="Shuttle.Esb" version="20.0.0" />
+      <dependency id="Shuttle.Esb.Logging" version="20.0.0" />
 		</dependencies>
 	</metadata>
 	<files>
