@@ -53,11 +53,6 @@ public class BasicQueueFixture : IntegrationFixture
         return workQueue;
     }
 
-    protected void TestReleaseMessage(IServiceCollection services, string queueUriFormat)
-    {
-        TestReleaseMessageAsync(services, queueUriFormat, true).GetAwaiter().GetResult();
-    }
-
     protected async Task TestReleaseMessageAsync(IServiceCollection services, string queueUriFormat)
     {
         await TestReleaseMessageAsync(services, queueUriFormat, false).ConfigureAwait(false);
