@@ -1,17 +1,16 @@
-﻿namespace Shuttle.Esb.Tests
+﻿namespace Shuttle.Esb.Tests;
+
+public class IdempotenceCounter
 {
-	public class IdempotenceCounter
-	{
-		private readonly object _lock = new object();
+    private readonly object _lock = new();
 
-		public int ProcessedCount { get; private set; }
+    public int ProcessedCount { get; private set; }
 
-		public void Processed()
-		{
-			lock (_lock)
-			{
-				ProcessedCount++;
-			}
-		}
-	}
+    public void Processed()
+    {
+        lock (_lock)
+        {
+            ProcessedCount++;
+        }
+    }
 }

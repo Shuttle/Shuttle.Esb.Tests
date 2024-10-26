@@ -1,7 +1,6 @@
-﻿namespace Shuttle.Esb.Tests
+﻿namespace Shuttle.Esb.Tests;
+
+public class MessageCountOptions
 {
-    public class MessageCountOptions
-    {
-        public int MessageCount { get; set; }
-    }
+    public int MessageCount { get; set; }
 }

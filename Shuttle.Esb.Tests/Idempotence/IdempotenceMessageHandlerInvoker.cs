@@ -1,34 +1,28 @@
 ﻿using System;
 using System.Threading.Tasks;
 using Shuttle.Core.Contract;
+using Shuttle.Core.Pipelines;
 
-namespace Shuttle.Esb.Tests
+namespace Shuttle.Esb.Tests;
+
+internal class IdempotenceMessageHandlerInvoker : IMessageHandlerInvoker
 {
-    internal class IdempotenceMessageHandlerInvoker : IMessageHandlerInvoker
+    private readonly IdempotenceCounter _counter = new();
+    private readonly Type _type = typeof(IdempotenceCommand);
+
+    public int ProcessedCount => _counter.ProcessedCount;
+
+    public async Task<MessageHandlerInvokeResult> InvokeAsync(IPipelineContext<OnHandleMessage> pipelineContext)
     {
-        private readonly IdempotenceCounter _counter = new IdempotenceCounter();
-        private readonly Type _type = typeof (IdempotenceCommand);
-
-        public int ProcessedCount => _counter.ProcessedCount;
-
-        public MessageHandlerInvokeResult Invoke(OnHandleMessage pipelineEvent)
+        var state = Guard.AgainstNull(pipelineContext).Pipeline.State;
+        
+        if (Guard.AgainstNull(state.GetMessage()).GetType() != _type)
         {
-            var state = Guard.AgainstNull(pipelineEvent, nameof(pipelineEvent)).Pipeline.State;
-            var message = Guard.AgainstNull(state.GetMessage(), StateKeys.Message);
-
-            if (message.GetType() != _type)
-            {
-                throw new Exception("Can only handle type of 'IdempotenceCommand'.");
-            }
-
-            _counter.Processed();
-
-            return MessageHandlerInvokeResult.InvokedHandler(null);
+            throw new("Can only handle type of 'IdempotenceCommand'.");
         }
 
-        public async Task<MessageHandlerInvokeResult> InvokeAsync(OnHandleMessage pipelineEvent)
-        {
-            return await Task.FromResult(Invoke(pipelineEvent)).ConfigureAwait(false);
-        }
+        _counter.Processed();
+
+        return await Task.FromResult(MessageHandlerInvokeResult.InvokedHandler(string.Empty)).ConfigureAwait(false);
     }
 }

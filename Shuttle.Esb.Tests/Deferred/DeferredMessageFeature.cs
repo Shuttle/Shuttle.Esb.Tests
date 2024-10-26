@@ -4,80 +4,68 @@ using Microsoft.Extensions.Options;
 using Shuttle.Core.Contract;
 using Shuttle.Core.Pipelines;
 
-namespace Shuttle.Esb.Tests
+namespace Shuttle.Esb.Tests;
+
+public class DeferredMessageFeature :
+    IPipelineObserver<OnAfterHandleMessage>,
+    IPipelineObserver<OnAfterProcessDeferredMessage>
 {
-	public class DeferredMessageFeature :
-		IPipelineObserver<OnAfterHandleMessage>,
-		IPipelineObserver<OnAfterProcessDeferredMessage>
-	{
-		private readonly ILogger<DeferredMessageFeature> _logger;
-		private readonly object _lock = new object();
-	    private readonly int _deferredMessageCount;
+    private readonly int _deferredMessageCount;
+    private readonly object _lock = new();
+    private readonly ILogger<DeferredMessageFeature> _logger;
 
-	    public DeferredMessageFeature(IOptions<MessageCountOptions> options, ILogger<DeferredMessageFeature> logger, IPipelineFactory pipelineFactory)
-		{
-			Guard.AgainstNull(options, nameof(options));
-			Guard.AgainstNull(pipelineFactory, nameof(pipelineFactory)).PipelineCreated += PipelineCreated;
+    public DeferredMessageFeature(IOptions<MessageCountOptions> options, ILogger<DeferredMessageFeature> logger, IPipelineFactory pipelineFactory)
+    {
+        Guard.AgainstNull(pipelineFactory).PipelineCreated += PipelineCreated;
 
-			_logger = Guard.AgainstNull(logger, nameof(logger));
-			_deferredMessageCount = Guard.AgainstNull(options.Value, nameof(options.Value)).MessageCount; 
-		}
+        _logger = Guard.AgainstNull(logger);
+        _deferredMessageCount = Guard.AgainstNull(Guard.AgainstNull(options).Value).MessageCount;
+    }
 
-		public int NumberOfDeferredMessagesReturned { get; private set; }
-		public int NumberOfMessagesHandled { get; private set; }
+    public int NumberOfDeferredMessagesReturned { get; private set; }
+    public int NumberOfMessagesHandled { get; private set; }
 
-		private void PipelineCreated(object sender, PipelineEventArgs e)
-		{
-		    if (e.Pipeline.GetType() != typeof (InboxMessagePipeline) && e.Pipeline.GetType() != typeof (DeferredMessagePipeline))
-			{
-				return;
-			}
+    public async Task ExecuteAsync(IPipelineContext<OnAfterHandleMessage> pipelineContext)
+    {
+        _logger.LogInformation("[OnAfterHandleMessage]");
 
-			e.Pipeline.RegisterObserver(this);
-		}
+        lock (_lock)
+        {
+            NumberOfMessagesHandled++;
+        }
 
-		public void Execute(OnAfterHandleMessage pipelineEvent)
-		{
-			_logger.LogInformation("[OnAfterHandleMessage]");
+        await Task.CompletedTask.ConfigureAwait(false);
+    }
 
-			lock (_lock)
-			{
-				NumberOfMessagesHandled++;
-			}
-		}
+    public async Task ExecuteAsync(IPipelineContext<OnAfterProcessDeferredMessage> pipelineContext)
+    {
+        _logger.LogInformation($"[OnAfterProcessDeferredMessage] : deferred message returned = '{pipelineContext.Pipeline.State.GetDeferredMessageReturned()}'");
 
-        public async Task ExecuteAsync(OnAfterHandleMessage pipelineEvent)
-		{
-			Execute(pipelineEvent);
+        if (!pipelineContext.Pipeline.State.GetDeferredMessageReturned())
+        {
+            return;
+        }
 
-			await Task.CompletedTask.ConfigureAwait(false);
-		}
+        lock (_lock)
+        {
+            NumberOfDeferredMessagesReturned++;
+        }
 
-		public void Execute(OnAfterProcessDeferredMessage pipelineEvent)
-		{
-			_logger.LogInformation($"[OnAfterProcessDeferredMessage] : deferred message returned = '{pipelineEvent.Pipeline.State.GetDeferredMessageReturned()}'");
+        await Task.CompletedTask.ConfigureAwait(false);
+    }
 
-			if (!pipelineEvent.Pipeline.State.GetDeferredMessageReturned())
-			{
-				return;
-			}
+    public bool AllMessagesHandled()
+    {
+        return NumberOfMessagesHandled == _deferredMessageCount;
+    }
 
-			lock (_lock)
-			{
-				NumberOfDeferredMessagesReturned++;
-			}
-		}
+    private void PipelineCreated(object? sender, PipelineEventArgs e)
+    {
+        if (e.Pipeline.GetType() != typeof(InboxMessagePipeline) && e.Pipeline.GetType() != typeof(DeferredMessagePipeline))
+        {
+            return;
+        }
 
-        public async Task ExecuteAsync(OnAfterProcessDeferredMessage pipelineEvent)
-		{
-			Execute(pipelineEvent);
-
-			await Task.CompletedTask.ConfigureAwait(false);
-		}
-
-		public bool AllMessagesHandled()
-		{
-			return NumberOfMessagesHandled == _deferredMessageCount;
-		}
-	}
+        e.Pipeline.RegisterObserver(this);
+    }
 }

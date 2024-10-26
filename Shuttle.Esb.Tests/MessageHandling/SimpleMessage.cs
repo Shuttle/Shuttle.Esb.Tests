@@ -1,10 +1,9 @@
 using System;
 
-namespace Shuttle.Esb.Tests
+namespace Shuttle.Esb.Tests;
+
+[Serializable]
+public class SimpleMessage : object
 {
-	[Serializable]
-	public class SimpleMessage : object
-	{
-		public string Name { get; set; }
-	}
+    public string Name { get; set; } = string.Empty;
 }

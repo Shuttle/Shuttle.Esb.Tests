@@ -1,19 +1,18 @@
-﻿namespace Shuttle.Esb.Tests
+﻿namespace Shuttle.Esb.Tests;
+
+internal class ExceptionAssertion
 {
-	internal class ExceptionAssertion
-	{
-		public ExceptionAssertion(string name)
-		{
-			Name = name;
-		}
+    public ExceptionAssertion(string name)
+    {
+        Name = name;
+    }
 
-		public string Name { get; private set; }
+    public bool HasRun { get; private set; }
 
-		public void MarkAsRun()
-		{
-			HasRun = true;
-		}
+    public string Name { get; private set; }
 
-		public bool HasRun { get; private set; }
-	}
+    public void MarkAsRun()
+    {
+        HasRun = true;
+    }
 }

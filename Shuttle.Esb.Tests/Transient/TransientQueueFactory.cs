@@ -2,24 +2,21 @@ using System;
 using Shuttle.Core.Contract;
 using Shuttle.Core.Threading;
 
-namespace Shuttle.Esb.Tests
+namespace Shuttle.Esb.Tests;
+
+public class TransientQueueFactory : IQueueFactory
 {
-    public class TransientQueueFactory : IQueueFactory
+    private readonly ICancellationTokenSource _cancellationTokenSource;
+
+    public TransientQueueFactory(ICancellationTokenSource cancellationTokenSource)
     {
-        private readonly ICancellationTokenSource _cancellationTokenSource;
+        _cancellationTokenSource = Guard.AgainstNull(cancellationTokenSource);
+    }
 
-        public TransientQueueFactory(ICancellationTokenSource cancellationTokenSource)
-        {
-            _cancellationTokenSource = Guard.AgainstNull(cancellationTokenSource, nameof(cancellationTokenSource));
-        }
+    public string Scheme => TransientQueue.Scheme;
 
-        public string Scheme => TransientQueue.Scheme;
-
-        public IQueue Create(Uri uri)
-        {
-            Guard.AgainstNull(uri, nameof(uri));
-
-            return new TransientQueue(uri, _cancellationTokenSource.Get().Token);
-        }
+    public IQueue Create(Uri uri)
+    {
+        return new TransientQueue(Guard.AgainstNull(uri), _cancellationTokenSource.Get().Token);
     }
 }

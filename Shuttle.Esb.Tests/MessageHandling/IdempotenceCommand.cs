@@ -1,6 +1,5 @@
-﻿namespace Shuttle.Esb.Tests
+﻿namespace Shuttle.Esb.Tests;
+
+public class IdempotenceCommand
 {
-	public class IdempotenceCommand
-	{
-	}
 }
