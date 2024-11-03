@@ -27,7 +27,7 @@ public class PipelineExceptionFixture : IntegrationFixture
         services.AddServiceBus(builder =>
         {
             builder.Options = serviceBusOptions;
-            builder.SuppressHostedService = true;
+            builder.SuppressHostedService();
         });
 
         services.ConfigureLogging(nameof(PipelineExceptionFixture));

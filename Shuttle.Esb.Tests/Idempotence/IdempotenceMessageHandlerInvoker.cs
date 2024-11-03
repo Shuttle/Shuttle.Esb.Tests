@@ -12,7 +12,7 @@ internal class IdempotenceMessageHandlerInvoker : IMessageHandlerInvoker
 
     public int ProcessedCount => _counter.ProcessedCount;
 
-    public async Task<MessageHandlerInvokeResult> InvokeAsync(IPipelineContext<OnHandleMessage> pipelineContext)
+    public async ValueTask<bool> InvokeAsync(IPipelineContext<OnHandleMessage> pipelineContext)
     {
         var state = Guard.AgainstNull(pipelineContext).Pipeline.State;
         
@@ -23,6 +23,6 @@ internal class IdempotenceMessageHandlerInvoker : IMessageHandlerInvoker
 
         _counter.Processed();
 
-        return await Task.FromResult(MessageHandlerInvokeResult.InvokedHandler(string.Empty)).ConfigureAwait(false);
+        return await ValueTask.FromResult(true).ConfigureAwait(false);
     }
 }

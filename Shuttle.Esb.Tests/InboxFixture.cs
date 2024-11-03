@@ -125,7 +125,7 @@ public abstract class InboxFixture : IntegrationFixture
         services.AddServiceBus(builder =>
         {
             builder.Options = serviceBusOptions;
-            builder.SuppressHostedService = true;
+            builder.SuppressHostedService();
         });
 
         services.ConfigureLogging(test);
@@ -246,7 +246,7 @@ public abstract class InboxFixture : IntegrationFixture
         services.AddServiceBus(builder =>
         {
             builder.Options = serviceBusOptions;
-            builder.SuppressHostedService = true;
+            builder.SuppressHostedService();
         });
 
         services.ConfigureLogging(nameof(TestInboxDeferredAsync));
@@ -398,7 +398,7 @@ public abstract class InboxFixture : IntegrationFixture
         services
             .AddServiceBus(builder =>
             {
-                builder.SuppressHostedService = true;
+                builder.SuppressHostedService();
             })
             .ConfigureLogging(nameof(TestInboxExpiryAsync));
 

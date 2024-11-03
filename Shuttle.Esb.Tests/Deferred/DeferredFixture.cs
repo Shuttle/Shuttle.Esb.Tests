@@ -55,7 +55,7 @@ public class DeferredFixture : IntegrationFixture
                     DeferredMessageProcessorWaitInterval = TimeSpan.FromMilliseconds(25)
                 }
             };
-            builder.SuppressHostedService = true;
+            builder.SuppressHostedService();
         });
 
         services.ConfigureLogging(test);

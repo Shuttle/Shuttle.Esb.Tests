@@ -98,7 +98,7 @@ public abstract class OutboxFixture : IntegrationFixture
                     }
             };
 
-            builder.SuppressHostedService = true;
+            builder.SuppressHostedService();
         });
 
         services.ConfigureLogging(nameof(OutboxFixture));

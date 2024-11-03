@@ -52,7 +52,7 @@ public class IdempotenceFixture : IntegrationFixture
         services.AddServiceBus(builder =>
         {
             builder.Options = serviceBusOptions;
-            builder.SuppressHostedService = true;
+            builder.SuppressHostedService();
         });
 
         services.ConfigureLogging(test);
