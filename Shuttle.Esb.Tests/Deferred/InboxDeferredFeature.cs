@@ -28,6 +28,6 @@ public class InboxDeferredFeature :
             return;
         }
 
-        e.Pipeline.RegisterObserver(this);
+        e.Pipeline.AddObserver(this);
     }
 }

@@ -114,7 +114,7 @@ public abstract class OutboxFixture : IntegrationFixture
         {
             if (args.Pipeline.GetType() == typeof(OutboxPipeline))
             {
-                args.Pipeline.RegisterObserver(outboxObserver);
+                args.Pipeline.AddObserver(outboxObserver);
             }
         };
 

@@ -62,6 +62,6 @@ public class InboxConcurrencyFeature : IPipelineObserver<OnAfterGetMessage>
             return;
         }
 
-        e.Pipeline.RegisterObserver(this);
+        e.Pipeline.AddObserver(this);
     }
 }

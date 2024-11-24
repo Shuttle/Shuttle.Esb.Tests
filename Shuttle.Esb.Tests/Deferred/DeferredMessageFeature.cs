@@ -66,6 +66,6 @@ public class DeferredMessageFeature :
             return;
         }
 
-        e.Pipeline.RegisterObserver(this);
+        e.Pipeline.AddObserver(this);
     }
 }

@@ -100,7 +100,7 @@ public class ReceivePipelineExceptionFeature :
             return;
         }
 
-        e.Pipeline.RegisterObserver(this);
+        e.Pipeline.AddObserver(this);
     }
 
     private void PipelineObtained(object? sender, PipelineEventArgs e)

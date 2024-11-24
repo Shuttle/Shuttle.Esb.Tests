@@ -330,7 +330,7 @@ public abstract class InboxFixture : IntegrationFixture
                 return;
             }
 
-            args.Pipeline.RegisterObserver(inboxMessagePipelineObserver);
+            args.Pipeline.AddObserver(inboxMessagePipelineObserver);
         };
 
         var queueService = serviceProvider.CreateQueueService();
@@ -468,12 +468,12 @@ public abstract class InboxFixture : IntegrationFixture
         {
             if (args.Pipeline.GetType() == typeof(InboxMessagePipeline))
             {
-                args.Pipeline.RegisterObserver(throughputObserver);
+                args.Pipeline.AddObserver(throughputObserver);
             }
 
             if (args.Pipeline.GetType() == typeof(StartupPipeline))
             {
-                args.Pipeline.RegisterObserver(serviceProvider.GetService<ProcessorThreadObserver>()!);
+                args.Pipeline.AddObserver(serviceProvider.GetService<ProcessorThreadObserver>()!);
             }
         };
 
