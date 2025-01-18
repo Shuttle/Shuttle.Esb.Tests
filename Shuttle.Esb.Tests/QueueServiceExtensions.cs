@@ -7,8 +7,8 @@ namespace Shuttle.Esb.Tests;
 
 public static class QueueServiceExtensions
 {
-    private static readonly List<string> QueueUris = new()
-    {
+    private static readonly List<string> QueueUris =
+    [
         "test-worker-work",
         "test-distributor-work",
         "test-distributor-control",
@@ -16,7 +16,7 @@ public static class QueueServiceExtensions
         "test-inbox-deferred",
         "test-outbox-work",
         "test-error"
-    };
+    ];
 
     public static async Task TryDropQueuesAsync(this IQueueService queueService, string queueUriFormat)
     {

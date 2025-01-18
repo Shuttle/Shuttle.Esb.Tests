@@ -30,11 +30,6 @@ public static class ServiceProviderExtensions
 
     public static async Task<IServiceProvider> StartHostedServicesAsync(this IServiceProvider serviceProvider)
     {
-        return await StartHostedServicesAsync(serviceProvider, false).ConfigureAwait(false);
-    }
-
-    private static async Task<IServiceProvider> StartHostedServicesAsync(IServiceProvider serviceProvider, bool sync)
-    {
         Guard.AgainstNull(serviceProvider);
 
         var logger = serviceProvider.GetLogger();
@@ -45,14 +40,7 @@ public static class ServiceProviderExtensions
         {
             logger.LogInformation($"[HostedService-starting] : {hostedService.GetType().Name}");
 
-            if (sync)
-            {
-                hostedService.StartAsync(CancellationToken.None).GetAwaiter().GetResult();
-            }
-            else
-            {
-                await hostedService.StartAsync(CancellationToken.None).ConfigureAwait(false);
-            }
+            await hostedService.StartAsync(CancellationToken.None).ConfigureAwait(false);
 
             logger.LogInformation($"[HostedService-started] : {hostedService.GetType().Name}");
         }
@@ -61,11 +49,6 @@ public static class ServiceProviderExtensions
     }
 
     public static async Task<IServiceProvider> StopHostedServicesAsync(this IServiceProvider serviceProvider)
-    {
-        return await StopHostedServicesAsync(serviceProvider, false).ConfigureAwait(false);
-    }
-
-    private static async Task<IServiceProvider> StopHostedServicesAsync(IServiceProvider serviceProvider, bool sync)
     {
         Guard.AgainstNull(serviceProvider);
 
@@ -77,14 +60,7 @@ public static class ServiceProviderExtensions
         {
             logger.LogInformation($"[HostedService-stopping] : {hostedService.GetType().Name}");
 
-            if (sync)
-            {
-                hostedService.StopAsync(CancellationToken.None).GetAwaiter().GetResult();
-            }
-            else
-            {
-                await hostedService.StopAsync(CancellationToken.None).ConfigureAwait(false);
-            }
+            await hostedService.StopAsync(CancellationToken.None).ConfigureAwait(false);
 
             logger.LogInformation($"[HostedService-stopped] : {hostedService.GetType().Name}");
         }

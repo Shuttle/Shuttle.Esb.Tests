@@ -55,18 +55,11 @@ public class BasicQueueFixture : IntegrationFixture
 
     protected async Task TestReleaseMessageAsync(IServiceCollection services, string queueUriFormat)
     {
-        await TestReleaseMessageAsync(services, queueUriFormat, false).ConfigureAwait(false);
-    }
-
-    private async Task TestReleaseMessageAsync(IServiceCollection services, string queueUriFormat, bool sync)
-    {
         ConfigureServices(Guard.AgainstNull(services), nameof(TestReleaseMessageAsync), 1, false, queueUriFormat);
 
         var serviceProvider = services.BuildServiceProvider();
         var queueService = serviceProvider.CreateQueueService();
-        var workQueue = sync
-            ? CreateWorkQueueAsync(queueService, queueUriFormat, true).GetAwaiter().GetResult()
-            : await CreateWorkQueueAsync(queueService, queueUriFormat, true).ConfigureAwait(false);
+        var workQueue = await CreateWorkQueueAsync(queueService, queueUriFormat, true).ConfigureAwait(false);
 
         try
         {

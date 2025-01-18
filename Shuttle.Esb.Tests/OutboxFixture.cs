@@ -80,8 +80,7 @@ public abstract class OutboxFixture : IntegrationFixture
         var receiverWorkQueueUri = string.Format(workQueueUriFormat, "test-receiver-work");
         var messageRouteProvider = new Mock<IMessageRouteProvider>();
 
-        messageRouteProvider.Setup(m => m.GetRouteUris(It.IsAny<string>())).Returns(new[] { receiverWorkQueueUri });
-        messageRouteProvider.Setup(m => m.GetRouteUrisAsync(It.IsAny<string>())).Returns(Task.FromResult<IEnumerable<string>>(new[] { receiverWorkQueueUri }));
+        messageRouteProvider.Setup(m => m.GetRouteUrisAsync(It.IsAny<string>())).Returns(Task.FromResult<IEnumerable<string>>([receiverWorkQueueUri]));
 
         services.AddSingleton(messageRouteProvider.Object);
 
