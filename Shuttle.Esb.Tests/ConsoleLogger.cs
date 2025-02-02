@@ -1,33 +1,32 @@
-﻿using Microsoft.Extensions.Logging;
-using System;
+﻿using System;
+using Microsoft.Extensions.Logging;
 
-namespace Shuttle.Esb.Tests
+namespace Shuttle.Esb.Tests;
+
+public class ConsoleLogger : ILogger
 {
-    public class ConsoleLogger : ILogger
+    private static readonly object Lock = new();
+    private DateTime _previousLogDateTime = DateTime.MinValue;
+
+    public bool IsEnabled(LogLevel logLevel)
     {
-        private static readonly object Lock = new object();
-        private DateTime _previousLogDateTime = DateTime.MinValue;
+        return true;
+    }
 
-        public IDisposable BeginScope<TState>(TState state)
+    public IDisposable? BeginScope<TState>(TState state) where TState : notnull
+    {
+        return null;
+    }
+
+    public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter)
+    {
+        lock (Lock)
         {
-            return null;
-        }
+            var now = DateTime.Now;
 
-        public bool IsEnabled(LogLevel logLevel)
-        {
-            return true;
-        }
+            Console.WriteLine($"{now:HH:mm:ss.fffffff} / {(_previousLogDateTime > DateTime.MinValue ? $"{now - _previousLogDateTime:fffffff}" : "0000000")} - {formatter(state, exception)}");
 
-        public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception exception, Func<TState, Exception, string> formatter)
-        {
-            lock (Lock)
-            {
-                var now = DateTime.Now;
-
-                Console.WriteLine($"{now:HH:mm:ss.fffffff} / {(_previousLogDateTime > DateTime.MinValue ? $"{(now - _previousLogDateTime):fffffff}" : "0000000")} - {formatter(state, exception)}");
-
-                _previousLogDateTime = now;
-            }
+            _previousLogDateTime = now;
         }
     }
 }

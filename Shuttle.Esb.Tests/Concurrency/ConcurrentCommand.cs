@@ -1,7 +1,6 @@
-namespace Shuttle.Esb.Tests
+namespace Shuttle.Esb.Tests;
+
+public class ConcurrentCommand
 {
-	public class ConcurrentCommand
-	{
-		public int MessageIndex { get; set; }
-	}
+    public int MessageIndex { get; set; }
 }

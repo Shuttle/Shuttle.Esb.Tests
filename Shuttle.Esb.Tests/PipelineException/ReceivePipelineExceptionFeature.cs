@@ -8,211 +8,189 @@ using Shuttle.Core.Contract;
 using Shuttle.Core.Pipelines;
 using Shuttle.Core.Reflection;
 
-namespace Shuttle.Esb.Tests
+namespace Shuttle.Esb.Tests;
+
+public class ReceivePipelineExceptionFeature :
+    IPipelineObserver<OnGetMessage>,
+    IPipelineObserver<OnAfterGetMessage>,
+    IPipelineObserver<OnDeserializeTransportMessage>,
+    IPipelineObserver<OnAfterDeserializeTransportMessage>
 {
-    public class ReceivePipelineExceptionFeature :
-        IPipelineObserver<OnGetMessage>,
-        IPipelineObserver<OnAfterGetMessage>,
-        IPipelineObserver<OnDeserializeTransportMessage>,
-        IPipelineObserver<OnAfterDeserializeTransportMessage>
+    private static readonly SemaphoreSlim Lock = new(1, 1);
+
+    private readonly List<ExceptionAssertion> _assertions = new();
+    private readonly ILogger<ReceivePipelineExceptionFeature> _logger;
+    private readonly IServiceBusConfiguration _serviceBusConfiguration;
+    private string _assertionName = string.Empty;
+    private volatile bool _failed;
+    private int _pipelineCount;
+
+    public ReceivePipelineExceptionFeature(ILogger<ReceivePipelineExceptionFeature> logger, IServiceBusConfiguration serviceBusConfiguration, IPipelineFactory pipelineFactory)
     {
-        private static readonly SemaphoreSlim Lock = new SemaphoreSlim(1, 1);
+        Guard.AgainstNull(pipelineFactory);
 
-        private readonly List<ExceptionAssertion> _assertions = new List<ExceptionAssertion>();
-        private readonly ILogger<ReceivePipelineExceptionFeature> _logger;
-        private readonly IServiceBusConfiguration _serviceBusConfiguration;
-        private string _assertionName;
-        private volatile bool _failed;
-        private int _pipelineCount;
+        pipelineFactory.PipelineCreated += PipelineCreated;
+        pipelineFactory.PipelineReleased += PipelineReleased;
+        pipelineFactory.PipelineObtained += PipelineObtained;
 
-        public ReceivePipelineExceptionFeature(ILogger<ReceivePipelineExceptionFeature> logger, IServiceBusConfiguration serviceBusConfiguration, IPipelineFactory pipelineFactory)
+        _logger = Guard.AgainstNull(logger);
+        _serviceBusConfiguration = Guard.AgainstNull(serviceBusConfiguration);
+
+        AddAssertion("OnGetMessage");
+        AddAssertion("OnAfterGetMessage");
+        AddAssertion("OnDeserializeTransportMessage");
+        AddAssertion("OnAfterDeserializeTransportMessage");
+    }
+
+    public async Task ExecuteAsync(IPipelineContext<OnAfterDeserializeTransportMessage> pipelineContext)
+    {
+        ThrowException("OnAfterDeserializeTransportMessage");
+
+        await Task.CompletedTask.ConfigureAwait(false);
+    }
+
+    public async Task ExecuteAsync(IPipelineContext<OnAfterGetMessage> pipelineContext)
+    {
+        ThrowException("OnAfterGetMessage");
+
+        await Task.CompletedTask.ConfigureAwait(false);
+    }
+
+    public async Task ExecuteAsync(IPipelineContext<OnDeserializeTransportMessage> pipelineContext)
+    {
+        ThrowException("OnDeserializeTransportMessage");
+
+        await Task.CompletedTask.ConfigureAwait(false);
+    }
+
+    public async Task ExecuteAsync(IPipelineContext<OnGetMessage> pipelineContext)
+    {
+        ThrowException("OnGetMessage");
+
+        await Task.CompletedTask.ConfigureAwait(false);
+    }
+
+    private void AddAssertion(string name)
+    {
+        Lock.Wait();
+
+        try
         {
-            Guard.AgainstNull(serviceBusConfiguration, nameof(serviceBusConfiguration));
-            Guard.AgainstNull(pipelineFactory, nameof(pipelineFactory));
+            _assertions.Add(new(name));
 
-            pipelineFactory.PipelineCreated += PipelineCreated;
-            pipelineFactory.PipelineReleased += PipelineReleased;
-            pipelineFactory.PipelineObtained += PipelineObtained;
+            _logger.LogInformation($"[ReceivePipelineExceptionModule:Added] : assertion = '{name}'.");
+        }
+        finally
+        {
+            Lock.Release();
+        }
+    }
 
-            _logger = Guard.AgainstNull(logger, nameof(logger));
-            _serviceBusConfiguration = serviceBusConfiguration;
+    private ExceptionAssertion? GetAssertion(string name)
+    {
+        return _assertions.Find(item => item.Name.Equals(name, StringComparison.InvariantCultureIgnoreCase));
+    }
 
-            AddAssertion("OnGetMessage");
-            AddAssertion("OnAfterGetMessage");
-            AddAssertion("OnDeserializeTransportMessage");
-            AddAssertion("OnAfterDeserializeTransportMessage");
+    private void PipelineCreated(object? sender, PipelineEventArgs e)
+    {
+        var fullName = e.Pipeline.GetType().FullName;
+
+        if (fullName != null && !fullName.Equals(typeof(InboxMessagePipeline).FullName, StringComparison.InvariantCultureIgnoreCase))
+        {
+            return;
         }
 
-        public void Execute(OnAfterDeserializeTransportMessage pipelineEvent)
+        e.Pipeline.AddObserver(this);
+    }
+
+    private void PipelineObtained(object? sender, PipelineEventArgs e)
+    {
+        _pipelineCount += 1;
+        _assertionName = string.Empty;
+
+        _logger.LogInformation($"[ReceivePipelineExceptionModule:PipelineObtained] : count = {_pipelineCount}");
+    }
+
+    private void PipelineReleased(object? sender, PipelineEventArgs e)
+    {
+        if (string.IsNullOrEmpty(_assertionName))
         {
-            ThrowException("OnAfterDeserializeTransportMessage");
+            return;
         }
 
-        public async Task ExecuteAsync(OnAfterDeserializeTransportMessage pipelineEvent1)
+        Lock.Wait();
+
+        try
         {
-            ThrowException("OnAfterDeserializeTransportMessage");
+            var assertion = Guard.AgainstNull(GetAssertion(_assertionName));
 
-            await Task.CompletedTask.ConfigureAwait(false);
-        }
-
-        public void Execute(OnAfterGetMessage pipelineEvent)
-        {
-            ThrowException("OnAfterGetMessage");
-        }
-
-        public async Task ExecuteAsync(OnAfterGetMessage pipelineEvent)
-        {
-            ThrowException("OnAfterGetMessage");
-
-            await Task.CompletedTask.ConfigureAwait(false);
-        }
-
-        public void Execute(OnDeserializeTransportMessage pipelineEvent)
-        {
-            ThrowException("OnDeserializeTransportMessage");
-        }
-
-        public async Task ExecuteAsync(OnDeserializeTransportMessage pipelineEvent1)
-        {
-            ThrowException("OnDeserializeTransportMessage");
-
-            await Task.CompletedTask.ConfigureAwait(false);
-        }
-
-        public void Execute(OnGetMessage pipelineEvent)
-        {
-            ThrowException("OnGetMessage");
-        }
-
-        public async Task ExecuteAsync(OnGetMessage pipelineEvent1)
-        {
-            ThrowException("OnGetMessage");
-
-            await Task.CompletedTask.ConfigureAwait(false);
-        }
-
-        private void AddAssertion(string name)
-        {
-            Lock.Wait();
-
-            try
-            {
-                _assertions.Add(new ExceptionAssertion(name));
-
-                _logger.LogInformation($"[ReceivePipelineExceptionModule:Added] : assertion = '{name}'.");
-            }
-            finally
-            {
-                Lock.Release();
-            }
-        }
-
-        private ExceptionAssertion GetAssertion(string name)
-        {
-            return _assertions.Find(item => item.Name.Equals(name, StringComparison.InvariantCultureIgnoreCase));
-        }
-
-        private void PipelineCreated(object sender, PipelineEventArgs e)
-        {
-            var fullName = e.Pipeline.GetType().FullName;
-
-            if (fullName != null && !fullName.Equals(typeof(InboxMessagePipeline).FullName, StringComparison.InvariantCultureIgnoreCase))
+            if (assertion.HasRun)
             {
                 return;
             }
 
-            e.Pipeline.RegisterObserver(this);
+            _logger.LogInformation($"[ReceivePipelineExceptionModule:Invoking] : assertion = '{assertion.Name}'.");
+
+            try
+            {
+                // IsEmpty does not work for prefetch queues
+                var receivedMessage = _serviceBusConfiguration.Inbox!.WorkQueue!.GetMessageAsync().GetAwaiter().GetResult();
+
+                Assert.That(receivedMessage, Is.Not.Null);
+
+                _serviceBusConfiguration.Inbox.WorkQueue.ReleaseAsync(receivedMessage!.AcknowledgementToken).GetAwaiter().GetResult();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogInformation(ex.AllMessages());
+
+                _failed = true;
+            }
+
+            assertion.MarkAsRun();
+
+            _logger.LogInformation($"[ReceivePipelineExceptionModule:Invoked] : assertion = '{assertion.Name}'.");
         }
-
-        private void PipelineObtained(object sender, PipelineEventArgs e)
+        finally
         {
-            _pipelineCount += 1;
-            _assertionName = string.Empty;
-
-            _logger.LogInformation($"[ReceivePipelineExceptionModule:PipelineObtained] : count = {_pipelineCount}");
+            Lock.Release();
         }
+    }
 
-        private void PipelineReleased(object sender, PipelineEventArgs e)
+    public bool ShouldWait()
+    {
+        Lock.Wait();
+
+        try
         {
-            if (string.IsNullOrEmpty(_assertionName))
+            return !_failed && _assertions.Find(item => !item.HasRun) != null;
+        }
+        finally
+        {
+            Lock.Release();
+        }
+    }
+
+    private void ThrowException(string name)
+    {
+        Lock.Wait();
+
+        try
+        {
+            _assertionName = name;
+
+            var assertion = Guard.AgainstNull(GetAssertion(_assertionName));
+
+            if (assertion.HasRun)
             {
                 return;
             }
 
-            Lock.Wait();
-
-            try
-            {
-                var assertion = GetAssertion(_assertionName);
-
-                if (assertion == null || assertion.HasRun)
-                {
-                    return;
-                }
-
-                _logger.LogInformation($"[ReceivePipelineExceptionModule:Invoking] : assertion = '{assertion.Name}'.");
-
-                try
-                {
-                    // IsEmpty does not work for prefetch queues
-                    var receivedMessage = _serviceBusConfiguration.Inbox.WorkQueue.GetMessage();
-
-                    Assert.IsNotNull(receivedMessage);
-
-                    _serviceBusConfiguration.Inbox.WorkQueue.Release(receivedMessage.AcknowledgementToken);
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogInformation(ex.AllMessages());
-
-                    _failed = true;
-                }
-
-                assertion.MarkAsRun();
-
-                _logger.LogInformation($"[ReceivePipelineExceptionModule:Invoked] : assertion = '{assertion.Name}'.");
-            }
-            finally
-            {
-                Lock.Release();
-            }
+            throw new AssertionException($"Testing assertion for '{name}'.");
         }
-
-        public bool ShouldWait()
+        finally
         {
-            Lock.Wait();
-
-            try
-            {
-                return !_failed && _assertions.Find(item => !item.HasRun) != null;
-            }
-            finally
-            {
-                Lock.Release();
-            }
-        }
-
-        private void ThrowException(string name)
-        {
-            Lock.Wait();
-
-            try
-            {
-                _assertionName = name;
-
-                var assertion = GetAssertion(_assertionName);
-
-                if (assertion.HasRun)
-                {
-                    return;
-                }
-
-                throw new AssertionException($"Testing assertion for '{name}'.");
-            }
-            finally
-            {
-                Lock.Release();
-            }
+            Lock.Release();
         }
     }
 }

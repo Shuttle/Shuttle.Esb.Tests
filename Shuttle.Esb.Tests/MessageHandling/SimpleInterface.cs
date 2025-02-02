@@ -1,7 +1,6 @@
-namespace Shuttle.Esb.Tests
+namespace Shuttle.Esb.Tests;
+
+public class SimpleInterface : ISimpleInterface
 {
-	public class SimpleInterface : ISimpleInterface
-	{
-		public string Name { get; set; }
-	}
+    public string Name { get; set; } = string.Empty;
 }

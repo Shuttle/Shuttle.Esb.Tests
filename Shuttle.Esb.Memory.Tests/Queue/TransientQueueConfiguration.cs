@@ -2,19 +2,18 @@
 using Microsoft.Extensions.DependencyInjection;
 using Shuttle.Esb.Tests;
 
-namespace Shuttle.Esb.Memory.Tests
+namespace Shuttle.Esb.Memory.Tests;
+
+public static class TransientQueueConfiguration
 {
-    public static class TransientQueueConfiguration
+    public static IServiceCollection GetServiceCollection()
     {
-        public static IServiceCollection GetServiceCollection()
-        {
-            var services = new ServiceCollection();
+        var services = new ServiceCollection();
 
-            services.AddSingleton<IConfiguration>(new ConfigurationBuilder().Build());
+        services.AddSingleton<IConfiguration>(new ConfigurationBuilder().Build());
 
-            services.AddTransientQueues();
+        services.AddTransientQueues();
 
-            return services;
-        }
+        return services;
     }
-}           
+}

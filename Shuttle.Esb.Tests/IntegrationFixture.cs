@@ -1,9 +1,8 @@
 using NUnit.Framework;
 
-namespace Shuttle.Esb.Tests
+namespace Shuttle.Esb.Tests;
+
+[NonParallelizable]
+public class IntegrationFixture
 {
-    [NonParallelizable]
-    public class IntegrationFixture
-    {
-    }
 }

@@ -1,7 +1,6 @@
-namespace Shuttle.Esb.Tests
+namespace Shuttle.Esb.Tests;
+
+public interface ISimpleInterface
 {
-	public interface ISimpleInterface
-	{
-		string Name { get; set; }
-	}
+    string Name { get; set; }
 }

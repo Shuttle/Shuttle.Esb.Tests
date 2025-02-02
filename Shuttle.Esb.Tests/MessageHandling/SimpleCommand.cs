@@ -1,18 +1,20 @@
-namespace Shuttle.Esb.Tests
+using Shuttle.Core.Contract;
+
+namespace Shuttle.Esb.Tests;
+
+public class SimpleCommand : object
 {
-	public class SimpleCommand : object
-	{
-		public SimpleCommand()
-			: this(typeof (SimpleCommand).GetType().FullName)
-		{
-		}
+    public SimpleCommand()
+        : this(Guard.AgainstNullOrEmptyString(typeof(SimpleCommand).FullName))
+    {
+    }
 
-		public SimpleCommand(string name)
-		{
-			Name = name;
-		}
+    public SimpleCommand(string name)
+    {
+        Name = name;
+    }
 
-		public string Name { get; set; }
-		public string Context { get; set; }
-	}
+    public string Context { get; set; } = string.Empty;
+
+    public string Name { get; set; }
 }
