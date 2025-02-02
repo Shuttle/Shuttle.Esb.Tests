@@ -92,7 +92,7 @@ public abstract class OutboxFixture : IntegrationFixture
                     new()
                     {
                         WorkQueueUri = workQueueUri,
-                        DurationToSleepWhenIdle = new() { TimeSpan.FromMilliseconds(25) },
+                        DurationToSleepWhenIdle = [TimeSpan.FromMilliseconds(25)],
                         ThreadCount = threadCount
                     }
             };
