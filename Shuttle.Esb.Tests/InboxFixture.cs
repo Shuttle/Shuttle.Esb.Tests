@@ -202,7 +202,7 @@ public abstract class InboxFixture : IntegrationFixture
 
             await serviceBus.StartAsync().ConfigureAwait(false);
 
-            var timeout = DateTime.Now.AddSeconds(5);
+            var timeout = DateTimeOffset.Now.AddSeconds(5);
             var timedOut = false;
 
             logger.LogInformation($"[TestInboxConcurrency] : waiting till {timeout:O} for all pipelines to become idle");
@@ -210,7 +210,7 @@ public abstract class InboxFixture : IntegrationFixture
             while (idlePipelines.Count < threadCount && !timedOut)
             {
                 await Task.Delay(30).ConfigureAwait(false);
-                timedOut = DateTime.Now >= timeout;
+                timedOut = DateTimeOffset.Now >= timeout;
             }
 
             Assert.That(timedOut, Is.False, $"[TIMEOUT] : All pipelines did not become idle before {timeout:O} / idle threads = {idlePipelines.Count}");
@@ -271,7 +271,7 @@ public abstract class InboxFixture : IntegrationFixture
 
             await serviceBus.StartAsync().ConfigureAwait(false);
 
-            var ignoreTillDate = DateTime.Now.Add(deferDurationValue);
+            var ignoreTillDate = DateTimeOffset.Now.Add(deferDurationValue);
 
             var transportMessage = await serviceBus.SendAsync(new ReceivePipelineCommand(),
                 builder =>
@@ -287,13 +287,13 @@ public abstract class InboxFixture : IntegrationFixture
 
             var messageId = transportMessage.MessageId;
 
-            var timeout = DateTime.Now.Add(deferDurationValue.Multiply(2));
+            var timeout = DateTimeOffset.Now.Add(deferDurationValue.Multiply(2));
             var timedOut = false;
 
             while (feature.TransportMessage == null && !timedOut)
             {
                 await Task.Delay(5).ConfigureAwait(false);
-                timedOut = DateTime.Now >= timeout;
+                timedOut = DateTimeOffset.Now >= timeout;
             }
 
             Assert.That(timedOut, Is.False, "[TIMEOUT] : The deferred message was never received.");
@@ -357,7 +357,7 @@ public abstract class InboxFixture : IntegrationFixture
 
             await serviceBus.StartAsync().ConfigureAwait(false);
 
-            var timeout = DateTime.Now.AddSeconds(150);
+            var timeout = DateTimeOffset.Now.AddSeconds(150);
             var timedOut = false;
 
             while (!inboxMessagePipelineObserver.HasReceivedPipelineException &&
@@ -365,7 +365,7 @@ public abstract class InboxFixture : IntegrationFixture
             {
                 await Task.Delay(25).ConfigureAwait(false);
 
-                timedOut = DateTime.Now > timeout;
+                timedOut = DateTimeOffset.Now > timeout;
             }
 
             Assert.That(!timedOut, "Timed out before message was received.");
@@ -515,9 +515,9 @@ public abstract class InboxFixture : IntegrationFixture
 
             await serviceBus.StartAsync().ConfigureAwait(false);
 
-            logger.LogInformation($"[starting] : {DateTime.Now:HH:mm:ss.fff}");
+            logger.LogInformation($"[starting] : {DateTimeOffset.Now:HH:mm:ss.fff}");
 
-            var timeout = DateTime.Now.AddSeconds(5);
+            var timeout = DateTimeOffset.Now.AddSeconds(5);
 
             sw.Start();
 
@@ -525,12 +525,12 @@ public abstract class InboxFixture : IntegrationFixture
             {
                 await Task.Delay(25).ConfigureAwait(false);
 
-                timedOut = DateTime.Now > timeout;
+                timedOut = DateTimeOffset.Now > timeout;
             }
 
             sw.Stop();
 
-            logger.LogInformation($"[stopped] : {DateTime.Now:HH:mm:ss.fff}");
+            logger.LogInformation($"[stopped] : {DateTimeOffset.Now:HH:mm:ss.fff}");
 
             await queueService.TryDropQueuesAsync(queueUriFormat).ConfigureAwait(false);
         }
