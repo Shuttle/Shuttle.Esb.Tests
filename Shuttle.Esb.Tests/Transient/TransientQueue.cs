@@ -167,7 +167,7 @@ public class TransientQueue : IQueue, ICreateQueue, IPurgeQueue
         {
             foreach (var candidate in Queues)
             {
-                foreach (var itemId in candidate.Value.Values.Where(item => item.TransportMessage.ExpiryDate <= DateTimeOffset.UtcNow).Select(item => item.ItemId))
+                foreach (var itemId in candidate.Value.Values.Where(item => item.TransportMessage.ExpiryDate <= DateTime.UtcNow).Select(item => item.ItemId))
                 {
                     candidate.Value.Remove(itemId);
                 }

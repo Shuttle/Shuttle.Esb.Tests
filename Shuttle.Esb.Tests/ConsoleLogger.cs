@@ -6,7 +6,7 @@ namespace Shuttle.Esb.Tests;
 public class ConsoleLogger : ILogger
 {
     private static readonly object Lock = new();
-    private DateTimeOffset _previousLogDateTime = DateTimeOffset.MinValue;
+    private DateTime _previousLogDateTime = DateTime.MinValue;
 
     public bool IsEnabled(LogLevel logLevel)
     {
@@ -22,9 +22,9 @@ public class ConsoleLogger : ILogger
     {
         lock (Lock)
         {
-            var now = DateTimeOffset.Now;
+            var now = DateTime.Now;
 
-            Console.WriteLine($"{now:HH:mm:ss.fffffff} / {(_previousLogDateTime > DateTimeOffset.MinValue ? $"{now - _previousLogDateTime:fffffff}" : "0000000")} - {formatter(state, exception)}");
+            Console.WriteLine($"{now:HH:mm:ss.fffffff} / {(_previousLogDateTime > DateTime.MinValue ? $"{now - _previousLogDateTime:fffffff}" : "0000000")} - {formatter(state, exception)}");
 
             _previousLogDateTime = now;
         }

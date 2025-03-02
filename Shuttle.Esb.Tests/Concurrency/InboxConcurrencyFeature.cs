@@ -10,10 +10,10 @@ namespace Shuttle.Esb.Tests;
 
 public class InboxConcurrencyFeature : IPipelineObserver<OnAfterGetMessage>
 {
-    private readonly List<DateTimeOffset> _datesAfterGetMessage = [];
+    private readonly List<DateTime> _datesAfterGetMessage = new();
     private readonly object _lock = new();
     private readonly ILogger<InboxConcurrencyFeature> _logger;
-    private DateTimeOffset _firstDateAfterGetMessage = DateTimeOffset.MinValue;
+    private DateTime _firstDateAfterGetMessage = DateTime.MinValue;
 
     public InboxConcurrencyFeature(ILogger<InboxConcurrencyFeature> logger, IPipelineFactory pipelineFactory)
     {
@@ -28,11 +28,11 @@ public class InboxConcurrencyFeature : IPipelineObserver<OnAfterGetMessage>
     {
         lock (_lock)
         {
-            var dateTime = DateTimeOffset.Now;
+            var dateTime = DateTime.Now;
 
-            if (_firstDateAfterGetMessage == DateTimeOffset.MinValue)
+            if (_firstDateAfterGetMessage == DateTime.MinValue)
             {
-                _firstDateAfterGetMessage = DateTimeOffset.Now;
+                _firstDateAfterGetMessage = DateTime.Now;
 
                 _logger.LogInformation("Offset date: {0:yyyy-MM-dd HH:mm:ss.fff}", _firstDateAfterGetMessage);
             }

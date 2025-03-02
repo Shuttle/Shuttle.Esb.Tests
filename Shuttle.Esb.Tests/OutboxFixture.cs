@@ -138,13 +138,13 @@ public abstract class OutboxFixture : IntegrationFixture
 
             var receiverWorkQueue = queueService.Get(receiverWorkQueueUri);
             var timedOut = false;
-            var timeout = DateTimeOffset.Now.AddSeconds(150);
+            var timeout = DateTime.Now.AddSeconds(150);
 
             while (outboxObserver.HandledMessageCount < count && !timedOut)
             {
                 await Task.Delay(25).ConfigureAwait(false);
 
-                timedOut = timeout < DateTimeOffset.Now;
+                timedOut = timeout < DateTime.Now;
             }
 
             Assert.That(timedOut, Is.False, $"Timed out before processing {count} messages.");

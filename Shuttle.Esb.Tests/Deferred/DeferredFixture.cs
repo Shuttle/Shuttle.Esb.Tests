@@ -102,7 +102,7 @@ public class DeferredFixture : IntegrationFixture
 
         try
         {
-            var ignoreTillDate = DateTimeOffset.UtcNow.AddSeconds(1);
+            var ignoreTillDate = DateTime.UtcNow.AddSeconds(1);
 
             await serviceBus.StartAsync().ConfigureAwait(false);
 
@@ -121,7 +121,7 @@ public class DeferredFixture : IntegrationFixture
                 ignoreTillDate = ignoreTillDate.AddMilliseconds(millisecondsToDefer);
             }
 
-            logger.LogInformation($"[start wait] : now = '{DateTimeOffset.Now}'");
+            logger.LogInformation($"[start wait] : now = '{DateTime.Now}'");
 
             var timeout = ignoreTillDate.AddMilliseconds(deferredMessageCount * millisecondsToDefer + millisecondsToDefer * 2 + 3000);
             var timedOut = false;
@@ -131,10 +131,10 @@ public class DeferredFixture : IntegrationFixture
             {
                 await Task.Delay(millisecondsToDefer).ConfigureAwait(false);
 
-                timedOut = timeout < DateTimeOffset.UtcNow;
+                timedOut = timeout < DateTime.UtcNow;
             }
 
-            logger.LogInformation($"[end wait] : now = '{DateTimeOffset.Now}' / timeout = '{timeout.ToLocalTime()}' / timed out = '{timedOut}'");
+            logger.LogInformation($"[end wait] : now = '{DateTime.Now}' / timeout = '{timeout.ToLocalTime()}' / timed out = '{timedOut}'");
             logger.LogInformation($"{feature.NumberOfDeferredMessagesReturned} of {deferredMessageCount} deferred messages returned to the inbox.");
             logger.LogInformation($"{feature.NumberOfMessagesHandled} of {deferredMessageCount} deferred messages handled.");
 
