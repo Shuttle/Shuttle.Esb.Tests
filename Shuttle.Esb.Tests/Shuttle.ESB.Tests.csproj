@@ -21,8 +21,4 @@
     <PackageReference Include="Shuttle.Esb.Logging" Version="20.0.0" />
   </ItemGroup>
 
-  <ItemGroup>
-    <Compile Remove="PerformanceCounterValue.cs;ResourceUsageFixture.cs" />
-  </ItemGroup>
-
 </Project>
